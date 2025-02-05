@@ -1,0 +1,48 @@
+[project]
+name = "CAP"
+version = "0.1.0"
+description = "Cardano Analytics Platform"
+authors = [{name = "MOBR Systems", email = "contact@mobr.ai"}]
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.1",
+    "httpx>=0.26.0",
+    "pydantic>=2.6.1",
+    "pydantic-settings>=2.1.0",
+    "opentelemetry-api>=1.23.0",
+    "opentelemetry-sdk>=1.23.0",
+    "opentelemetry-instrumentation-fastapi>=0.44b0",
+    "opentelemetry-exporter-otlp>=1.23.0",
+    "SPARQLWrapper>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "hatchling>=1.21.1",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.5",
+    "pytest-cov>=4.1.0",
+    "black>=24.1.1",
+    "isort>=5.13.2",
+    "mypy>=1.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cap"]

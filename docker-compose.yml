@@ -1,0 +1,52 @@
+services:
+  api:
+    build: .
+    platform: linux/arm64
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - VIRTUOSO_HOST=virtuoso
+      - VIRTUOSO_PORT=8890
+      - VIRTUOSO_USER=dba
+      - VIRTUOSO_PASSWORD=mysecretpassword
+      - SPARQL_UPDATE=true
+    command: >
+      sh -c "sleep 15 && uvicorn src.cap.main:app --host 0.0.0.0 --port 8000"
+    networks:
+      - app-network
+
+  virtuoso:
+    image: tenforce/virtuoso    # Changed from openlink to tenforce
+    platform: linux/amd64
+    ports:
+      - "8890:8890"
+      - "1111:1111"
+    environment:
+      - DBA_PASSWORD=mysecretpassword
+      - SPARQL_UPDATE=true
+      - DEFAULT_GRAPH=http://www.mobr.ai/ontologies/cardano
+    volumes:
+      - virtuoso-data:/database
+    networks:
+      - app-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    platform: linux/arm64
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  virtuoso-data:
