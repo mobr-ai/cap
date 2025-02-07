@@ -128,3 +128,11 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# project specific
+.env
+.DS_Store
+__pycache__
+.coverage
+_pytest.out
+_docker.out
