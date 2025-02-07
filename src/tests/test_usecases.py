@@ -310,7 +310,7 @@ async def test_sparql_queries(async_client: AsyncClient):
     timestamp_results = response.json()["results"]["results"]
     logger.debug(f"Timestamp debugging now - comparison results: {timestamp_results}")
 
-    # debuggin query 1
+    # debugging query 1
     query1 = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
         PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
