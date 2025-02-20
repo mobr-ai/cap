@@ -26,6 +26,11 @@ docker run -d --name virtuoso \
   -e SPARQL_UPDATE=true \
   tenforce/virtuoso
 
+# set virtual environment with python 3.11 and upgrade pip
+virtualenv venv --python 3.11
+source venv/bin/activate
+pip install --upgrade pip
+
 # install dependencies
 pip install --no-cache-dir -e ".[dev]" 
 
@@ -38,6 +43,9 @@ http://localhost:8000/docs
 #### Testing
 With CAP and its dependencies running, you can also run its tests
 ```bash
+# activate virtual environment
+source venv/bin/activate
+
 # Run all tests
 pytest
 
