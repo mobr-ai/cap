@@ -148,11 +148,10 @@ pytest --cov=src/cap
    docker compose up -d
    ```
 
-   This will start:
-
-   - **CAP API** → [http://localhost:8000/docs](http://localhost:8000/docs)
-   - **Virtuoso** → [http://localhost:8890](http://localhost:8890)
+   Wait a couple of minutes until the services are up. Check them on:
    - **Jaeger UI** → [http://localhost:16686](http://localhost:16686)
+   - **Virtuoso** → [http://localhost:8890](http://localhost:8890)
+   - **CAP API** → [http://localhost:8000/docs](http://localhost:8000/docs)
 
 3. **View logs:**
 
