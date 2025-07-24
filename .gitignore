@@ -136,3 +136,4 @@ __pycache__
 .coverage
 _pytest.out
 _docker.out
+catalog*.xml

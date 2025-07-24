@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from typing import AsyncGenerator
 import logging
 from cap.main import app
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)

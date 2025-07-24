@@ -1,7 +1,7 @@
 import pytest
 import logging
 from httpx import AsyncClient
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 TEST_GRAPH = "http://test.integration"
 logger = logging.getLogger(__name__)

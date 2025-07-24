@@ -1,5 +1,5 @@
 import pytest
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 TEST_GRAPH = "http://test.graph"
 TEST_PREFIXES = {

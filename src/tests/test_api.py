@@ -4,7 +4,7 @@ import logging
 
 from httpx import AsyncClient
 from urllib.parse import quote_plus
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

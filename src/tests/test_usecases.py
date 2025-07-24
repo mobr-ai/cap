@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 import logging
 from httpx import AsyncClient
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 PREFIXES = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
