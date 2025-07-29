@@ -17,17 +17,6 @@ class BaseTransformer(ABC):
     def __init__(self):
         self.base_uri = settings.CARDANO_GRAPH
 
-    def get_prefixes_turtle(self) -> str:
-        """Get standard prefixes for all transformers aligned with ontology."""
-        return """
-            @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-            @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-            @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-            @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-            @prefix owl: <http://www.w3.org/2002/07/owl#> .
-        """
-
     def create_uri(self, entity_type: str, identifier: Any) -> str:
         """Create a URI for an entity with proper encoding."""
         if identifier is None:
@@ -68,7 +57,8 @@ class BaseTransformer(ABC):
 
         # Escape quotes and special characters in string values
         if isinstance(value, str):
-            escaped_value = value.replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+            # More robust escaping needed
+            escaped_value = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
             if datatype:
                 return f'"{escaped_value}"^^{datatype}'
             else:
@@ -106,7 +96,7 @@ class BaseTransformer(ABC):
         lines = []
 
         if block.get('slot_no') is not None:
-            lines.append(f"    cardano:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:integer')} ;")
+            lines.append(f"    cardano:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:decimal')} ;")
 
         if block.get('epoch_no') is not None:
             epoch_uri = self.create_epoch_uri(block['epoch_no'])

@@ -122,20 +122,6 @@ class AccountExtractor(BaseExtractor):
 
     def _get_first_appearance(self, stake_addr: StakeAddress) -> Optional[dict[str, Any]]:
         """Get the first transaction where this stake address appeared."""
-        # If registered_tx_id exists, use that
-        if stake_addr.registered_tx_id:
-            tx = self.db_session.query(Tx).filter(
-                Tx.id == stake_addr.registered_tx_id
-            ).first()
-            if tx and tx.block:
-                return {
-                    'hash': tx.hash.hex() if tx.hash else None,
-                    'timestamp': tx.block.time.isoformat() if tx.block.time else None,
-                    'block_hash': tx.block.hash.hex() if tx.block.hash else None,
-                    'block_timestamp': tx.block.time.isoformat() if tx.block.time else None
-                }
-
-        # Otherwise, find first transaction with outputs to this address
         first_output = self.db_session.query(TxOut).filter(
             TxOut.stake_address_id == stake_addr.id
         ).order_by(TxOut.id).first()

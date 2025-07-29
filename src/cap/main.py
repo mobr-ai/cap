@@ -33,8 +33,14 @@ async def initialize_graph(client: VirtuosoClient, graph_uri: str, ontology_path
                     turtle_data = f.read()
 
                 await client.create_graph(graph_uri, turtle_data)
-                logger.info(f"Successfully initialized graph: {graph_uri}")
-                return True
+                exists = await client.check_graph_exists(graph_uri)
+                if exists:
+                    logger.info(f"Successfully initialized graph: {graph_uri}")
+                    return True
+
+                else:
+                    logger.error(f"Could not create graph: {graph_uri}")
+                    return False
 
             logger.info(f"Graph already exists: {graph_uri}")
             return False
@@ -56,6 +62,7 @@ async def initialize_required_graphs(client: VirtuosoClient) -> None:
             try:
                 if ontology_path:
                     result = await initialize_graph(client, graph_uri, ontology_path)
+
                 else:
                     # Create empty graph for data
                     exists = await client.check_graph_exists(graph_uri)
@@ -85,9 +92,10 @@ async def start_etl_service():
                 continuous=settings.ETL_CONTINUOUS
             )
             logger.info("ETL service auto-started successfully")
+
         except Exception as e:
             logger.error(f"Failed to auto-start ETL service: {e}")
-            # Don't fail application startup if ETL fails
+
     else:
         logger.info("ETL auto-start disabled. ETL service can be started manually.")
 
@@ -110,10 +118,10 @@ async def lifespan(app: FastAPI):
             # Initialize graphs
             await initialize_required_graphs(client)
             logger.info("Application startup completed successfully")
-            
+
             # Start ETL service
             await start_etl_service()
-            
+
         except Exception as e:
             span.set_attribute("startup_error", str(e))
             logger.error(f"Application startup failed: {e}")
@@ -133,10 +141,10 @@ def create_application() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan
     )
-    
+
     instrument_app(app)
     app.include_router(router)
-    
+
     return app
 
 app = create_application()

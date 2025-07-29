@@ -19,7 +19,7 @@ class EpochTransformer(BaseTransformer):
             turtle_lines.append(f"{epoch_uri} a cardano:Epoch ;")
 
             if epoch['no'] is not None:
-                turtle_lines.append(f"    cardano:hasEpochNumber {self.format_literal(epoch['no'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasEpochNumber {self.format_literal(epoch['no'], 'xsd:decimal')} ;")
 
             if epoch['start_time']:
                 turtle_lines.append(f"    cardano:hasStartTime {self.format_literal(epoch['start_time'], 'xsd:dateTime')} ;")

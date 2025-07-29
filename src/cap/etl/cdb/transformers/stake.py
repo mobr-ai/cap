@@ -89,12 +89,8 @@ class StakeAddressTransformer(BaseTransformer):
             if addr['hash_raw']:
                 turtle_lines.append(f"    blockchain:hasHash \"{addr['hash_raw']}\" ;")
 
-            if addr['registered_tx_hash']:
-                tx_uri = self.create_transaction_uri(addr['registered_tx_hash'])
-                turtle_lines.append(f"    blockchain:firstAppearedInTransaction {tx_uri} ;")
-
             if addr.get('stake_amount') and addr['stake_amount'] > 0:
-                turtle_lines.append(f"    cardano:hasStakeAmount {self.format_literal(addr['stake_amount'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasStakeAmount {self.format_literal(addr['stake_amount'], 'xsd:decimal')} ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):
@@ -126,7 +122,7 @@ class DelegationTransformer(BaseTransformer):
 
                 turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
                 turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-                turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(delegation['stake_amount'], 'xsd:integer')} .")
+                turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(delegation['stake_amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 
@@ -164,7 +160,7 @@ class RewardTransformer(BaseTransformer):
             turtle_lines.append(f"")
             turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
             turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(reward['amount'], 'xsd:integer')} .")
+            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(reward['amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 
@@ -205,7 +201,7 @@ class WithdrawalTransformer(BaseTransformer):
             turtle_lines.append(f"")
             turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
             turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(withdrawal['amount'], 'xsd:integer')} .")
+            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(withdrawal['amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 

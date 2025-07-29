@@ -17,7 +17,6 @@ from cap.data.virtuoso import VirtuosoClient
 from cap.config import settings
 from cap.etl.cdb.extractor_factory import ExtractorFactory
 from cap.etl.cdb.transformer_factory import TransformerFactory
-from cap.etl.cdb.post_processor import etl_post_processor
 from cap.etl.cdb.loaders.loader import CDBLoader
 from cap.data.cdb_model import Block
 
@@ -74,7 +73,7 @@ class ETLPipeline:
         self.virtuoso_client = VirtuosoClient()
         self.loader = CDBLoader()
 
-        # ETL entity types in proper dependency order
+        # ETL entity types
         self.entity_types = [
             # Foundation entities first
             'account',
@@ -159,6 +158,7 @@ class ETLPipeline:
                     progress.status = ETLStatus.ERROR
                     progress.error_message = str(e)
                     progress.last_updated = datetime.now()
+
                 raise
             finally:
                 self.running = False
@@ -169,12 +169,12 @@ class ETLPipeline:
         logger.info("Stopping ETL pipeline...")
         self.running = False
 
-    async def _load_existing_progress(self):
+    async def _load_existing_progress(self, metadata_graph: str=settings.ETL_PROGRESS_GRAPH):
         """Load existing ETL progress from Virtuoso metadata."""
         with tracer.start_as_current_span("load_existing_progress") as span:
             for entity_type in self.entity_types:
                 try:
-                    existing_progress = await self._load_progress_metadata(entity_type)
+                    existing_progress = await self._load_progress_metadata(entity_type, metadata_graph)
                     if existing_progress:
                         self.progress[entity_type] = existing_progress
                         logger.info(f"Loaded existing progress for {entity_type}: "
@@ -183,7 +183,7 @@ class ETLPipeline:
                 except Exception as e:
                     logger.warning(f"Could not load existing progress for {entity_type}: {e}")
 
-    async def _load_progress_metadata(self, entity_type: str) -> Optional[ETLProgress]:
+    async def _load_progress_metadata(self, entity_type: str, graph_uri: str) -> Optional[ETLProgress]:
         """Load ETL progress metadata from Virtuoso."""
         with tracer.start_as_current_span("load_etl_progress") as span:
             span.set_attribute("entity_type", entity_type)
@@ -195,15 +195,17 @@ class ETLPipeline:
 
                 SELECT ?lastId ?totalRecords ?processedRecords ?status ?lastUpdated ?errorMessage
                 WHERE {{
-                    <{settings.CARDANO_GRAPH}/etl/progress/{entity_type}>
-                        cardano:hasLastProcessedId ?lastId ;
-                        cardano:hasTotalRecords ?totalRecords ;
-                        cardano:hasProcessedRecords ?processedRecords ;
-                        cardano:hasStatus ?status ;
-                        cardano:hasLastUpdated ?lastUpdated .
-                    OPTIONAL {{
+                    GRAPH <{graph_uri}> {{
                         <{settings.CARDANO_GRAPH}/etl/progress/{entity_type}>
-                            cardano:hasErrorMessage ?errorMessage .
+                            cardano:hasLastProcessedId ?lastId ;
+                            cardano:hasTotalRecords ?totalRecords ;
+                            cardano:hasProcessedRecords ?processedRecords ;
+                            cardano:hasStatus ?status ;
+                            cardano:hasLastUpdated ?lastUpdated .
+                        OPTIONAL {{
+                            <{settings.CARDANO_GRAPH}/etl/progress/{entity_type}>
+                                cardano:hasErrorMessage ?errorMessage .
+                        }}
                     }}
                 }}
                 """
@@ -253,9 +255,10 @@ class ETLPipeline:
                 try:
                     await self._sync_entity_type(entity_type)
                 except Exception as e:
-                    logger.error(f"Error syncing {entity_type}: {e}", exc_info=True)
+                    err_msg = f"Error syncing {entity_type}"
+                    logger.error(err_msg, exc_info=True)
                     self.progress[entity_type].status = ETLStatus.ERROR
-                    self.progress[entity_type].error_message = str(e)
+                    self.progress[entity_type].error_message = err_msg
                     self.progress[entity_type].last_updated = datetime.now()
 
                     # Save error state
@@ -270,14 +273,6 @@ class ETLPipeline:
 
                     # Continue with other entity types
                     continue
-
-            # Run post-processing after all entities are synced
-            if self.running:
-                try:
-                    logger.info("Running ETL post-processing...")
-                    await etl_post_processor.run_all_post_processing()
-                except Exception as e:
-                    logger.error(f"Error in ETL post-processing: {e}", exc_info=True)
 
     async def _sync_entity_type(self, entity_type: str):
         """Sync a specific entity type with error handling and progress tracking."""
@@ -331,7 +326,7 @@ class ETLPipeline:
 
                         try:
                             # Transform to RDF - all data goes to the same graph
-                            turtle_data = transformer.get_prefixes_turtle() + transformer.transform(batch)
+                            turtle_data = transformer.transform(batch)
 
                             # Load to Virtuoso - use single graph for all Cardano data
                             graph_uri = settings.CARDANO_GRAPH
@@ -344,15 +339,17 @@ class ETLPipeline:
                             await self.loader.load_batch(graph_uri, turtle_data, batch_info)
 
                             # Update progress
-                            if batch:
-                                # Find the maximum ID in the batch
-                                max_id = 0
-                                for item in batch:
-                                    if isinstance(item, dict) and 'id' in item:
-                                        max_id = max(max_id, item['id'])
+                            # Find the maximum ID in the batch
+                            max_id = 0
+                            for item in batch:
+                                if isinstance(item, dict) and 'id' in item:
+                                    max_id = max(max_id, item['id'])
 
-                                if max_id > 0:
-                                    progress.last_processed_id = max_id
+                            if max_id > 0:
+                                progress.last_processed_id = max_id
+                            else:
+                                logger.debug(f"Batch {batch_count} for {entity_type} has an id issue, stopping")
+                                break
 
                             progress.processed_records += len(batch)
                             processed_in_session += len(batch)
@@ -374,6 +371,7 @@ class ETLPipeline:
                             raise
 
                     # Final progress save
+                    logger.info(f"Finishing sync for {entity_type}. ")
                     progress.status = ETLStatus.COMPLETED
                     await self.loader.save_progress_metadata(
                         entity_type,
@@ -468,7 +466,7 @@ class ETLPipeline:
                         block_data = [extractor._serialize_block(block) for block in latest_blocks]
 
                         # Transform to RDF
-                        turtle_data = transformer.get_prefixes_turtle() + transformer.transform(block_data)
+                        turtle_data = transformer.transform(block_data)
 
                         # Load to Virtuoso - use main graph
                         batch_info = {

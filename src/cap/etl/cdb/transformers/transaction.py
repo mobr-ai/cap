@@ -57,7 +57,7 @@ class TransactionTransformer(BaseTransformer):
                 turtle_lines.append(f"    blockchain:hasHash \"{tx['hash']}\" ;")
 
             if tx['fee']:
-                turtle_lines.append(f"    cardano:hasFee {self.format_literal(tx['fee'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasFee {self.format_literal(tx['fee'], 'xsd:decimal')} ;")
 
             # Link to block and ensure timestamp propagation
             if tx.get('block_hash'):
@@ -120,7 +120,7 @@ class TransactionTransformer(BaseTransformer):
                 # Create input entity
                 turtle_lines.append(f"")
                 turtle_lines.append(f"{input_uri} a cardano:RegularInput ;")
-                turtle_lines.append(f"    cardano:referencesOutputIndex {self.format_literal(tx_input['tx_out_index'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:referencesOutputIndex {self.format_literal(tx_input['tx_out_index'], 'xsd:decimal')} ;")
 
                 # Remove trailing semicolon from input
                 if turtle_lines[-1].endswith(' ;'):
@@ -143,7 +143,7 @@ class TransactionTransformer(BaseTransformer):
                     turtle_lines.append(f"")
                     turtle_lines.append(f"{ada_amount_uri} a blockchain:TokenAmount ;")
                     turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(output['value'], 'xsd:integer')} .")
+                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(output['value'], 'xsd:decimal')} .")
                     turtle_lines.append(f"")
 
                 # Process multi-assets
@@ -157,7 +157,7 @@ class TransactionTransformer(BaseTransformer):
                     turtle_lines.append(f"")
                     turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
                     turtle_lines.append(f"    blockchain:hasCurrency {asset_uri} ;")
-                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(ma['quantity'], 'xsd:integer')} .")
+                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(ma['quantity'], 'xsd:decimal')} .")
                     turtle_lines.append(f"")
 
                 # Handle datum if present
@@ -206,18 +206,18 @@ class TransactionTransformer(BaseTransformer):
                             # Extract proposal details if available
                             if isinstance(meta_obj, dict):
                                 if 'title' in meta_obj:
-                                    title = str(meta_obj['title']).replace('"', '\\"').replace('\n', '\\n')
+                                    title = str(meta_obj['title']).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                                     turtle_lines.append(f"    cardano:hasProposalTitle \"{title}\" ;")
                                 if 'abstract' in meta_obj or 'description' in meta_obj:
                                     desc = meta_obj.get('abstract', meta_obj.get('description', ''))
-                                    escaped_desc = str(desc).replace('"', '\\"').replace('\n', '\\n')
+                                    escaped_desc = str(desc).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                                     turtle_lines.append(f"    cardano:hasProposalDescription \"{escaped_desc}\" ;")
                                 if 'proposer' in meta_obj:
-                                    proposer = str(meta_obj['proposer']).replace('"', '\\"')
+                                    proposer = str(meta_obj['proposer']).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                                     turtle_lines.append(f"    cardano:hasProposalProposer \"{proposer}\" ;")
                                 if 'budget' in meta_obj or 'amount' in meta_obj:
                                     budget = meta_obj.get('budget', meta_obj.get('amount', 0))
-                                    turtle_lines.append(f"    cardano:hasRequestedBudget {self.format_literal(budget, 'xsd:integer')} ;")
+                                    turtle_lines.append(f"    cardano:hasRequestedBudget {self.format_literal(budget, 'xsd:decimal')} ;")
 
                             # Default status
                             turtle_lines.append(f"    cardano:hasProposalStatus \"active\" ;")

@@ -7,8 +7,7 @@ from sqlalchemy import (
     Column, Integer, BigInteger, String, Text, DateTime, Boolean,
     Numeric, ForeignKey, Index, LargeBinary, SmallInteger
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
 
@@ -72,9 +71,9 @@ class Tx(Base):
 
     # Relationships
     block = relationship("Block", back_populates="transactions")
-    inputs = relationship("TxIn", back_populates="tx")
+    inputs = relationship("TxIn", foreign_keys='TxIn.tx_in_id', back_populates="tx")
     outputs = relationship("TxOut", back_populates="tx")
-    metadata = relationship("TxMetadata", back_populates="tx")
+    tx_metadata = relationship("TxMetadata", back_populates="tx")
     minted_assets = relationship("MaTxMint", back_populates="tx")
 
 class TxIn(Base):
@@ -98,7 +97,6 @@ class TxOut(Base):
     tx_id = Column(BigInteger, ForeignKey('tx.id'), nullable=False)
     index = Column(SmallInteger, nullable=False)
     address = Column(String, nullable=False)
-    address_raw = Column(LargeBinary, nullable=False)
     payment_cred = Column(LargeBinary)
     stake_address_id = Column(BigInteger, ForeignKey('stake_address.id'))
     value = Column(Numeric(20, 0), nullable=False)
@@ -120,9 +118,6 @@ class StakeAddress(Base):
     hash_raw = Column(LargeBinary, nullable=False, unique=True)
     view = Column(String, nullable=False)
     script_hash = Column(LargeBinary)
-    registered_tx_id = Column(BigInteger, ForeignKey('tx.id'))
-
-    registered_tx = relationship("Tx")
 
 class StakeRegistration(Base):
     __tablename__ = 'stake_registration'
@@ -190,7 +185,7 @@ class TxMetadata(Base):
     bytes = Column(LargeBinary)
     tx_id = Column(BigInteger, ForeignKey('tx.id'), nullable=False)
 
-    tx = relationship("Tx", back_populates="metadata")
+    tx = relationship("Tx", back_populates="tx_metadata")
 
 class Epoch(Base):
     __tablename__ = 'epoch'
@@ -313,14 +308,12 @@ class Reward(Base):
     addr_id = Column(BigInteger, ForeignKey('stake_address.id'), nullable=False)
     type = Column(String, nullable=False)  # 'member', 'leader', 'treasury', 'reserves'
     amount = Column(Numeric(20, 0), nullable=False)
-    earned_epoch = Column(BigInteger, ForeignKey('epoch.id'), nullable=False)
-    spendable_epoch = Column(BigInteger, ForeignKey('epoch.id'), nullable=False)
+    earned_epoch = Column(BigInteger, nullable=False)
+    spendable_epoch = Column(BigInteger, nullable=False)
     pool_id = Column(BigInteger, ForeignKey('pool_hash.id'))
 
     # Relationships
     addr = relationship("StakeAddress")
-    earned_epoch_ref = relationship("Epoch", foreign_keys=[earned_epoch])
-    spendable_epoch_ref = relationship("Epoch", foreign_keys=[spendable_epoch])
     pool = relationship("PoolHash")
 
 class Withdrawal(Base):

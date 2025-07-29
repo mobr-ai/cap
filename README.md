@@ -46,7 +46,7 @@ Before running CAP, ensure you have the following installed on your system:
 
 ### Setting Up Windows (WSL2) - NOT OFFICIALLY SUPPORTED, TESTED NOR RECOMMENDED.
 
-> **DISCLAIMER:** While CAP may work on WSL2, it is **not officially supported**. Some features, especially those relying on networking and Docker, may require additional configuration or may not work as expected. Use at your own discretion.  
+> **DISCLAIMER:** While CAP may work on WSL2, it is **not officially supported**. Some features, especially those relying on networking and Docker, may require additional configuration or may not work as expected. Use at your own discretion.
 
 1. **Enable WSL2 and Install Ubuntu:**
    - Follow Microsoft’s guide: [https://learn.microsoft.com/en-us/windows/wsl/install](https://learn.microsoft.com/en-us/windows/wsl/install)
@@ -188,8 +188,8 @@ Before running CAP, ensure you have the following installed on your system:
    ```bash
    python3.11 -m venv venv
    source venv/bin/activate
-   pip install --upgrade pip
-   pip install --no-cache-dir -e ".[dev]"
+
+   poetry install
    ```
 
 4. **Run CAP server:**
@@ -207,11 +207,14 @@ With CAP and its dependencies running, you can also run its tests
 # activate virtual environment
 source venv/bin/activate
 
+# install dev dependencies
+poetry install --with dev
+
 # Run all tests
-pytest
+pytest -v
 
 # Run specific test file
-pytest src/tests/test_api.py
+pytest -v src/tests/test_api.py
 
 # Run specifit test function
 pytest -s src/tests/test_integration.py::test_full_graph_lifecycle

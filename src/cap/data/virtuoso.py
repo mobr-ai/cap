@@ -62,13 +62,19 @@ class VirtuosoClient:
             logger.error(f"Failed to initialize SPARQL wrapper: {e}")
             raise RuntimeError(f"SPARQL wrapper initialization failed: {e}")
 
-    def _build_prefixes(self, additional_prefixes: Optional[dict[str, str]] = None) -> str:
+    def _build_prefixes(self, prefix_statement, default_prefixes, additional_prefixes: Optional[dict[str, str]] = None) -> str:
         """Build prefix declarations including any additional prefixes."""
-        prefix_str = DEFAULT_PREFIX
+        prefix_str = default_prefixes
         if additional_prefixes:
             for prefix, uri in additional_prefixes.items():
-                prefix_str += f"\n    PREFIX {prefix}: <{uri}>"
+                prefix_str += f"\n    {prefix_statement} {prefix}: <{uri}>"
         return prefix_str
+
+    def _build_turtle_prefixes(self, additional_prefixes: Optional[dict[str, str]] = None) -> str:
+        return self._build_prefixes("@prefix", "", additional_prefixes)
+
+    def _build_sparql_prefixes(self, additional_prefixes: Optional[dict[str, str]] = None) -> str:
+        return self._build_prefixes("PREFIX", DEFAULT_PREFIX, additional_prefixes)
 
     async def _execute_sparql_query_async(self, query: str) -> dict:
         """Execute SPARQL query asynchronously."""
@@ -76,12 +82,14 @@ class VirtuosoClient:
             try:
                 if not self._sparql_wrapper:
                     self._initialize_sparql_wrapper()
-                
+
                 self._sparql_wrapper.setQuery(query)
                 result = self._sparql_wrapper.query()
                 return result.convert()
             except Exception as e:
-                logger.error(f"SPARQL query execution failed: {e}")
+                logger.error(f"SPARQL query execution failed!")
+                logger.error(f"     query: {query}")
+                logger.error(f"     exception: {e}")
                 raise
 
         loop = asyncio.get_event_loop()
@@ -92,11 +100,12 @@ class VirtuosoClient:
             raise HTTPException(status_code=500, detail=f"SPARQL query failed: {str(e)}")
 
     async def _make_crud_request(
-        self, 
-        method: str, 
-        graph_uri: str, 
+        self,
+        method: str,
+        graph_uri: str,
         data: Optional[str] = None,
-        headers: Optional[dict[str, str]] = None
+        headers: Optional[dict[str, str]] = None,
+        additional_prefixes: Optional[dict[str, str]] = None
     ) -> bool:
         """Make a CRUD request to the Virtuoso endpoint."""
         with tracer.start_as_current_span("virtuoso_crud_request") as span:
@@ -127,12 +136,13 @@ class VirtuosoClient:
             timeout = httpx.Timeout(30.0, connect=10.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 try:
+                    str_prefixes = self._build_turtle_prefixes(additional_prefixes)
                     response = await client.request(
                         method=method,
                         url=self.config.crud_endpoint,
                         params={"graph-uri": graph_uri},
                         headers=default_headers,
-                        content=data,
+                        content=str_prefixes+data,
                         auth=(self.config.username, self.config.password)
                     )
 
@@ -159,35 +169,42 @@ class VirtuosoClient:
                     logger.error(error_msg)
                     raise HTTPException(status_code=503, detail=error_msg)
 
-    async def create_graph(self, graph_uri: str, turtle_data: str) -> bool:
+    async def create_graph(
+            self,
+            graph_uri: str,
+            turtle_data: str,
+            additional_prefixes: Optional[dict[str, str]] = None
+    ) -> bool:
         """Create a new graph with the provided Turtle data."""
         with tracer.start_as_current_span("create_graph") as span:
             span.set_attribute("graph_uri", graph_uri)
             span.set_attribute("data_size", len(turtle_data))
-            
+
             try:
                 exists = await self.check_graph_exists(graph_uri)
                 if exists:
                     logger.warning(f"Graph {graph_uri} already exists, skipping creation")
                     return True  # Consider this a success case
-                
+
                 return await self._make_crud_request(
                     method="POST",
                     graph_uri=graph_uri,
                     data=turtle_data,
-                    headers={"Content-Type": "application/x-turtle"}
+                    headers={"Content-Type": "application/x-turtle"},
+                    additional_prefixes=additional_prefixes
                 )
             except HTTPException:
+                logger.error(f"HTTP Exception creating graph {graph_uri}")
                 raise
             except Exception as e:
                 logger.error(f"Unexpected error creating graph {graph_uri}: {e}")
-                raise HTTPException(status_code=500, detail=f"Graph creation failed: {str(e)}")
+                raise
 
     async def read_graph(self, graph_uri: str) -> dict:
         """Read all triples from a graph."""
         with tracer.start_as_current_span("read_graph") as span:
             span.set_attribute("graph_uri", graph_uri)
-            
+
             try:
                 query = f"""
                 CONSTRUCT {{ ?s ?p ?o }}
@@ -199,14 +216,15 @@ class VirtuosoClient:
                 """
                 return await self._execute_sparql_query_async(query)
             except HTTPException:
+                logger.error(f"HTTP Exception reading graph {graph_uri}")
                 raise
             except Exception as e:
                 logger.error(f"Error reading graph {graph_uri}: {e}")
-                raise HTTPException(status_code=500, detail=f"Graph read failed: {str(e)}")
+                raise
 
     async def update_graph(
-        self, 
-        graph_uri: str, 
+        self,
+        graph_uri: str,
         insert_data: Optional[str] = None,
         delete_data: Optional[str] = None,
         additional_prefixes: Optional[dict[str, str]] = None
@@ -221,47 +239,79 @@ class VirtuosoClient:
                 raise ValueError("Either insert_data or delete_data must be provided")
 
             try:
-                prefixes = self._build_prefixes(additional_prefixes)
-                query_parts = [prefixes]
+                self._sparql_wrapper.setMethod('POST')
+                prefixes = self._build_sparql_prefixes(additional_prefixes)
 
+                # Handle DELETE operation
                 if delete_data:
-                    query_parts.append(f"DELETE DATA {{ GRAPH <{graph_uri}> {{ {delete_data} }} }}")
-                    
-                if insert_data:
-                    query_parts.append(f"INSERT DATA {{ GRAPH <{graph_uri}> {{ {insert_data} }} }}")
+                    # Check if delete_data contains variables
+                    if '?' in delete_data:
+                        # Use DELETE WHERE for patterns with variables
+                        delete_query = f"""
+                        {prefixes}
+                        DELETE WHERE {{
+                            GRAPH <{graph_uri}> {{
+                                {delete_data}
+                            }}
+                        }}
+                        """
+                    else:
+                        # Use DELETE DATA for specific triples
+                        delete_query = f"""
+                        {prefixes}
+                        DELETE DATA {{
+                            GRAPH <{graph_uri}> {{
+                                {delete_data}
+                            }}
+                        }}
+                        """
 
-                query = "\n".join(query_parts)
-                
-                await self._execute_sparql_query_async(query)
+                    await self._execute_sparql_query_async(delete_query)
+
+                # Handle INSERT operation
+                if insert_data:
+                    insert_query = f"""
+                    {prefixes}
+                    INSERT DATA {{
+                        GRAPH <{graph_uri}> {{
+                            {insert_data}
+                        }}
+                    }}
+                    """
+
+                    await self._execute_sparql_query_async(insert_query)
+
                 return True
 
             except HTTPException:
+                logger.error(f"HTTP Exception updating graph {graph_uri}")
                 raise
             except Exception as e:
                 logger.error(f"Error updating graph {graph_uri}: {e}")
-                raise HTTPException(status_code=500, detail=f"Graph update failed: {str(e)}")
+                raise
 
     async def delete_graph(self, graph_uri: str) -> bool:
         """Delete an entire graph."""
         with tracer.start_as_current_span("delete_graph") as span:
             span.set_attribute("graph_uri", graph_uri)
-            
+
             try:
                 return await self._make_crud_request(
                     method="DELETE",
                     graph_uri=graph_uri
                 )
             except HTTPException:
+                logger.error(f"HTTP Exception deleting graph {graph_uri}")
                 raise
             except Exception as e:
                 logger.error(f"Error deleting graph {graph_uri}: {e}")
-                raise HTTPException(status_code=500, detail=f"Graph deletion failed: {str(e)}")
+                raise
 
     async def check_graph_exists(self, graph_uri: str) -> bool:
         """Check if a graph exists."""
         with tracer.start_as_current_span("check_graph_exists") as span:
             span.set_attribute("graph_uri", graph_uri)
-            
+
             try:
                 query = f"""
                 ASK WHERE {{
@@ -287,20 +337,21 @@ class VirtuosoClient:
         """Execute a SPARQL query."""
         with tracer.start_as_current_span("execute_query") as span:
             span.set_attribute("query_type", "SELECT" if "SELECT" in query.upper() else "OTHER")
-            
+
             try:
                 return await self._execute_sparql_query_async(query)
             except HTTPException:
+                logger.error(f"Error HTTPException")
                 raise
             except Exception as e:
                 logger.error(f"Error executing SPARQL query: {e}")
-                raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}")
+                raise
 
     async def get_graph_count(self, graph_uri: str) -> int:
         """Get the number of triples in a graph."""
         with tracer.start_as_current_span("get_graph_count") as span:
             span.set_attribute("graph_uri", graph_uri)
-            
+
             try:
                 query = f"""
                 SELECT (COUNT(*) AS ?count)
@@ -311,7 +362,7 @@ class VirtuosoClient:
                 }}
                 """
                 result = await self._execute_sparql_query_async(query)
-                
+
                 if result.get('results', {}).get('bindings'):
                     count = int(result['results']['bindings'][0]['count']['value'])
                     span.set_attribute("triple_count", count)

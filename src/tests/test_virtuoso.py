@@ -16,7 +16,7 @@ async def test_check_graph_exists(virtuoso_client: VirtuosoClient):
     # Clean start
     if await virtuoso_client.check_graph_exists(TEST_GRAPH):
         await virtuoso_client.delete_graph(TEST_GRAPH)
-    
+
     # Test non-existent graph
     exists = await virtuoso_client.check_graph_exists(TEST_GRAPH)
     assert not exists
@@ -26,7 +26,7 @@ async def test_create_and_delete_graph(virtuoso_client: VirtuosoClient):
     # Clean start
     if await virtuoso_client.check_graph_exists(TEST_GRAPH):
         await virtuoso_client.delete_graph(TEST_GRAPH)
-    
+
     # Create graph
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_TRIPLE)
     exists = await virtuoso_client.check_graph_exists(TEST_GRAPH)
@@ -41,7 +41,7 @@ async def test_create_and_delete_graph(virtuoso_client: VirtuosoClient):
 async def test_execute_query(virtuoso_client: VirtuosoClient):
     # Setup
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_TRIPLE)
-    
+
     # Test query
     query = f"""
     PREFIX test: <http://test.graph#>
@@ -53,7 +53,7 @@ async def test_execute_query(virtuoso_client: VirtuosoClient):
     """
     result = await virtuoso_client.execute_query(query)
     assert result.get('boolean') is True
-    
+
     # Cleanup
     await virtuoso_client.delete_graph(TEST_GRAPH)
 
@@ -61,7 +61,7 @@ async def test_execute_query(virtuoso_client: VirtuosoClient):
 async def test_update_graph(virtuoso_client: VirtuosoClient):
     # Setup
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_TRIPLE)
-    
+
     # Update
     update_success = await virtuoso_client.update_graph(
         TEST_GRAPH,
@@ -83,6 +83,6 @@ async def test_update_graph(virtuoso_client: VirtuosoClient):
     """
     result = await virtuoso_client.execute_query(query)
     assert result.get('boolean') is True
-    
+
     # Cleanup
     await virtuoso_client.delete_graph(TEST_GRAPH)

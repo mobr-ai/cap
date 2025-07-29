@@ -173,8 +173,6 @@ class RewardExtractor(BaseExtractor):
         with tracer.start_as_current_span("reward_extraction") as span:
             query = self.db_session.query(Reward).options(
                 joinedload(Reward.addr),
-                joinedload(Reward.earned_epoch_ref),
-                joinedload(Reward.spendable_epoch_ref),
                 joinedload(Reward.pool)
             )
 
@@ -223,9 +221,7 @@ class StakeAddressExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract stake addresses in batches."""
         with tracer.start_as_current_span("stake_address_extraction") as span:
-            query = self.db_session.query(StakeAddress).options(
-                joinedload(StakeAddress.registered_tx)
-            )
+            query = self.db_session.query(StakeAddress)
 
             if last_processed_id:
                 query = query.filter(StakeAddress.id > last_processed_id)
@@ -253,8 +249,6 @@ class StakeAddressExtractor(BaseExtractor):
             'hash_raw': stake_addr.hash_raw.hex() if stake_addr.hash_raw else None,
             'view': stake_addr.view,
             'script_hash': stake_addr.script_hash.hex() if stake_addr.script_hash else None,
-            'registered_tx_id': stake_addr.registered_tx_id,
-            'registered_tx_hash': stake_addr.registered_tx.hash.hex() if stake_addr.registered_tx and stake_addr.registered_tx.hash else None,
             'has_script': bool(stake_addr.script_hash),
             'stake_amount': stake_amount
         }

@@ -20,10 +20,15 @@ class Settings(BaseSettings):
     ETL_SYNC_INTERVAL: int = 300  # seconds
     ETL_AUTO_START: bool = False
     ETL_CONTINUOUS: bool = True
+    ETL_PROGRESS_GRAPH: str
 
     # Monitoring settings
     ETL_METRICS_ENABLED: bool = True
     ETL_LOG_LEVEL: str = "INFO"
+
+    # CAP settings
+    CAP_HOST: str
+    CAP_PORT: int
 
     model_config = SettingsConfigDict(
         env_file=".env",

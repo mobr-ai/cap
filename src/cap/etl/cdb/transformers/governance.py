@@ -30,13 +30,6 @@ class GovernanceTransformer(BaseTransformer):
                 proposal_uri = self.create_uri('governance_proposal', f"{action['tx_hash']}_proposal")
                 turtle_lines.append(f"    cardano:executesGovernanceProposal {proposal_uri} ;")
 
-                # Create the proposal if it doesn't exist
-                turtle_lines.append(f"")
-                turtle_lines.append(f"{proposal_uri} a cardano:GovernanceProposal ;")
-                turtle_lines.append(f"    cardano:hasProposalId \"{action['tx_hash']}_proposal\" ;")
-                turtle_lines.append(f"    cardano:hasProposalStatus \"active\" .")
-                turtle_lines.append(f"")
-
             # Process voting procedures
             vote_count = 0
             for i, vote_proc in enumerate(action.get('voting_procedures', [])):
@@ -44,7 +37,21 @@ class GovernanceTransformer(BaseTransformer):
                 turtle_lines.append(f"    cardano:hasVote {vote_uri} ;")
                 vote_count += 1
 
-                # Create vote entity
+            # Remove trailing semicolon and add period
+            if turtle_lines and turtle_lines[-1].endswith(' ;'):
+                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+
+            # Create the proposal if it doesn't exist
+            if proposal_uri:
+                turtle_lines.append(f"")
+                turtle_lines.append(f"{proposal_uri} a cardano:GovernanceProposal ;")
+                turtle_lines.append(f"    cardano:hasProposalId \"{action['tx_hash']}_proposal\" ;")
+                turtle_lines.append(f"    cardano:hasProposalStatus \"active\" .")
+
+            # Create vote entities
+            for i, vote_proc in enumerate(action.get('voting_procedures', [])):
+                vote_uri = self.create_uri('vote', f"{action['id']}_vote_{i}")
+
                 turtle_lines.append(f"")
                 turtle_lines.append(f"{vote_uri} a cardano:Vote ;")
 
@@ -56,9 +63,12 @@ class GovernanceTransformer(BaseTransformer):
                     else:
                         turtle_lines.append(f"    cardano:hasVotingResult \"abstain\" ;")
 
+                # Remove trailing semicolon from vote
+                if turtle_lines[-1].endswith(' ;'):
+                    turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+
                 # Bidirectional link between proposal and vote
                 if proposal_uri:
-                    turtle_lines.append(f"    cardano:hasVotingResult \"{vote_proc.get('vote', 'abstain').lower()}\" .")
                     turtle_lines.append(f"{proposal_uri} cardano:hasVote {vote_uri} .")
 
                 # Create account-vote relationship with correct direction
@@ -87,10 +97,6 @@ class GovernanceTransformer(BaseTransformer):
             if proposal_uri and vote_count > 0:
                 turtle_lines.append(f"")
                 turtle_lines.append(f"# Total votes for this proposal: {vote_count}")
-
-            # Remove trailing semicolon and add period
-            if turtle_lines and turtle_lines[-1].endswith(' ;'):
-                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
 
             turtle_lines.append("")
 
@@ -150,8 +156,8 @@ class TreasuryTransformer(BaseTransformer):
         treasury_uri = self.create_uri('treasury_movement', treasury['id'])
 
         lines.append(f"{treasury_uri} a cardano:TreasuryMovement ;")
-        lines.append(f"    cardano:hasTreasuryAmount {self.format_literal(treasury['amount'], 'xsd:integer')} ;")
-        lines.append(f"    cardano:hasCertIndex {self.format_literal(treasury['cert_index'], 'xsd:integer')} ;")
+        lines.append(f"    cardano:hasTreasuryAmount {self.format_literal(treasury['amount'], 'xsd:decimal')} ;")
+        lines.append(f"    cardano:hasCertIndex {self.format_literal(treasury['cert_index'], 'xsd:decimal')} ;")
 
         if treasury['stake_address']:
             stake_addr_uri = self.create_stake_address_uri(treasury['stake_address'])
@@ -174,8 +180,8 @@ class TreasuryTransformer(BaseTransformer):
         reserve_uri = self.create_uri('reserve_movement', reserve['id'])
 
         lines.append(f"{reserve_uri} a cardano:ReserveMovement ;")
-        lines.append(f"    cardano:hasReserveAmount {self.format_literal(reserve['amount'], 'xsd:integer')} ;")
-        lines.append(f"    cardano:hasCertIndex {self.format_literal(reserve['cert_index'], 'xsd:integer')} ;")
+        lines.append(f"    cardano:hasReserveAmount {self.format_literal(reserve['amount'], 'xsd:decimal')} ;")
+        lines.append(f"    cardano:hasCertIndex {self.format_literal(reserve['cert_index'], 'xsd:decimal')} ;")
 
         if reserve['stake_address']:
             stake_addr_uri = self.create_stake_address_uri(reserve['stake_address'])
@@ -198,9 +204,9 @@ class TreasuryTransformer(BaseTransformer):
         transfer_uri = self.create_uri('pot_transfer', pot_transfer['id'])
 
         lines.append(f"{transfer_uri} a cardano:PotTransfer ;")
-        lines.append(f"    cardano:hasTreasuryTransfer {self.format_literal(pot_transfer['treasury'], 'xsd:integer')} ;")
-        lines.append(f"    cardano:hasReserveTransfer {self.format_literal(pot_transfer['reserves'], 'xsd:integer')} ;")
-        lines.append(f"    cardano:hasCertIndex {self.format_literal(pot_transfer['cert_index'], 'xsd:integer')} ;")
+        lines.append(f"    cardano:hasTreasuryTransfer {self.format_literal(pot_transfer['treasury'], 'xsd:decimal')} ;")
+        lines.append(f"    cardano:hasReserveTransfer {self.format_literal(pot_transfer['reserves'], 'xsd:decimal')} ;")
+        lines.append(f"    cardano:hasCertIndex {self.format_literal(pot_transfer['cert_index'], 'xsd:decimal')} ;")
 
         if pot_transfer['tx_hash']:
             tx_uri = self.create_transaction_uri(pot_transfer['tx_hash'])

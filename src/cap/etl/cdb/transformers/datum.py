@@ -22,8 +22,8 @@ class DatumTransformer(BaseTransformer):
                 turtle_lines.append(f"    blockchain:hasHash \"{datum['hash']}\" ;")
 
             if datum['value']:
-                # Escape the JSON value properly
-                escaped_value = datum['value'].replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                # More robust JSON escaping
+                escaped_value = datum['value'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
                 turtle_lines.append(f"    cardano:hasDatumContent {self.format_literal(escaped_value)} ;")
 
             if datum['bytes']:

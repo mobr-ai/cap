@@ -24,7 +24,7 @@ class TransactionExtractor(BaseExtractor):
                 joinedload(Tx.outputs).joinedload(TxOut.inline_datum),
                 joinedload(Tx.outputs).joinedload(TxOut.reference_script),
                 joinedload(Tx.minted_assets).joinedload(MaTxMint.multi_asset),
-                joinedload(Tx.metadata)
+                joinedload(Tx.tx_metadata)
             )
 
             if last_processed_id:
@@ -64,7 +64,7 @@ class TransactionExtractor(BaseExtractor):
             'script_size': tx.script_size,
             'inputs': [self._serialize_tx_input(inp) for inp in tx.inputs],
             'outputs': [self._serialize_tx_output(out) for out in tx.outputs],
-            'metadata': [self._serialize_tx_metadata(meta) for meta in tx.metadata],
+            'metadata': [self._serialize_tx_metadata(meta) for meta in tx.tx_metadata],
             'minted_assets': [self._serialize_minted_asset(ma) for ma in getattr(tx, 'minted_assets', [])],
             'certificates': self._extract_certificates(tx),
             'withdrawals': self._extract_withdrawals(tx)
@@ -90,7 +90,6 @@ class TransactionExtractor(BaseExtractor):
             'id': tx_out.id,
             'index': tx_out.index,
             'address': tx_out.address,
-            'address_raw': tx_out.address_raw.hex() if tx_out.address_raw else None,
             'payment_cred': tx_out.payment_cred.hex() if tx_out.payment_cred else None,
             'stake_address_id': tx_out.stake_address_id,
             'stake_address': tx_out.stake_address.view if tx_out.stake_address else None,
@@ -176,18 +175,6 @@ class TransactionExtractor(BaseExtractor):
                 'pool_hash_id': deleg.pool_hash_id
             })
 
-        # Get pool updates
-        pool_updates = self.db_session.query(PoolUpdate).filter(
-            PoolUpdate.registered_tx_id == tx.id
-        ).all()
-
-        for update in pool_updates:
-            certificates.append({
-                'type': 'pool_update',
-                'cert_index': update.cert_index,
-                'hash_id': update.hash_id
-            })
-
         # Get pool retirements
         pool_retires = self.db_session.query(PoolRetire).filter(
             PoolRetire.announced_tx_id == tx.id
@@ -204,27 +191,27 @@ class TransactionExtractor(BaseExtractor):
         return certificates
 
     def _extract_withdrawals(self, tx: Tx) -> list[dict[str, Any]]:
-        """Extract withdrawal data from transaction."""
-        from cap.data.cdb_model import Withdrawal
+       """Extract withdrawal data from transaction."""
+       from cap.data.cdb_model import Withdrawal
 
-        withdrawals = []
+       withdrawals = []
 
-        tx_withdrawals = self.db_session.query(Withdrawal).filter(
-            Withdrawal.tx_id == tx.id
-        ).all()
+       tx_withdrawals = self.db_session.query(Withdrawal).filter(
+           Withdrawal.tx_id == tx.id
+       ).all()
 
-        for withdrawal in tx_withdrawals:
-            withdrawals.append({
-                'id': withdrawal.id,
-                'addr_id': withdrawal.addr_id,
-                'amount': str(withdrawal.amount)
-            })
+       for withdrawal in tx_withdrawals:
+           withdrawals.append({
+               'id': withdrawal.id,
+               'addr_id': withdrawal.addr_id,
+               'amount': str(withdrawal.amount)
+           })
 
-        return withdrawals
+       return withdrawals
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Tx.id)).scalar()
+       return self.db_session.query(func.count(Tx.id)).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Tx.id)).scalar()
-        return result
+       result = self.db_session.query(func.max(Tx.id)).scalar()
+       return result

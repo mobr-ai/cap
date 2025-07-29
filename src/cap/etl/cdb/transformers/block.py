@@ -25,23 +25,23 @@ class BlockTransformer(BaseTransformer):
                 turtle_lines.append(f"    blockchain:hasTimestamp {self.format_literal(block['time'], 'xsd:dateTime')} ;")
 
             if block['slot_no'] is not None:
-                turtle_lines.append(f"    cardano:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:decimal')} ;")
 
             if block['epoch_no'] is not None:
                 epoch_uri = self.create_epoch_uri(block['epoch_no'])
                 turtle_lines.append(f"    cardano:belongsToEpoch {epoch_uri} ;")
 
             if block['epoch_slot_no'] is not None:
-                turtle_lines.append(f"    cardano:hasEpochSlot {self.format_literal(block['epoch_slot_no'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasEpochSlot {self.format_literal(block['epoch_slot_no'], 'xsd:decimal')} ;")
 
             if block['block_no'] is not None:
-                turtle_lines.append(f"    cardano:hasBlockNumber {self.format_literal(block['block_no'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasBlockNumber {self.format_literal(block['block_no'], 'xsd:decimal')} ;")
 
             if block['size']:
-                turtle_lines.append(f"    cardano:hasBlockSize {self.format_literal(block['size'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasBlockSize {self.format_literal(block['size'], 'xsd:decimal')} ;")
 
             if block['tx_count']:
-                turtle_lines.append(f"    cardano:hasBlockTransactionCount {self.format_literal(block['tx_count'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasBlockTransactionCount {self.format_literal(block['tx_count'], 'xsd:decimal')} ;")
 
             # Add all transactions
             for tx in block.get('transactions', []):
@@ -55,10 +55,10 @@ class BlockTransformer(BaseTransformer):
 
             # Protocol version information
             if block.get('proto_major') is not None:
-                turtle_lines.append(f"    cardano:hasProtocolMajorVersion {self.format_literal(block['proto_major'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasProtocolMajorVersion {self.format_literal(block['proto_major'], 'xsd:decimal')} ;")
 
             if block.get('proto_minor') is not None:
-                turtle_lines.append(f"    cardano:hasProtocolMinorVersion {self.format_literal(block['proto_minor'], 'xsd:integer')} ;")
+                turtle_lines.append(f"    cardano:hasProtocolMinorVersion {self.format_literal(block['proto_minor'], 'xsd:decimal')} ;")
 
             # Slot leader information
             if block['slot_leader_hash']:

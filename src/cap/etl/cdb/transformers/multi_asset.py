@@ -26,7 +26,9 @@ class MultiAssetTransformer(BaseTransformer):
                 turtle_lines.append(f"    cardano:hasPolicyId \"{asset['policy']}\" ;")
 
             if asset['name']:
-                turtle_lines.append(f"    blockchain:hasTokenName \"{asset['name']}\" ;")
+                # Escape the name properly
+                escaped_name = asset['name'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+                turtle_lines.append(f"    blockchain:hasTokenName \"{escaped_name}\" ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):

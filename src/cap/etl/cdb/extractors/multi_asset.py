@@ -12,29 +12,29 @@ tracer = trace.get_tracer(__name__)
 
 class MultiAssetExtractor(BaseExtractor):
     """Extracts multi-asset (native token) data from cardano-db-sync."""
-    
+
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract multi-assets in batches."""
         with tracer.start_as_current_span("multi_asset_extraction") as span:
             query = self.db_session.query(MultiAsset)
-            
+
             if last_processed_id:
                 query = query.filter(MultiAsset.id > last_processed_id)
-            
+
             query = query.order_by(MultiAsset.id)
-            
+
             offset = 0
             while True:
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
-                
+
                 span.set_attribute("batch_size", len(batch))
                 span.set_attribute("offset", offset)
-                
+
                 yield [self._serialize_multi_asset(asset) for asset in batch]
                 offset += self.batch_size
-    
+
     def _serialize_multi_asset(self, asset: MultiAsset) -> dict[str, Any]:
         """Serialize multi-asset to dictionary."""
         return {
@@ -44,10 +44,10 @@ class MultiAssetExtractor(BaseExtractor):
             'name_utf8': asset.name.decode('utf-8', errors='ignore') if asset.name else None,
             'fingerprint': asset.fingerprint
         }
-    
+
     def get_total_count(self) -> int:
         return self.db_session.query(func.count(MultiAsset.id)).scalar()
-    
+
     def get_last_id(self) -> Optional[int]:
         result = self.db_session.query(func.max(MultiAsset.id)).scalar()
         return result

@@ -3,7 +3,7 @@ import pytest
 from httpx import AsyncClient
 from typing import AsyncGenerator
 import logging
-from cap.main import app
+from cap.config import settings
 from cap.data.virtuoso import VirtuosoClient
 
 # Set up logging
@@ -16,9 +16,9 @@ def virtuoso_client():
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    base_url = "http://localhost:8000"
+    base_url = f"http://{settings.CAP_HOST}:{settings.CAP_PORT}"
     logger.debug(f"Creating async client with base_url: {base_url}")
-    
+
     async with AsyncClient(
         base_url=base_url,
         follow_redirects=True,
