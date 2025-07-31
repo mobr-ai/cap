@@ -9,11 +9,11 @@ class Settings(BaseSettings):
     CARDANO_GRAPH: str
 
     # PostgreSQL settings for cardano-db-sync
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "cap"
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "mysecretpassword"
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
 
     # ETL settings
     ETL_BATCH_SIZE: int = 1000

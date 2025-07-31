@@ -58,7 +58,7 @@ class StakePoolExtractor(BaseExtractor):
             'cert_index': pool_update.cert_index,
             'vrf_key_hash': pool_update.vrf_key_hash.hex() if pool_update.vrf_key_hash else None,
             'pledge': str(pool_update.pledge),
-            'reward_addr': pool_update.reward_addr,
+            'reward_addr': pool_update.reward_addr.view if pool_update.reward_addr else None,  # Access through relationship
             'active_epoch_no': pool_update.active_epoch_no,
             'margin': float(pool_update.margin),
             'fixed_cost': str(pool_update.fixed_cost),
@@ -176,10 +176,21 @@ class RewardExtractor(BaseExtractor):
                 joinedload(Reward.pool)
             )
 
+            # Since reward table doesn't have an id column, we need to use a different approach
+            # We'll order by addr_id, type, and earned_epoch (the composite key)
             if last_processed_id:
-                query = query.filter(Reward.id > last_processed_id)
+                # last_processed_id will be a tuple of (addr_id, type, earned_epoch)
+                if isinstance(last_processed_id, dict):
+                    query = query.filter(
+                        (Reward.addr_id > last_processed_id['addr_id']) |
+                        ((Reward.addr_id == last_processed_id['addr_id']) &
+                         (Reward.type > last_processed_id['type'])) |
+                        ((Reward.addr_id == last_processed_id['addr_id']) &
+                         (Reward.type == last_processed_id['type']) &
+                         (Reward.earned_epoch > last_processed_id['earned_epoch']))
+                    )
 
-            query = query.order_by(Reward.id)
+            query = query.order_by(Reward.addr_id, Reward.type, Reward.earned_epoch)
 
             offset = 0
             while True:
@@ -196,7 +207,8 @@ class RewardExtractor(BaseExtractor):
     def _serialize_reward(self, reward: Reward) -> dict[str, Any]:
         """Serialize a reward to dictionary."""
         return {
-            'id': reward.id,
+            # Create composite id for tracking
+            'id': f"{reward.addr_id}_{reward.type}_{reward.earned_epoch}",
             'addr_id': reward.addr_id,
             'stake_address': reward.addr.view if reward.addr else None,
             'stake_address_hash': reward.addr.hash_raw.hex() if reward.addr and reward.addr.hash_raw else None,
@@ -205,15 +217,20 @@ class RewardExtractor(BaseExtractor):
             'earned_epoch': reward.earned_epoch,
             'spendable_epoch': reward.spendable_epoch,
             'pool_id': reward.pool_id,
-            'pool_hash': reward.pool.view if reward.pool else None
+            'pool_hash': reward.pool.view if reward.pool else None,
+            # Store composite key components for progress tracking
+            '_composite_key': {
+                'addr_id': reward.addr_id,
+                'type': reward.type,
+                'earned_epoch': reward.earned_epoch
+            }
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Reward.id)).scalar()
+        return self.db_session.query(func.count()).select_from(Reward).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Reward.id)).scalar()
-        return result
+        return None
 
 class StakeAddressExtractor(BaseExtractor):
     """Extracts stake address data from cardano-db-sync."""

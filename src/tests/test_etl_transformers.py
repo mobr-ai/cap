@@ -164,7 +164,6 @@ async def test_governance_transformer():
             {
                 'id': 1,
                 'vote': 'Yes',
-                'voter_hash': 'voter123',
                 'voter_role': 'DRep'
             }
         ]

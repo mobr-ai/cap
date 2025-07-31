@@ -1,34 +1,29 @@
-[project]
+[tool.poetry]
 name = "CAP"
 version = "0.2.0"
 description = "Cardano Analytics Platform"
-authors = [{name = "MOBR Systems", email = "contact@mobr.ai"}]
+authors = ["MOBR Systems <contact@mobr.ai>"]
 readme = "README.md"
-requires-python = ">=3.11"
+license = "MIT"
 
-dependencies = [
-    "fastapi>=0.110.0",
-    "uvicorn>=0.27.1",
-    "httpx>=0.26.0",
-    "pydantic>=2.6.1",
-    "pydantic-settings>=2.7.1",
-    "opentelemetry-api>=1.23.0",
-    "opentelemetry-sdk>=1.23.0",
-    "opentelemetry-instrumentation-fastapi>=0.44b0",
-    "opentelemetry-exporter-otlp>=1.23.0",
-    "SPARQLWrapper>=2.0.0",
-    "python-dotenv>=1.0.0",
-    "sqlalchemy>=2.0.0",
-    "psycopg2-binary>=2.9.5",
-    "asyncpg>=0.29.0",
-]
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry.dependencies]
+python = ">=3.11"
+fastapi = ">=0.110.0"
+uvicorn = ">=0.27.1"
+httpx = ">=0.26.0"
+pydantic = ">=2.6.1"
+pydantic-settings = ">=2.7.1"
+opentelemetry-api = ">=1.23.0"
+opentelemetry-sdk = ">=1.23.0"
+opentelemetry-instrumentation-fastapi = ">=0.44b0"
+opentelemetry-exporter-otlp = ">=1.23.0"
+SPARQLWrapper = ">=2.0.0"
+python-dotenv = ">=1.0.0"
+sqlalchemy = ">=2.0.0"
+psycopg2-binary = ">=2.9.5"
+asyncpg = ">=0.29.0"
 
 [tool.poetry.group.dev.dependencies]
-hatchling = ">=1.21.1"
 pytest = ">=8.0.0"
 pytest-asyncio = ">=0.23.5"
 pytest-cov = ">=4.1.0"
@@ -36,6 +31,10 @@ black = ">=24.1.1"
 isort = ">=5.13.2"
 mypy = ">=1.8.0"
 ruff = ">=0.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
@@ -125,6 +124,3 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cap"]

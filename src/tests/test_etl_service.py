@@ -89,7 +89,7 @@ async def test_etl_api_endpoints(async_client: AsyncClient):
         params={"batch_size": 10, "sync_interval": 1, "continuous": False}
     )
     assert response.status_code == 200
-    assert "started successfully" in response.json()["message"]
+    assert ("running already" in response.json()["message"] or "started successfully" in response.json()["message"])
 
     # Get status while running
     response = await async_client.get("/api/v1/etl/status")

@@ -78,10 +78,37 @@ class TransactionTransformer(BaseTransformer):
                     asset_uri = self.create_uri('native_token', minted['fingerprint'])
                     turtle_lines.append(f"    cardano:hasMintedAsset {asset_uri} ;")
 
+            # Process inputs
+            for i, tx_input in enumerate(tx['inputs']):
+                input_uri = self.create_uri('tx_input', f"{tx['hash']}_input_{i}")
+                turtle_lines.append(f"    cardano:hasInput {input_uri} ;")
+
+            # Process outputs
+            for output in tx['outputs']:
+                output_uri = self.create_uri('tx_output', f"{tx['hash']}_output_{output['index']}")
+                turtle_lines.append(f"    cardano:hasOutput {output_uri} ;")
+
+            # Process metadata
+            for metadata in tx['metadata']:
+                meta_uri = self.create_uri('tx_metadata', f"{tx['hash']}_meta_{metadata['key']}")
+                turtle_lines.append(f"    cardano:hasTransactionMetadata {meta_uri} ;")
+
+            # Remove trailing semicolon and add period to close the transaction
+            if turtle_lines and turtle_lines[-1].endswith(' ;'):
+                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+
+            turtle_lines.append("")
+
+            # Now process the related entities that were referenced above
+
+            # Process minted assets (create the entities)
+            for minted in tx.get('minted_assets', []):
+                if minted['fingerprint']:
+                    asset_uri = self.create_uri('native_token', minted['fingerprint'])
+
                     # Check if it's an NFT
                     if self._is_nft(minted, tx.get('metadata', [])):
                         # Create NFT instance
-                        turtle_lines.append(f"")
                         turtle_lines.append(f"{asset_uri} a blockchain:NFT ;")
                         if minted.get('name_utf8'):
                             turtle_lines.append(f"    blockchain:hasTokenName \"{minted['name_utf8']}\" ;")
@@ -94,10 +121,9 @@ class TransactionTransformer(BaseTransformer):
                         # Remove trailing semicolon
                         if turtle_lines[-1].endswith(' ;'):
                             turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-                        turtle_lines.append(f"")
+                        turtle_lines.append("")
                     else:
                         # Create regular token
-                        turtle_lines.append(f"")
                         turtle_lines.append(f"{asset_uri} a cardano:CNT ;")
                         if minted.get('name_utf8'):
                             turtle_lines.append(f"    blockchain:hasTokenName \"{minted['name_utf8']}\" ;")
@@ -110,29 +136,26 @@ class TransactionTransformer(BaseTransformer):
                         # Remove trailing semicolon
                         if turtle_lines[-1].endswith(' ;'):
                             turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-                        turtle_lines.append(f"")
+                        turtle_lines.append("")
 
-            # Process inputs
+            # Process inputs (create the entities)
             for i, tx_input in enumerate(tx['inputs']):
                 input_uri = self.create_uri('tx_input', f"{tx['hash']}_input_{i}")
-                turtle_lines.append(f"    cardano:hasInput {input_uri} ;")
 
                 # Create input entity
-                turtle_lines.append(f"")
                 turtle_lines.append(f"{input_uri} a cardano:RegularInput ;")
                 turtle_lines.append(f"    cardano:referencesOutputIndex {self.format_literal(tx_input['tx_out_index'], 'xsd:decimal')} ;")
 
                 # Remove trailing semicolon from input
                 if turtle_lines[-1].endswith(' ;'):
                     turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+                turtle_lines.append("")
 
-            # Process outputs
+            # Process outputs (create the entities)
             for output in tx['outputs']:
                 output_uri = self.create_uri('tx_output', f"{tx['hash']}_output_{output['index']}")
-                turtle_lines.append(f"    cardano:hasOutput {output_uri} ;")
 
                 # Create output entity
-                turtle_lines.append(f"")
                 turtle_lines.append(f"{output_uri} a cardano:RegularOutput ;")
 
                 # Add ADA amount
@@ -140,25 +163,12 @@ class TransactionTransformer(BaseTransformer):
                     ada_amount_uri = self.create_uri('token_amount', f"{tx['hash']}_{output['index']}_ada")
                     turtle_lines.append(f"    blockchain:hasTokenAmount {ada_amount_uri} ;")
 
-                    turtle_lines.append(f"")
-                    turtle_lines.append(f"{ada_amount_uri} a blockchain:TokenAmount ;")
-                    turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(output['value'], 'xsd:decimal')} .")
-                    turtle_lines.append(f"")
-
                 # Process multi-assets
                 for ma in output['multi_assets']:
                     asset_uri = self.create_uri('native_token', ma['fingerprint'])
                     amount_uri = self.create_uri('token_amount', f"{tx['hash']}_{output['index']}_{ma['fingerprint']}")
 
                     turtle_lines.append(f"    blockchain:hasTokenAmount {amount_uri} ;")
-
-                    # Create token amount entity
-                    turtle_lines.append(f"")
-                    turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
-                    turtle_lines.append(f"    blockchain:hasCurrency {asset_uri} ;")
-                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(ma['quantity'], 'xsd:decimal')} .")
-                    turtle_lines.append(f"")
 
                 # Handle datum if present
                 if output.get('data_hash'):
@@ -168,14 +178,33 @@ class TransactionTransformer(BaseTransformer):
                 # Remove trailing semicolon from output
                 if turtle_lines[-1].endswith(' ;'):
                     turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+                turtle_lines.append("")
 
-            # Process metadata
+                # Create the token amount entities for this output
+                # ADA amount
+                if output['value']:
+                    ada_amount_uri = self.create_uri('token_amount', f"{tx['hash']}_{output['index']}_ada")
+                    turtle_lines.append(f"{ada_amount_uri} a blockchain:TokenAmount ;")
+                    turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
+                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(output['value'], 'xsd:decimal')} .")
+                    turtle_lines.append("")
+
+                # Multi-asset amounts
+                for ma in output['multi_assets']:
+                    asset_uri = self.create_uri('native_token', ma['fingerprint'])
+                    amount_uri = self.create_uri('token_amount', f"{tx['hash']}_{output['index']}_{ma['fingerprint']}")
+
+                    # Create token amount entity
+                    turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
+                    turtle_lines.append(f"    blockchain:hasCurrency {asset_uri} ;")
+                    turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(ma['quantity'], 'xsd:decimal')} .")
+                    turtle_lines.append("")
+
+            # Process metadata (create the entities)
             for metadata in tx['metadata']:
                 meta_uri = self.create_uri('tx_metadata', f"{tx['hash']}_meta_{metadata['key']}")
-                turtle_lines.append(f"    cardano:hasTransactionMetadata {meta_uri} ;")
 
                 # Create metadata entity
-                turtle_lines.append(f"")
                 turtle_lines.append(f"{meta_uri} a cardano:TransactionMetadata .")
 
                 # Check if metadata contains governance proposal
@@ -199,7 +228,7 @@ class TransactionTransformer(BaseTransformer):
                             turtle_lines.append(f"{meta_uri} cardano:hasGovernanceProposal {proposal_uri} .")
 
                             # Create the proposal entity with proper ID
-                            turtle_lines.append(f"")
+                            turtle_lines.append("")
                             turtle_lines.append(f"{proposal_uri} a cardano:GovernanceProposal ;")
                             turtle_lines.append(f"    cardano:hasProposalId \"{tx['hash']}_proposal_{metadata['key']}\" ;")
 
@@ -225,15 +254,11 @@ class TransactionTransformer(BaseTransformer):
                             # Remove trailing semicolon
                             if turtle_lines[-1].endswith(' ;'):
                                 turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-                            turtle_lines.append(f"")
+                            turtle_lines.append("")
                     except Exception as e:
                         logger.debug(f"Error parsing metadata JSON: {e}")
 
-            # Remove trailing semicolon and add period
-            if turtle_lines and turtle_lines[-1].endswith(' ;'):
-                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-
-            turtle_lines.append("")
+                turtle_lines.append("")
 
         # Add block-transaction relationships
         for block_uri, tx_uri, timestamp in block_tx_links:

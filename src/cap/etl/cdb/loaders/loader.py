@@ -183,7 +183,7 @@ class CDBLoader:
                 turtle_data = f"""
                 <{progress_uri}> a cardano:ETLProgress ;
                     cardano:hasEntityType "{entity_type}" ;
-                    cardano:hasLastProcessedId {progress.last_processed_id or 0} ;
+                    cardano:hasLastProcessedId "{progress.last_processed_id if isinstance(progress.last_processed_id, (int, str)) else 0}" ;
                     cardano:hasTotalRecords {progress.total_records} ;
                     cardano:hasProcessedRecords {progress.processed_records} ;
                     cardano:hasStatus "{progress.status.value}" ;

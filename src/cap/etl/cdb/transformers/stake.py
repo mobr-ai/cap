@@ -42,32 +42,29 @@ class StakePoolTransformer(BaseTransformer):
                 metadata_uri = self.create_uri('pool_metadata', pool['id'])
                 turtle_lines.append(f"    cardano:hasPoolMetadata {metadata_uri} ;")
 
-                # Create metadata entity
-                turtle_lines.append(f"")
-                turtle_lines.append(f"{metadata_uri} a cardano:PoolMetadata ;")
-
-                # Remove trailing semicolon
-                if turtle_lines[-1].endswith(' ;'):
-                    turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-
             # Pool retirement
             if pool.get('retirement_epoch'):
                 retirement_uri = self.create_uri('pool_retirement', pool['id'])
                 turtle_lines.append(f"    cardano:hasRetirement {retirement_uri} ;")
-
-                # Create retirement entity
-                turtle_lines.append(f"")
-                turtle_lines.append(f"{retirement_uri} a cardano:PoolRetirement ;")
-
-                # Remove trailing semicolon
-                if turtle_lines[-1].endswith(' ;'):
-                    turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):
                 turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
 
             turtle_lines.append("")
+
+            # Now create the separate entities AFTER closing the pool entity
+            # Pool metadata entity
+            if pool['metadata_url']:
+                metadata_uri = self.create_uri('pool_metadata', pool['id'])
+                turtle_lines.append(f"{metadata_uri} a cardano:PoolMetadata .")
+                turtle_lines.append("")
+
+            # Pool retirement entity
+            if pool.get('retirement_epoch'):
+                retirement_uri = self.create_uri('pool_retirement', pool['id'])
+                turtle_lines.append(f"{retirement_uri} a cardano:PoolRetirement .")
+                turtle_lines.append("")
 
         return '\n'.join(turtle_lines)
 

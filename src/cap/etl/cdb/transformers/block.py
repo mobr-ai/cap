@@ -1,4 +1,3 @@
-# Fixed transformers/block.py
 import logging
 from typing import Any
 
@@ -7,7 +6,7 @@ from cap.etl.cdb.transformers.transformer import BaseTransformer
 logger = logging.getLogger(__name__)
 
 class BlockTransformer(BaseTransformer):
-    """Fixed transformer for block data aligned with Cardano ontology."""
+    """Transformer for block data aligned with Cardano ontology."""
 
     def transform(self, blocks: list[dict[str, Any]]) -> str:
         """Transform blocks to RDF Turtle format with complete ontology coverage."""
@@ -65,8 +64,16 @@ class BlockTransformer(BaseTransformer):
                 slot_leader_uri = self.create_uri('slot_leader', block['slot_leader_hash'])
                 turtle_lines.append(f"    cardano:hasSlotLeader {slot_leader_uri} ;")
 
-                # Create slot leader entity
-                turtle_lines.append(f"")
+            # Remove trailing semicolon and add period
+            if turtle_lines and turtle_lines[-1].endswith(' ;'):
+                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+
+            # Add blank line before slot leader entity
+            turtle_lines.append("")
+
+            # Create slot leader entity if it exists
+            if block['slot_leader_hash']:
+                slot_leader_uri = self.create_uri('slot_leader', block['slot_leader_hash'])
                 turtle_lines.append(f"{slot_leader_uri} a cardano:SlotLeader ;")
                 turtle_lines.append(f"    blockchain:hasHash {self.create_hash_literal(block['slot_leader_hash'])} ;")
 
@@ -77,10 +84,6 @@ class BlockTransformer(BaseTransformer):
                 # Remove trailing semicolon from slot leader
                 if turtle_lines[-1].endswith(' ;'):
                     turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
-
-            # Remove trailing semicolon and add period
-            if turtle_lines and turtle_lines[-1].endswith(' ;'):
-                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
 
             turtle_lines.append("")
 

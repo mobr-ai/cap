@@ -71,28 +71,6 @@ class GovernanceTransformer(BaseTransformer):
                 if proposal_uri:
                     turtle_lines.append(f"{proposal_uri} cardano:hasVote {vote_uri} .")
 
-                # Create account-vote relationship with correct direction
-                if vote_proc.get('voter_hash'):
-                    # Determine voter type and create appropriate account
-                    voter_role = vote_proc.get('voter_role', '')
-
-                    if voter_role == 'SPO' and vote_proc.get('pool_hash'):
-                        # For SPO votes, link to stake pool
-                        pool_uri = self.create_pool_uri(vote_proc['pool_hash'])
-                        turtle_lines.append(f"{pool_uri} cardano:castsVote {vote_uri} .")
-                    elif voter_role == 'DRep':
-                        # For DRep votes, create DRep account
-                        drep_uri = self.create_uri('drep', vote_proc['voter_hash'])
-                        turtle_lines.append(f"{drep_uri} a cardano:DRep ;")
-                        turtle_lines.append(f"    blockchain:hasHash \"{vote_proc['voter_hash']}\" ;")
-                        turtle_lines.append(f"    cardano:castsVote {vote_uri} .")
-                    else:
-                        # For other votes, create generic account
-                        voter_account_uri = self.create_uri('account', vote_proc['voter_hash'])
-                        turtle_lines.append(f"{voter_account_uri} a blockchain:Account ;")
-                        turtle_lines.append(f"    blockchain:hasHash \"{vote_proc['voter_hash']}\" ;")
-                        turtle_lines.append(f"    cardano:castsVote {vote_uri} .")
-
             # Add vote count to proposal for easier querying
             if proposal_uri and vote_count > 0:
                 turtle_lines.append(f"")

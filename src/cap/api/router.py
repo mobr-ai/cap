@@ -4,7 +4,7 @@ from urllib.parse import unquote_plus
 import logging
 
 from cap.api.models import (
-    QueryRequest, 
+    QueryRequest,
     QueryResponse,
     GraphCreateRequest,
     GraphUpdateRequest,
@@ -56,15 +56,15 @@ async def read_graph(graph_uri: str):
     try:
         graph_uri = unquote_plus(graph_uri)
         logger.debug(f"[READ] Decoded graph_uri: {graph_uri}")
-        
+
         client = VirtuosoClient()
         exists = await client.check_graph_exists(graph_uri)
         logger.debug(f"[READ] Graph exists check: {exists}")
-        
+
         if not exists:
             logger.debug(f"[READ] Graph not found: {graph_uri}")
             raise HTTPException(status_code=404, detail=f"Graph {graph_uri} not found")
-        
+
         data = await client.read_graph(graph_uri)
         return GraphResponse(data=data)
     except HTTPException as e:
@@ -115,15 +115,15 @@ async def delete_graph(graph_uri: str):
     try:
         graph_uri = unquote_plus(graph_uri)
         logger.debug(f"[DELETE] Decoded graph_uri: {graph_uri}")
-        
+
         client = VirtuosoClient()
         exists = await client.check_graph_exists(graph_uri)
         logger.debug(f"[DELETE] Graph exists check: {exists}")
-        
+
         if not exists:
             logger.debug(f"[DELETE] Graph not found: {graph_uri}")
             raise HTTPException(status_code=404, detail=f"Graph {graph_uri} not found")
-        
+
         success = await client.delete_graph(graph_uri)
         return SuccessResponse(success=success)
     except HTTPException as e:
@@ -150,6 +150,9 @@ async def start_etl(
 ):
     """Manually start ETL pipeline."""
     try:
+        if etl_service.pipeline and etl_service.pipeline.running:
+            return {"message": "ETL pipeline is running already"}
+
         await etl_service.start_etl(
             batch_size=batch_size,
             sync_interval=sync_interval,

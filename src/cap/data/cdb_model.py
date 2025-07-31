@@ -275,7 +275,7 @@ class PoolUpdate(Base):
     cert_index = Column(Integer, nullable=False)
     vrf_key_hash = Column(LargeBinary, nullable=False)
     pledge = Column(Numeric(20, 0), nullable=False)
-    reward_addr = Column(String, nullable=False)
+    reward_addr_id = Column(BigInteger, ForeignKey('stake_address.id'), nullable=False)
     active_epoch_no = Column(BigInteger, nullable=False)
     meta_id = Column(BigInteger, ForeignKey('pool_metadata_ref.id'))
     margin = Column(Numeric, nullable=False)
@@ -286,6 +286,7 @@ class PoolUpdate(Base):
     hash = relationship("PoolHash")
     meta = relationship("PoolMetadataRef")
     registered_tx = relationship("Tx")
+    reward_addr = relationship("StakeAddress")
 
 class PoolRetire(Base):
     __tablename__ = 'pool_retire'
@@ -304,12 +305,12 @@ class PoolRetire(Base):
 class Reward(Base):
     __tablename__ = 'reward'
 
-    id = Column(BigInteger, primary_key=True)
-    addr_id = Column(BigInteger, ForeignKey('stake_address.id'), nullable=False)
-    type = Column(String, nullable=False)  # 'member', 'leader', 'treasury', 'reserves'
-    amount = Column(Numeric(20, 0), nullable=False)
-    earned_epoch = Column(BigInteger, nullable=False)
+    # Composite primary key - no id column in reward table
+    addr_id = Column(BigInteger, ForeignKey('stake_address.id'), nullable=False, primary_key=True)
+    type = Column(String, nullable=False, primary_key=True)  # 'member', 'leader', 'treasury', 'reserves'
+    earned_epoch = Column(BigInteger, nullable=False, primary_key=True)
     spendable_epoch = Column(BigInteger, nullable=False)
+    amount = Column(Numeric(20, 0), nullable=False)
     pool_id = Column(BigInteger, ForeignKey('pool_hash.id'))
 
     # Relationships
@@ -400,7 +401,6 @@ class VotingProcedure(Base):
     index = Column(Integer, nullable=False)
     gov_action_proposal_id = Column(BigInteger, ForeignKey('gov_action_proposal.id'), nullable=False)
     voter_role = Column(String, nullable=False)  # 'ConstitutionalCommittee', 'DRep', 'SPO'
-    voter_hash = Column(LargeBinary, nullable=False)
     vote = Column(String, nullable=False)  # 'Yes', 'No', 'Abstain'
 
     # Relationships

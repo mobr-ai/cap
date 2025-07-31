@@ -340,12 +340,27 @@ class ETLPipeline:
 
                             # Update progress
                             # Find the maximum ID in the batch
-                            max_id = 0
+                            max_id = None
                             for item in batch:
                                 if isinstance(item, dict) and 'id' in item:
-                                    max_id = max(max_id, item['id'])
+                                    current_id = item['id']
+                                    # Handle composite IDs (rewards use strings)
+                                    if isinstance(current_id, str) and '_composite_key' in item:
+                                        # For rewards, use the composite key dict
+                                        if max_id is None:
+                                            max_id = item['_composite_key']
+                                        else:
+                                            # Compare composite keys
+                                            if (current_id > str(max_id.get('addr_id', 0)) + '_' +
+                                                str(max_id.get('type', '')) + '_' +
+                                                str(max_id.get('earned_epoch', 0))):
+                                                max_id = item['_composite_key']
+                                    elif isinstance(current_id, (int, float)):
+                                        # Normal numeric ID
+                                        if max_id is None or (isinstance(max_id, (int, float)) and current_id > max_id):
+                                            max_id = current_id
 
-                            if max_id > 0:
+                            if max_id is not None:
                                 progress.last_processed_id = max_id
                             else:
                                 logger.debug(f"Batch {batch_count} for {entity_type} has an id issue, stopping")

@@ -76,16 +76,6 @@ class GovernanceExtractor(BaseExtractor):
         if procedure.tx_id:
             tx = self.db_session.query(Tx).filter(Tx.id == procedure.tx_id).first()
 
-        # Get pool hash if this is an SPO vote
-        pool_hash = None
-        if procedure.voter_role == 'SPO' and procedure.voter_hash:
-            # Try to find the pool hash that matches this voter hash
-            pool = self.db_session.query(PoolHash).filter(
-                PoolHash.hash_raw == procedure.voter_hash
-            ).first()
-            if pool:
-                pool_hash = pool.view
-
         return {
             'id': procedure.id,
             'tx_id': procedure.tx_id,
@@ -93,9 +83,7 @@ class GovernanceExtractor(BaseExtractor):
             'index': procedure.index,
             'gov_action_proposal_id': procedure.gov_action_proposal_id,
             'voter_role': procedure.voter_role,
-            'voter_hash': procedure.voter_hash.hex() if procedure.voter_hash else None,
-            'vote': procedure.vote,
-            'pool_hash': pool_hash  # Add pool hash for SPO votes
+            'vote': procedure.vote
         }
 
     def get_total_count(self) -> int:
