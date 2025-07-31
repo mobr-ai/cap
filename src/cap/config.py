@@ -8,6 +8,28 @@ class Settings(BaseSettings):
     VIRTUOSO_PASSWORD: str
     CARDANO_GRAPH: str
 
+    # PostgreSQL settings for cardano-db-sync
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+
+    # ETL settings
+    ETL_BATCH_SIZE: int = 1000
+    ETL_SYNC_INTERVAL: int = 300  # seconds
+    ETL_AUTO_START: bool = False
+    ETL_CONTINUOUS: bool = True
+    ETL_PROGRESS_GRAPH: str
+
+    # Monitoring settings
+    ETL_METRICS_ENABLED: bool = True
+    ETL_LOG_LEVEL: str = "INFO"
+
+    # CAP settings
+    CAP_HOST: str
+    CAP_PORT: int
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

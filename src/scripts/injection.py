@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta
 import asyncio
 
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 PREFIXES = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
     PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-     
+
 """
 TEST_GRAPH = "http://test.cardano.queries"
 
@@ -78,15 +78,15 @@ def generate_test_data():
         # Transaction outputs
         <http://test/output1> blockchain:hasTokenAmount <http://test/amount1> .
         <http://test/amount1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "5000000000"^^xsd:integer .
+            blockchain:hasAmountValue "5000000000"^^xsd:decimal .
 
         <http://test/output2> blockchain:hasTokenAmount <http://test/amount2> .
         <http://test/amount2> blockchain:hasCurrency <http://test/token1> ;
-            blockchain:hasAmountValue "1000"^^xsd:integer .
+            blockchain:hasAmountValue "1000"^^xsd:decimal .
 
         <http://test/output3> blockchain:hasTokenAmount <http://test/amount3> .
         <http://test/amount3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "3000000000"^^xsd:integer .
+            blockchain:hasAmountValue "3000000000"^^xsd:decimal .
 
         # Accounts
         <http://test/account1> rdf:type blockchain:Account ;
@@ -105,20 +105,20 @@ def generate_test_data():
 
         # Account holdings
         <http://test/holding1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "250000000000"^^xsd:integer .
+            blockchain:hasAmountValue "250000000000"^^xsd:decimal .
 
         <http://test/holding2> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "150000000000"^^xsd:integer .
+            blockchain:hasAmountValue "150000000000"^^xsd:decimal .
 
         <http://test/holding3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "180000000000"^^xsd:integer .
+            blockchain:hasAmountValue "180000000000"^^xsd:decimal .
 
         # Rewards
         <http://test/reward1> cardano:hasRewardAmount <http://test/rewardAmount1> .
-        <http://test/rewardAmount1> blockchain:hasAmountValue "1000000"^^xsd:integer .
+        <http://test/rewardAmount1> blockchain:hasAmountValue "1000000"^^xsd:decimal .
 
         <http://test/reward2> cardano:hasRewardAmount <http://test/rewardAmount2> .
-        <http://test/rewardAmount2> blockchain:hasAmountValue "1500000"^^xsd:integer .
+        <http://test/rewardAmount2> blockchain:hasAmountValue "1500000"^^xsd:decimal .
 
         # Smart Contracts
         <http://test/contract1> rdf:type blockchain:SmartContract ;
@@ -139,11 +139,11 @@ def generate_test_data():
 
         # Staking
         <http://test/account1> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "100000000000"^^xsd:integer .
+            cardano:hasStakeAmount "100000000000"^^xsd:decimal .
         <http://test/account2> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "80000000000"^^xsd:integer .
+            cardano:hasStakeAmount "80000000000"^^xsd:decimal .
         <http://test/account3> cardano:delegatesTo <http://test/pool2> ;
-            cardano:hasStakeAmount "90000000000"^^xsd:integer .
+            cardano:hasStakeAmount "90000000000"^^xsd:decimal .
 
         # Governance
         <http://test/proposal1> rdf:type cardano:GovernanceProposal .

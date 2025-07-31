@@ -16,9 +16,7 @@ Before running CAP, ensure you have the following installed on your system:
 - **Virtualenv** (for local setup)
 - **Git**
 
-### Installation Steps
-
-#### macOS
+### Setting Up macOS
 
 1. **Install Homebrew (if not installed):**
    ```bash
@@ -33,7 +31,7 @@ Before running CAP, ensure you have the following installed on your system:
    open -a Docker
    ```
 
-#### Linux (Ubuntu)
+### Setting Up Linux (Ubuntu)
 
 1. **Update system and install dependencies:**
    ```bash
@@ -46,9 +44,9 @@ Before running CAP, ensure you have the following installed on your system:
    sudo systemctl enable docker
    ```
 
-#### Windows (WSL2) - NOT OFFICIALLY SUPPORTED, TESTED NOR RECOMMENDED.
+### Setting Up Windows (WSL2) - NOT OFFICIALLY SUPPORTED, TESTED NOR RECOMMENDED.
 
-> **DISCLAIMER:** While CAP may work on WSL2, it is **not officially supported**. Some features, especially those relying on networking and Docker, may require additional configuration or may not work as expected. Use at your own discretion.  
+> **DISCLAIMER:** While CAP may work on WSL2, it is **not officially supported**. Some features, especially those relying on networking and Docker, may require additional configuration or may not work as expected. Use at your own discretion.
 
 1. **Enable WSL2 and Install Ubuntu:**
    - Follow Microsoft’s guide: [https://learn.microsoft.com/en-us/windows/wsl/install](https://learn.microsoft.com/en-us/windows/wsl/install)
@@ -62,35 +60,127 @@ Before running CAP, ensure you have the following installed on your system:
    sudo systemctl start docker
    ```
 
-### Runing locally
+## Runing CAP
+
+### Running locally
 
 #### CAP Setup
 
-1. **Copy environment file:**
+1. **Config and environment files:**
 
+   Run script to fetch necessary cardano-node and cardano-db-sync config files
+   ```bash
+   ./fetch_config_files.sh
+   ```
+
+   Create env file by copying provided example
    ```bash
    cp .env.example .env
    ```
 
-   Set `VIRTUOSO_HOST=localhost` and define your password (use the same password in the `docker run` command below).
+   In the .env file, set `VIRTUOSO_HOST=localhost` and define your password (use the same password in the commands ahead).
 
 2. **Run supporting services:**
 
+   ATTENTION: remove --platform linux/amd64 if you are *NOT* using an amd64 platform (e.g. Mac with M1, M2, M3, M4 chips)
+
+   Jaeger for CAP tracing support:
    ```bash
-   # Run Jaeger for tracing
-   docker run -d --name jaeger \
+   docker run --platform linux/amd64 -d --name jaeger \
      -p 4317:4317 \
      -p 4318:4318 \
      -p 16686:16686 \
      jaegertracing/all-in-one:latest
+   ```
 
-   # Run Virtuoso for triplestore
-   docker run -d --name virtuoso \
-     --platform linux/amd64 \
+   Virtuoso for CAP triplestore:
+   ```bash
+   docker run --platform linux/amd64 -d --name virtuoso \
      -p 8890:8890 -p 1111:1111 \
      -e DBA_PASSWORD=mysecretpassword \
      -e SPARQL_UPDATE=true \
      tenforce/virtuoso
+   ```
+
+   PostgreSQL:
+   ```bash
+   docker run --platform linux/amd64 -d --name postgres \
+      -v postgres-data:/var/lib/postgresql/data \
+      -e POSTGRES_DB=cap \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_PASSWORD=mysecretpassword \
+      -p 5432:5432 \
+      postgres:17.5-alpine
+   ```
+
+   Verify PostgreSQL is running:
+   ```bash
+   docker ps
+   ```
+
+   Clone the cardano-db-sync Repository:
+   ```bash
+   #remember to cd to your preferred source code folder
+   git clone https://github.com/IntersectMBO/cardano-db-sync.git
+   cd cardano-db-sync
+   ```
+
+   Create a pgpass File:
+   ```bash
+   echo "localhost:5432:cap:postgres:mysecretpassword" > ~/.pgpass
+   chmod 600 ~/.pgpass
+   ```
+
+   In the cardano-db-sync folder, run the DB Setup Script:
+   ```bash
+   docker run --rm \
+      --platform linux/amd64 \
+      --network host \
+      -v $(pwd)/scripts:/scripts \
+      -v ~/.pgpass:/root/.pgpass \
+      -e PGPASSFILE=/root/.pgpass \
+      --entrypoint /bin/bash \
+      ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2 \
+      -c "/scripts/postgresql-setup.sh --createdb"
+   ```
+
+   Cardano Node:
+   ```bash
+   docker run --platform linux/amd64 -d --name cardano-node-preview \
+      -v $HOME/cardano/preview-config:/config \
+      -v $(pwd)/backend/assets:/assets \
+      -v $HOME/cardano/db:/data \
+      -p 3001:3001 \
+      ghcr.io/intersectmbo/cardano-node:10.4.0 \
+      run \
+      --config /config/config.json \
+      --topology /config/topology.json \
+      --database-path /data \
+      --socket-path /data/node.socket \
+      --host-addr 0.0.0.0 \
+      --port 3001
+   ```
+
+   cardano-db-sync:
+   ```bash
+   docker run --platform linux/amd64 -d --name cardano-db-sync-preview \
+      --network host \
+      -v $HOME/cardano/preview-config:/config \
+      -v $HOME/cardano/db-sync-data:/var/lib/cexplorer \
+      -v $HOME/cardano/db:/node-ipc \
+      -e NETWORK=preview \
+      -e POSTGRES_HOST=localhost \
+      -e POSTGRES_PORT=5432 \
+      -e POSTGRES_DB=cap \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_PASSWORD=mysecretpassword \
+      -e DB_SYNC_CONFIG=/config/db-sync-config.json \
+      ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2
+   ```
+
+   Wait a few seconds and verify if database is syncing:
+   ```bash
+   docker exec -it postgres psql -U postgres -d cap -c "SELECT * FROM block LIMIT 10;"
    ```
 
 3. **Set up Python environment:**
@@ -98,8 +188,8 @@ Before running CAP, ensure you have the following installed on your system:
    ```bash
    python3.11 -m venv venv
    source venv/bin/activate
-   pip install --upgrade pip
-   pip install --no-cache-dir -e ".[dev]"
+
+   poetry install
    ```
 
 4. **Run CAP server:**
@@ -117,11 +207,14 @@ With CAP and its dependencies running, you can also run its tests
 # activate virtual environment
 source venv/bin/activate
 
+# install dev dependencies
+poetry install --with dev
+
 # Run all tests
-pytest
+pytest -v
 
 # Run specific test file
-pytest src/tests/test_api.py
+pytest -v src/tests/test_api.py
 
 # Run specifit test function
 pytest -s src/tests/test_integration.py::test_full_graph_lifecycle
