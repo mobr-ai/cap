@@ -13,11 +13,10 @@ from cap.etl.cdb.service import etl_service
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
-setup_telemetry()
 
 # Configure ETL logging
 etl_logger = logging.getLogger('cap.etl')
-etl_logger.setLevel(getattr(logging, settings.ETL_LOG_LEVEL))
+etl_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 
 # Set uvloop as the event loop policy
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -140,8 +139,19 @@ async def lifespan(app: FastAPI):
         await stop_etl_service()
         logger.info("Application shutdown completed")
 
+def setup_tracing():
+    # Only set up tracing if explicitly enabled
+    if settings.ENABLE_TRACING:
+        setup_telemetry()
+
+    else:
+        # Set a no-op tracer provider to disable tracing
+        trace.set_tracer_provider(trace.NoOpTracerProvider())
+
 def create_application() -> FastAPI:
     """Create and configure the FastAPI application with ETL integration."""
+
+    setup_tracing()
     app = FastAPI(
         title="CAP",
         description="Cardano Analytics Platform with ETL Pipeline",

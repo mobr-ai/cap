@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+    # Virtuoso settings
     VIRTUOSO_HOST: str
     VIRTUOSO_PORT: int
     VIRTUOSO_USER: str
@@ -23,8 +24,9 @@ class Settings(BaseSettings):
     ETL_PROGRESS_GRAPH: str
 
     # Monitoring settings
-    ETL_METRICS_ENABLED: bool = True
-    ETL_LOG_LEVEL: str = "INFO"
+    ENABLE_TRACING: bool
+    LOG_LEVEL: str
+    ETL_METRICS_ENABLED: bool
 
     # CAP settings
     CAP_HOST: str
