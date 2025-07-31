@@ -1,4 +1,6 @@
 import logging
+import uvloop
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from opentelemetry import trace
@@ -16,6 +18,9 @@ setup_telemetry()
 # Configure ETL logging
 etl_logger = logging.getLogger('cap.etl')
 etl_logger.setLevel(getattr(logging, settings.ETL_LOG_LEVEL))
+
+# Set uvloop as the event loop policy
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 async def initialize_graph(client: VirtuosoClient, graph_uri: str, ontology_path: str) -> bool:
     """Initialize a graph with ontology data if it doesn't exist."""
@@ -86,16 +91,17 @@ async def start_etl_service():
     if settings.ETL_AUTO_START:
         try:
             logger.info("Auto-starting ETL service...")
-            await etl_service.start_etl(
-                batch_size=settings.ETL_BATCH_SIZE,
-                sync_interval=settings.ETL_SYNC_INTERVAL,
-                continuous=settings.ETL_CONTINUOUS
+            # Run ETL startup in a separate task to avoid blocking
+            asyncio.create_task(
+                etl_service.start_etl(
+                    batch_size=settings.ETL_BATCH_SIZE,
+                    sync_interval=settings.ETL_SYNC_INTERVAL,
+                    continuous=settings.ETL_CONTINUOUS
+                )
             )
-            logger.info("ETL service auto-started successfully")
-
+            logger.info("ETL service auto-start task scheduled")
         except Exception as e:
             logger.error(f"Failed to auto-start ETL service: {e}")
-
     else:
         logger.info("ETL auto-start disabled. ETL service can be started manually.")
 
@@ -127,11 +133,12 @@ async def lifespan(app: FastAPI):
             logger.error(f"Application startup failed: {e}")
             raise RuntimeError(f"Application startup failed: {e}")
 
-    yield
-
-    # Shutdown
-    await stop_etl_service()
-    logger.info("Application shutdown completed")
+    try:
+        yield
+    finally:
+        # Shutdown
+        await stop_etl_service()
+        logger.info("Application shutdown completed")
 
 def create_application() -> FastAPI:
     """Create and configure the FastAPI application with ETL integration."""
