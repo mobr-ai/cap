@@ -16,14 +16,15 @@ class DatumExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract datums in batches."""
         with tracer.start_as_current_span("datum_extraction") as span:
-            query = self.db_session.query(Datum).options(
-                joinedload(Datum.tx)
-            )
-
             if last_processed_id:
-                query = query.filter(Datum.id > last_processed_id)
+                query = self.db_session.query(Datum).options(
+                    joinedload(Datum.tx)
+                ).order_by(Datum.id).filter(Datum.id > last_processed_id)
 
-            query = query.order_by(Datum.id)
+            else:
+                query = self.db_session.query(Datum).options(
+                    joinedload(Datum.tx)
+                ).order_by(Datum.id)
 
             offset = 0
             while True:

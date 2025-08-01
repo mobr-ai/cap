@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from opentelemetry import trace
 import logging
+import datetime
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
 from cap.data.cdb_model import StakeAddress, MultiAsset, TxOut, MaTxOut, TxIn, Tx, Block
@@ -21,18 +22,23 @@ class AccountExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract account balances in batches."""
         with tracer.start_as_current_span("account_balance_extraction") as span:
-            query = self.db_session.query(StakeAddress)
-
+            logger.info(f"extract_batch check_point_1: {datetime.now()}")
             if last_processed_id:
-                query = query.filter(StakeAddress.id > last_processed_id)
+                query = self.db_session.query(StakeAddress).order_by(StakeAddress.id).filter(StakeAddress.id > last_processed_id)
+            else:
+                query = self.db_session.query(StakeAddress).order_by(StakeAddress.id)
 
-            query = query.order_by(StakeAddress.id)
-
-            for offset in range(0, self.get_total_count(), self.batch_size):
+            logger.info(f"extract_batch check_point_2: {datetime.now()}")
+            total_count = self.get_total_count()
+            logger.info(f"extract_batch check_point_3: {datetime.now()}")
+            i = 4
+            for offset in range(0, total_count, self.batch_size):
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
+                logger.info(f"extract_batch check_point_{i}: {datetime.now()}")
+                i += 1
                 # Bulk process accounts
                 stake_addr_ids = [sa.id for sa in batch]
 
@@ -41,6 +47,8 @@ class AccountExtractor(BaseExtractor):
 
                 # Get first appearances in bulk
                 first_appearances = self._bulk_get_first_appearances(stake_addr_ids)
+                logger.info(f"extract_batch check_point_{i}: {datetime.now()}")
+                i += 1
 
                 batch_data = []
                 for stake_addr in batch:

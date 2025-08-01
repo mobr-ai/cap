@@ -16,17 +16,18 @@ class BlockExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract blocks in batches."""
         with tracer.start_as_current_span("block_extraction") as span:
-            query = self.db_session.query(Block).options(
-                subqueryload(Block.slot_leader).subqueryload(SlotLeader.pool_hash)
-            )
-
             if last_processed_id:
-                query = query.filter(Block.id > last_processed_id)
-
-            query = query.order_by(Block.id)
+                query = self.db_session.query(Block).options(
+                    subqueryload(Block.slot_leader).subqueryload(SlotLeader.pool_hash)
+                ).order_by(Block.id).filter(Block.id > last_processed_id)
+            else:
+                self.db_session.query(Block).options(
+                    subqueryload(Block.slot_leader).subqueryload(SlotLeader.pool_hash)
+                ).order_by(Block.id)
 
             # Pre-fetch transaction hashes in bulk
-            for offset in range(0, self.db_session.query(func.count(Block.id)).scalar() or 0, self.batch_size):
+            total_count = self.get_total_count()
+            for offset in range(0, total_count or 0, self.batch_size):
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
