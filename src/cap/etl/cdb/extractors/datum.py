@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
@@ -16,19 +16,21 @@ class DatumExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract datums in batches."""
         with tracer.start_as_current_span("datum_extraction") as span:
-            if last_processed_id:
-                query = self.db_session.query(Datum).options(
-                    joinedload(Datum.tx)
-                ).order_by(Datum.id).filter(Datum.id > last_processed_id)
+            stmt = (
+                select(Datum)
+                .options(selectinload(Datum.tx))
+                .order_by(Datum.id)
+            )
 
-            else:
-                query = self.db_session.query(Datum).options(
-                    joinedload(Datum.tx)
-                ).order_by(Datum.id)
+            if last_processed_id:
+                stmt = stmt.filter(Datum.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -50,8 +52,9 @@ class DatumExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Datum.id)).scalar()
+        stmt = select(func.count(Datum.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Datum.id)).scalar()
-        return result
+        stmt = select(func.max(Datum.id))
+        return self.db_session.execute(stmt).scalar()

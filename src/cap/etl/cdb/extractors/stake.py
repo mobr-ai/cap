@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload, subqueryload
-from sqlalchemy import func, and_, exists
+from sqlalchemy.orm import selectinload, lazyload
+from sqlalchemy import func, and_, exists, select, case
 from opentelemetry import trace
 import logging
 
@@ -20,20 +20,25 @@ class StakePoolExtractor(BaseExtractor):
         """Extract stake pools in batches."""
         with tracer.start_as_current_span("stake_pool_extraction") as span:
             # Get pool updates with metadata
-            query = self.db_session.query(PoolUpdate).options(
-                joinedload(PoolUpdate.hash),
-                joinedload(PoolUpdate.meta),
-                joinedload(PoolUpdate.registered_tx)
+            stmt = (
+                select(PoolUpdate)
+                .options(
+                    selectinload(PoolUpdate.hash),
+                    selectinload(PoolUpdate.meta),
+                    selectinload(PoolUpdate.registered_tx)
+                )
+                .order_by(PoolUpdate.id)
             )
 
             if last_processed_id:
-                query = query.filter(PoolUpdate.id > last_processed_id)
-
-            query = query.order_by(PoolUpdate.id)
+                stmt = stmt.filter(PoolUpdate.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -46,9 +51,8 @@ class StakePoolExtractor(BaseExtractor):
     def _serialize_pool_update(self, pool_update: PoolUpdate) -> dict[str, Any]:
         """Serialize pool update to dictionary."""
         # Check for retirement
-        retirement = self.db_session.query(PoolRetire).filter(
-            PoolRetire.hash_id == pool_update.hash_id
-        ).first()
+        retire_stmt = select(PoolRetire).filter(PoolRetire.hash_id == pool_update.hash_id)
+        retirement = self.db_session.execute(retire_stmt).scalar()
 
         return {
             'id': pool_update.id,
@@ -71,35 +75,40 @@ class StakePoolExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(PoolUpdate.id)).scalar()
+        stmt = select(func.count(PoolUpdate.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(PoolUpdate.id)).scalar()
-        return result
+        stmt = select(func.max(PoolUpdate.id))
+        return self.db_session.execute(stmt).scalar()
 
 class DelegationExtractor(BaseExtractor):
     """Extracts delegation data from cardano-db-sync."""
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract delegations with stake amounts in batches."""
         with tracer.start_as_current_span("delegation_extraction") as span:
-            current_epoch = self.db_session.query(func.max(Epoch.no)).scalar()
+            current_epoch = self.db_session.execute(select(func.max(Epoch.no))).scalar()
 
-            query = self.db_session.query(Delegation).options(
-                subqueryload(Delegation.addr),
-                subqueryload(Delegation.pool_hash),
-                subqueryload(Delegation.tx)
-            ).filter(
-                Delegation.active_epoch_no <= current_epoch
+            stmt = (
+                select(Delegation)
+                .options(
+                    lazyload(Delegation.addr),
+                    lazyload(Delegation.pool_hash),
+                    lazyload(Delegation.tx)
+                )
+                .filter(Delegation.active_epoch_no <= current_epoch)
+                .order_by(Delegation.id)
             )
 
             if last_processed_id:
-                query = query.filter(Delegation.id > last_processed_id)
-
-            query = query.order_by(Delegation.id)
+                stmt = stmt.filter(Delegation.id > last_processed_id)
 
             # Bulk calculate stake amounts
             for offset in range(0, self.get_total_count(), self.batch_size):
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -118,31 +127,36 @@ class DelegationExtractor(BaseExtractor):
 
     def _bulk_calculate_stake_amounts(self, addr_ids: list[int]) -> dict[int, int]:
         """Calculate stake amounts for multiple addresses in one query."""
-        from sqlalchemy import and_, not_, exists, case
-
         if not addr_ids:
             return {}
 
         # Subquery for spent outputs
-        spent_outputs = self.db_session.query(
-            TxIn.tx_out_id,
-            TxIn.tx_out_index
-        ).subquery()
+        spent_outputs = (
+            select(TxIn.tx_out_id, TxIn.tx_out_index)
+            .subquery()
+        )
 
         # Get all unspent outputs for the addresses
-        results = self.db_session.query(
-            TxOut.stake_address_id,
-            func.sum(TxOut.value).label('total_stake')
-        ).filter(
-            TxOut.stake_address_id.in_(addr_ids),
-            ~exists().where(
-                and_(
-                    spent_outputs.c.tx_out_id == TxOut.tx_id,
-                    spent_outputs.c.tx_out_index == TxOut.index
+        stmt = (
+            select(
+                TxOut.stake_address_id,
+                func.sum(TxOut.value).label('total_stake')
+            )
+            .filter(
+                TxOut.stake_address_id.in_(addr_ids),
+                ~exists(
+                    select(1).select_from(spent_outputs).where(
+                        and_(
+                            spent_outputs.c.tx_out_id == TxOut.tx_id,
+                            spent_outputs.c.tx_out_index == TxOut.index
+                        )
+                    )
                 )
             )
-        ).group_by(TxOut.stake_address_id).all()
+            .group_by(TxOut.stake_address_id)
+        )
 
+        results = self.db_session.execute(stmt).all()
         return {addr_id: int(stake or 0) for addr_id, stake in results}
 
     def _serialize_delegation_with_stake(self, delegation: Delegation) -> dict[str, Any]:
@@ -169,21 +183,20 @@ class DelegationExtractor(BaseExtractor):
     def _calculate_stake_amount(self, stake_addr_id: int) -> int:
         """Calculate the total stake amount for a stake address."""
         # Get all UTXOs for this stake address
-        utxos = self.db_session.query(TxOut).filter(
-            TxOut.stake_address_id == stake_addr_id
-        ).all()
+        stmt = select(TxOut).filter(TxOut.stake_address_id == stake_addr_id)
+        utxos = self.db_session.execute(stmt).scalars().all()
 
         # Filter out spent UTXOs and sum the values
         total_stake = 0
         for utxo in utxos:
             # Check if this output has been spent
-            from cap.data.cdb_model import TxIn
-            spent = self.db_session.query(TxIn).filter(
+            spent_stmt = select(TxIn).filter(
                 and_(
                     TxIn.tx_out_id == utxo.tx_id,
                     TxIn.tx_out_index == utxo.index
                 )
-            ).first()
+            )
+            spent = self.db_session.execute(spent_stmt).scalar()
 
             if not spent:
                 total_stake += int(utxo.value)
@@ -191,14 +204,13 @@ class DelegationExtractor(BaseExtractor):
         return total_stake
 
     def get_total_count(self) -> int:
-        current_epoch = self.db_session.query(func.max(Epoch.no)).scalar()
-        return self.db_session.query(func.count(Delegation.id)).filter(
-            Delegation.active_epoch_no <= current_epoch
-        ).scalar()
+        current_epoch = self.db_session.execute(select(func.max(Epoch.no))).scalar()
+        stmt = select(func.count(Delegation.id)).filter(Delegation.active_epoch_no <= current_epoch)
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Delegation.id)).scalar()
-        return result
+        stmt = select(func.max(Delegation.id))
+        return self.db_session.execute(stmt).scalar()
 
 class RewardExtractor(BaseExtractor):
     """Extracts reward data from cardano-db-sync."""
@@ -206,9 +218,13 @@ class RewardExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract rewards in batches."""
         with tracer.start_as_current_span("reward_extraction") as span:
-            query = self.db_session.query(Reward).options(
-                joinedload(Reward.addr),
-                joinedload(Reward.pool)
+            stmt = (
+                select(Reward)
+                .options(
+                    selectinload(Reward.addr),
+                    selectinload(Reward.pool)
+                )
+                .order_by(Reward.addr_id, Reward.type, Reward.earned_epoch)
             )
 
             # Since reward table doesn't have an id column, we need to use a different approach
@@ -216,7 +232,7 @@ class RewardExtractor(BaseExtractor):
             if last_processed_id:
                 # last_processed_id will be a tuple of (addr_id, type, earned_epoch)
                 if isinstance(last_processed_id, dict):
-                    query = query.filter(
+                    stmt = stmt.filter(
                         (Reward.addr_id > last_processed_id['addr_id']) |
                         ((Reward.addr_id == last_processed_id['addr_id']) &
                          (Reward.type > last_processed_id['type'])) |
@@ -225,11 +241,12 @@ class RewardExtractor(BaseExtractor):
                          (Reward.earned_epoch > last_processed_id['earned_epoch']))
                     )
 
-            query = query.order_by(Reward.addr_id, Reward.type, Reward.earned_epoch)
-
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -262,7 +279,8 @@ class RewardExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count()).select_from(Reward).scalar()
+        stmt = select(func.count()).select_from(Reward)
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
         return None
@@ -273,15 +291,17 @@ class StakeAddressExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract stake addresses in batches."""
         with tracer.start_as_current_span("stake_address_extraction") as span:
-            query = self.db_session.query(StakeAddress)
+            stmt = select(StakeAddress).order_by(StakeAddress.id)
 
             if last_processed_id:
-                query = query.filter(StakeAddress.id > last_processed_id)
+                stmt = stmt.filter(StakeAddress.id > last_processed_id)
 
-            query = query.order_by(StakeAddress.id)
+            total_count = self.db_session.execute(select(func.count(StakeAddress.id))).scalar() or 0
+            for offset in range(0, total_count, self.batch_size):
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
 
-            for offset in range(0, self.db_session.query(func.count(StakeAddress.id)).scalar() or 0, self.batch_size):
-                batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
@@ -303,32 +323,37 @@ class StakeAddressExtractor(BaseExtractor):
     def _calculate_stake_amount(self, stake_addr_id: int) -> int:
         """Calculate the total stake amount for a stake address."""
         # Subquery for spent outputs
-        spent_outputs = self.db_session.query(
-            TxIn.tx_out_id,
-            TxIn.tx_out_index
-        ).subquery()
+        spent_outputs = (
+            select(TxIn.tx_out_id, TxIn.tx_out_index)
+            .subquery()
+        )
 
         # Calculate sum directly in database
-        result = self.db_session.query(
-            func.coalesce(func.sum(TxOut.value), 0)
-        ).filter(
-            TxOut.stake_address_id == stake_addr_id,
-            ~exists().where(
-                and_(
-                    spent_outputs.c.tx_out_id == TxOut.tx_id,
-                    spent_outputs.c.tx_out_index == TxOut.index
+        stmt = (
+            select(func.coalesce(func.sum(TxOut.value), 0))
+            .filter(
+                TxOut.stake_address_id == stake_addr_id,
+                ~exists(
+                    select(1).select_from(spent_outputs).where(
+                        and_(
+                            spent_outputs.c.tx_out_id == TxOut.tx_id,
+                            spent_outputs.c.tx_out_index == TxOut.index
+                        )
+                    )
                 )
             )
-        ).scalar()
+        )
 
+        result = self.db_session.execute(stmt).scalar()
         return int(result)
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(StakeAddress.id)).scalar()
+        stmt = select(func.count(StakeAddress.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(StakeAddress.id)).scalar()
-        return result
+        stmt = select(func.max(StakeAddress.id))
+        return self.db_session.execute(stmt).scalar()
 
 class WithdrawalExtractor(BaseExtractor):
     """Extracts withdrawal data from cardano-db-sync."""
@@ -336,19 +361,24 @@ class WithdrawalExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract withdrawals in batches."""
         with tracer.start_as_current_span("withdrawal_extraction") as span:
-            query = self.db_session.query(Withdrawal).options(
-                joinedload(Withdrawal.addr),
-                joinedload(Withdrawal.tx)
+            stmt = (
+                select(Withdrawal)
+                .options(
+                    selectinload(Withdrawal.addr),
+                    selectinload(Withdrawal.tx)
+                )
+                .order_by(Withdrawal.id)
             )
 
             if last_processed_id:
-                query = query.filter(Withdrawal.id > last_processed_id)
-
-            query = query.order_by(Withdrawal.id)
+                stmt = stmt.filter(Withdrawal.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -370,8 +400,9 @@ class WithdrawalExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Withdrawal.id)).scalar()
+        stmt = select(func.count(Withdrawal.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Withdrawal.id)).scalar()
-        return result
+        stmt = select(func.max(Withdrawal.id))
+        return self.db_session.execute(stmt).scalar()

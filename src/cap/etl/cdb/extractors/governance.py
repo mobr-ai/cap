@@ -1,13 +1,13 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
 from cap.data.cdb_model import (
-    GovernanceAction, VotingProcedure, DrepRegistration, DrepHash,
-    VotingAnchor, Treasury, Reserve, PotTransfer, Tx, PoolHash
+    GovernanceAction, VotingProcedure, DrepRegistration,
+    Treasury, Reserve, PotTransfer, Tx
 )
 
 logger = logging.getLogger(__name__)
@@ -19,18 +19,21 @@ class GovernanceExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract governance actions in batches."""
         with tracer.start_as_current_span("governance_extraction") as span:
-            query = self.db_session.query(GovernanceAction).options(
-                joinedload(GovernanceAction.tx)
+            stmt = (
+                select(GovernanceAction)
+                .options(selectinload(GovernanceAction.tx))
+                .order_by(GovernanceAction.id)
             )
 
             if last_processed_id:
-                query = query.filter(GovernanceAction.id > last_processed_id)
-
-            query = query.order_by(GovernanceAction.id)
+                stmt = stmt.filter(GovernanceAction.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -43,9 +46,10 @@ class GovernanceExtractor(BaseExtractor):
                     action_data = self._serialize_governance_action(action)
 
                     # Get voting procedures for this action
-                    voting_procedures = self.db_session.query(VotingProcedure).filter(
+                    vp_stmt = select(VotingProcedure).filter(
                         VotingProcedure.gov_action_proposal_id == action.id
-                    ).all()
+                    )
+                    voting_procedures = self.db_session.execute(vp_stmt).scalars().all()
 
                     action_data['voting_procedures'] = [
                         self._serialize_voting_procedure(vp) for vp in voting_procedures
@@ -74,7 +78,8 @@ class GovernanceExtractor(BaseExtractor):
         # Get tx separately if not loaded
         tx = None
         if procedure.tx_id:
-            tx = self.db_session.query(Tx).filter(Tx.id == procedure.tx_id).first()
+            stmt = select(Tx).filter(Tx.id == procedure.tx_id)
+            tx = self.db_session.execute(stmt).scalar()
 
         return {
             'id': procedure.id,
@@ -87,11 +92,12 @@ class GovernanceExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(GovernanceAction.id)).scalar()
+        stmt = select(func.count(GovernanceAction.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(GovernanceAction.id)).scalar()
-        return result
+        stmt = select(func.max(GovernanceAction.id))
+        return self.db_session.execute(stmt).scalar()
 
 class DRepExtractor(BaseExtractor):
     """Extracts DRep (Delegated Representative) data from cardano-db-sync."""
@@ -99,20 +105,25 @@ class DRepExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract DRep registrations in batches."""
         with tracer.start_as_current_span("drep_extraction") as span:
-            query = self.db_session.query(DrepRegistration).options(
-                joinedload(DrepRegistration.tx),
-                joinedload(DrepRegistration.drep_hash),
-                joinedload(DrepRegistration.voting_anchor)
+            stmt = (
+                select(DrepRegistration)
+                .options(
+                    selectinload(DrepRegistration.tx),
+                    selectinload(DrepRegistration.drep_hash),
+                    selectinload(DrepRegistration.voting_anchor)
+                )
+                .order_by(DrepRegistration.id)
             )
 
             if last_processed_id:
-                query = query.filter(DrepRegistration.id > last_processed_id)
-
-            query = query.order_by(DrepRegistration.id)
+                stmt = stmt.filter(DrepRegistration.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -140,11 +151,12 @@ class DRepExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(DrepRegistration.id)).scalar()
+        stmt = select(func.count(DrepRegistration.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(DrepRegistration.id)).scalar()
-        return result
+        stmt = select(func.max(DrepRegistration.id))
+        return self.db_session.execute(stmt).scalar()
 
 class TreasuryExtractor(BaseExtractor):
     """Extracts treasury and reserve data from cardano-db-sync."""
@@ -159,45 +171,52 @@ class TreasuryExtractor(BaseExtractor):
                 combined_batch = []
 
                 # Get treasury data
-                treasury_query = self.db_session.query(Treasury).options(
-                    joinedload(Treasury.addr),
-                    joinedload(Treasury.tx)
+                treasury_stmt = (
+                    select(Treasury)
+                    .options(
+                        selectinload(Treasury.addr),
+                        selectinload(Treasury.tx)
+                    )
+                    .order_by(Treasury.id)
                 )
 
                 if last_processed_id:
-                    treasury_query = treasury_query.filter(Treasury.id > last_processed_id)
+                    treasury_stmt = treasury_stmt.filter(Treasury.id > last_processed_id)
 
-                treasury_batch = (treasury_query.order_by(Treasury.id)
-                                .offset(offset)
-                                .limit(self.batch_size // 3)
-                                .all())
+                treasury_batch = self.db_session.execute(
+                    treasury_stmt.offset(offset).limit(self.batch_size // 3)
+                ).scalars().all()
 
                 # Get reserve data
-                reserve_query = self.db_session.query(Reserve).options(
-                    joinedload(Reserve.addr),
-                    joinedload(Reserve.tx)
+                reserve_stmt = (
+                    select(Reserve)
+                    .options(
+                        selectinload(Reserve.addr),
+                        selectinload(Reserve.tx)
+                    )
+                    .order_by(Reserve.id)
                 )
 
                 if last_processed_id:
-                    reserve_query = reserve_query.filter(Reserve.id > last_processed_id)
+                    reserve_stmt = reserve_stmt.filter(Reserve.id > last_processed_id)
 
-                reserve_batch = (reserve_query.order_by(Reserve.id)
-                               .offset(offset)
-                               .limit(self.batch_size // 3)
-                               .all())
+                reserve_batch = self.db_session.execute(
+                    reserve_stmt.offset(offset).limit(self.batch_size // 3)
+                ).scalars().all()
 
                 # Get pot transfers
-                pot_transfer_query = self.db_session.query(PotTransfer).options(
-                    joinedload(PotTransfer.tx)
+                pot_transfer_stmt = (
+                    select(PotTransfer)
+                    .options(selectinload(PotTransfer.tx))
+                    .order_by(PotTransfer.id)
                 )
 
                 if last_processed_id:
-                    pot_transfer_query = pot_transfer_query.filter(PotTransfer.id > last_processed_id)
+                    pot_transfer_stmt = pot_transfer_stmt.filter(PotTransfer.id > last_processed_id)
 
-                pot_transfer_batch = (pot_transfer_query.order_by(PotTransfer.id)
-                                    .offset(offset)
-                                    .limit(self.batch_size // 3)
-                                    .all())
+                pot_transfer_batch = self.db_session.execute(
+                    pot_transfer_stmt.offset(offset).limit(self.batch_size // 3)
+                ).scalars().all()
 
                 if not treasury_batch and not reserve_batch and not pot_transfer_batch:
                     break
@@ -261,13 +280,13 @@ class TreasuryExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        treasury_count = self.db_session.query(func.count(Treasury.id)).scalar() or 0
-        reserve_count = self.db_session.query(func.count(Reserve.id)).scalar() or 0
-        pot_transfer_count = self.db_session.query(func.count(PotTransfer.id)).scalar() or 0
+        treasury_count = self.db_session.execute(select(func.count(Treasury.id))).scalar() or 0
+        reserve_count = self.db_session.execute(select(func.count(Reserve.id))).scalar() or 0
+        pot_transfer_count = self.db_session.execute(select(func.count(PotTransfer.id))).scalar() or 0
         return treasury_count + reserve_count + pot_transfer_count
 
     def get_last_id(self) -> Optional[int]:
-        treasury_max = self.db_session.query(func.max(Treasury.id)).scalar() or 0
-        reserve_max = self.db_session.query(func.max(Reserve.id)).scalar() or 0
-        pot_transfer_max = self.db_session.query(func.max(PotTransfer.id)).scalar() or 0
+        treasury_max = self.db_session.execute(select(func.max(Treasury.id))).scalar() or 0
+        reserve_max = self.db_session.execute(select(func.max(Reserve.id))).scalar() or 0
+        pot_transfer_max = self.db_session.execute(select(func.max(PotTransfer.id))).scalar() or 0
         return max(treasury_max, reserve_max, pot_transfer_max) if any([treasury_max, reserve_max, pot_transfer_max]) else None

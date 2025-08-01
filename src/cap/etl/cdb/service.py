@@ -279,21 +279,19 @@ class ETLPipeline:
                         break
 
                     # Process entities in parallel within each dependency group
-                    tasks = []
+                    futures = []
                     for entity_type in group:
                         if entity_type in self.entity_types:
-                            task = asyncio.create_task(
-                                asyncio.get_event_loop().run_in_executor(
-                                    executor,
-                                    self._sync_entity_type_threadsafe,
-                                    entity_type
-                                )
+                            future = asyncio.get_event_loop().run_in_executor(
+                                executor,
+                                self._sync_entity_type_threadsafe,
+                                entity_type
                             )
-                            tasks.append(task)
+                            futures.append(future)
 
                     # Wait for all entities in the group to complete
-                    if tasks:
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                    if futures:
+                        await asyncio.gather(*futures, return_exceptions=True)
 
     def _sync_entity_type_threadsafe(self, entity_type: str):
         """Thread-safe wrapper for entity synchronization."""

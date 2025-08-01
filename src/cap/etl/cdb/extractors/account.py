@@ -1,9 +1,8 @@
 from typing import Any, Optional, Iterator
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, select, exists
 from opentelemetry import trace
 import logging
-import datetime
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
 from cap.data.cdb_model import StakeAddress, MultiAsset, TxOut, MaTxOut, TxIn, Tx, Block
@@ -22,23 +21,20 @@ class AccountExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract account balances in batches."""
         with tracer.start_as_current_span("account_balance_extraction") as span:
-            logger.info(f"extract_batch check_point_1: {datetime.now()}")
-            if last_processed_id:
-                query = self.db_session.query(StakeAddress).order_by(StakeAddress.id).filter(StakeAddress.id > last_processed_id)
-            else:
-                query = self.db_session.query(StakeAddress).order_by(StakeAddress.id)
+            stmt = select(StakeAddress).order_by(StakeAddress.id)
 
-            logger.info(f"extract_batch check_point_2: {datetime.now()}")
+            if last_processed_id:
+                stmt = stmt.filter(StakeAddress.id > last_processed_id)
+
             total_count = self.get_total_count()
-            logger.info(f"extract_batch check_point_3: {datetime.now()}")
-            i = 4
             for offset in range(0, total_count, self.batch_size):
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
-                logger.info(f"extract_batch check_point_{i}: {datetime.now()}")
-                i += 1
                 # Bulk process accounts
                 stake_addr_ids = [sa.id for sa in batch]
 
@@ -47,9 +43,6 @@ class AccountExtractor(BaseExtractor):
 
                 # Get first appearances in bulk
                 first_appearances = self._bulk_get_first_appearances(stake_addr_ids)
-                logger.info(f"extract_batch check_point_{i}: {datetime.now()}")
-                i += 1
-
                 batch_data = []
                 for stake_addr in batch:
                     if stake_addr.view in self.processed_accounts:
@@ -71,35 +64,41 @@ class AccountExtractor(BaseExtractor):
 
     def _bulk_get_utxo_data(self, stake_addr_ids: list[int]) -> dict:
         """Get UTXO data for multiple addresses efficiently."""
-        from sqlalchemy import and_, not_, exists
+        if not stake_addr_ids:
+            return {}
 
         # Subquery for spent outputs
-        spent = self.db_session.query(
-            TxIn.tx_out_id,
-            TxIn.tx_out_index
-        ).subquery()
+        spent_subq = (
+            select(TxIn.tx_out_id, TxIn.tx_out_index)
+            .subquery()
+        )
 
-        # Get unspent UTXOs with their multi-assets
-        utxos = self.db_session.query(
-            TxOut.stake_address_id,
-            TxOut.value,
-            MaTxOut.quantity,
-            MultiAsset.fingerprint,
-            MultiAsset.policy,
-            MultiAsset.name
-        ).outerjoin(
-            MaTxOut, MaTxOut.tx_out_id == TxOut.id
-        ).outerjoin(
-            MultiAsset, MultiAsset.id == MaTxOut.ident
-        ).filter(
-            TxOut.stake_address_id.in_(stake_addr_ids),
-            ~exists().where(
-                and_(
-                    spent.c.tx_out_id == TxOut.tx_id,
-                    spent.c.tx_out_index == TxOut.index
+        # Get unspent UTXOs with their multi-assets using modern select
+        stmt = (
+            select(
+                TxOut.stake_address_id,
+                TxOut.value,
+                MaTxOut.quantity,
+                MultiAsset.fingerprint,
+                MultiAsset.policy,
+                MultiAsset.name
+            )
+            .outerjoin(MaTxOut, MaTxOut.tx_out_id == TxOut.id)
+            .outerjoin(MultiAsset, MultiAsset.id == MaTxOut.ident)
+            .filter(
+                TxOut.stake_address_id.in_(stake_addr_ids),
+                ~exists(
+                    select(1).select_from(spent_subq).where(
+                        and_(
+                            spent_subq.c.tx_out_id == TxOut.tx_id,
+                            spent_subq.c.tx_out_index == TxOut.index
+                        )
+                    )
                 )
             )
-        ).all()
+        )
+
+        utxos = self.db_session.execute(stmt).all()
 
         # Organize data by stake address
         result = {}
@@ -132,21 +131,21 @@ class AccountExtractor(BaseExtractor):
     def _extract_account_balance(self, stake_addr: StakeAddress) -> Optional[dict[str, Any]]:
         """Extract balance information for a stake address."""
         try:
-            # Get all UTXOs for this stake address
-            utxos = self.db_session.query(TxOut).filter(
-                TxOut.stake_address_id == stake_addr.id
-            ).all()
+            # Get all UTXOs for this stake address using modern select
+            stmt = select(TxOut).filter(TxOut.stake_address_id == stake_addr.id)
+            utxos = self.db_session.execute(stmt).scalars().all()
 
             # Filter out spent UTXOs
             unspent_utxos = []
             for utxo in utxos:
                 # Check if this output has been spent
-                spent = self.db_session.query(TxIn).filter(
+                spent_stmt = select(TxIn).filter(
                     and_(
                         TxIn.tx_out_id == utxo.tx_id,
                         TxIn.tx_out_index == utxo.index
                     )
-                ).first()
+                )
+                spent = self.db_session.execute(spent_stmt).scalar()
 
                 if not spent:
                     unspent_utxos.append(utxo)
@@ -197,9 +196,13 @@ class AccountExtractor(BaseExtractor):
 
     def _get_first_appearance(self, stake_addr: StakeAddress) -> Optional[dict[str, Any]]:
         """Get the first transaction where this stake address appeared."""
-        first_output = self.db_session.query(TxOut).filter(
-            TxOut.stake_address_id == stake_addr.id
-        ).order_by(TxOut.id).first()
+        stmt = (
+            select(TxOut)
+            .filter(TxOut.stake_address_id == stake_addr.id)
+            .order_by(TxOut.id)
+            .limit(1)
+        )
+        first_output = self.db_session.execute(stmt).scalar()
 
         if first_output and first_output.tx and first_output.tx.block:
             return {
@@ -212,11 +215,12 @@ class AccountExtractor(BaseExtractor):
         return None
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(StakeAddress.id)).scalar()
+        stmt = select(func.count(StakeAddress.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(StakeAddress.id)).scalar()
-        return result
+        stmt = select(func.max(StakeAddress.id))
+        return self.db_session.execute(stmt).scalar()
 
     def _bulk_get_first_appearances(self, stake_addr_ids: list[int]) -> dict[int, dict[str, Any]]:
         """Get first transaction appearances for multiple stake addresses efficiently."""
@@ -224,32 +228,36 @@ class AccountExtractor(BaseExtractor):
             return {}
 
         # Subquery to find the minimum tx_out.id for each stake_address_id
-        first_outputs = self.db_session.query(
-            TxOut.stake_address_id,
-            func.min(TxOut.id).label('min_id')
-        ).filter(
-            TxOut.stake_address_id.in_(stake_addr_ids)
-        ).group_by(
-            TxOut.stake_address_id
-        ).subquery()
+        first_outputs_subq = (
+            select(
+                TxOut.stake_address_id,
+                func.min(TxOut.id).label('min_id')
+            )
+            .filter(TxOut.stake_address_id.in_(stake_addr_ids))
+            .group_by(TxOut.stake_address_id)
+            .subquery()
+        )
 
         # Join to get full transaction and block details
-        results = self.db_session.query(
-            TxOut.stake_address_id,
-            Tx.hash.label('tx_hash'),
-            Block.hash.label('block_hash'),
-            Block.time.label('block_time')
-        ).join(
-            first_outputs,
-            and_(
-                TxOut.stake_address_id == first_outputs.c.stake_address_id,
-                TxOut.id == first_outputs.c.min_id
+        stmt = (
+            select(
+                TxOut.stake_address_id,
+                Tx.hash.label('tx_hash'),
+                Block.hash.label('block_hash'),
+                Block.time.label('block_time')
             )
-        ).join(
-            Tx, Tx.id == TxOut.tx_id
-        ).join(
-            Block, Block.id == Tx.block_id
-        ).all()
+            .join(
+                first_outputs_subq,
+                and_(
+                    TxOut.stake_address_id == first_outputs_subq.c.stake_address_id,
+                    TxOut.id == first_outputs_subq.c.min_id
+                )
+            )
+            .join(Tx, Tx.id == TxOut.tx_id)
+            .join(Block, Block.id == Tx.block_id)
+        )
+
+        results = self.db_session.execute(stmt).all()
 
         # Build result dictionary
         appearances = {}

@@ -1,5 +1,5 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy import func
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
@@ -15,14 +15,17 @@ class EpochExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract epochs in batches."""
         with tracer.start_as_current_span("epoch_extraction") as span:
+            stmt = select(Epoch).order_by(Epoch.id)
+
             if last_processed_id:
-                query = self.db_session.query(Epoch).order_by(Epoch.id).filter(Epoch.id > last_processed_id)
-            else:
-                query = self.db_session.query(Epoch).order_by(Epoch.id)
+                stmt = stmt.filter(Epoch.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -46,8 +49,9 @@ class EpochExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Epoch.id)).scalar()
+        stmt = select(func.count(Epoch.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Epoch.id)).scalar()
-        return result
+        stmt = select(func.max(Epoch.id))
+        return self.db_session.execute(stmt).scalar()
