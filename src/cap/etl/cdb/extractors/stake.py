@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func, and_
+from sqlalchemy.orm import joinedload, subqueryload
+from sqlalchemy import func, and_, exists
 from opentelemetry import trace
 import logging
 
@@ -82,13 +82,12 @@ class DelegationExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract delegations with stake amounts in batches."""
         with tracer.start_as_current_span("delegation_extraction") as span:
-            # Get current epoch to determine active delegations
             current_epoch = self.db_session.query(func.max(Epoch.no)).scalar()
 
             query = self.db_session.query(Delegation).options(
-                joinedload(Delegation.addr),
-                joinedload(Delegation.pool_hash),
-                joinedload(Delegation.tx)
+                subqueryload(Delegation.addr),
+                subqueryload(Delegation.pool_hash),
+                subqueryload(Delegation.tx)
             ).filter(
                 Delegation.active_epoch_no <= current_epoch
             )
@@ -98,17 +97,53 @@ class DelegationExtractor(BaseExtractor):
 
             query = query.order_by(Delegation.id)
 
-            offset = 0
-            while True:
+            # Bulk calculate stake amounts
+            for offset in range(0, self.get_total_count(), self.batch_size):
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
-                span.set_attribute("batch_size", len(batch))
-                span.set_attribute("offset", offset)
+                # Get all stake amounts in one query
+                addr_ids = [d.addr_id for d in batch]
+                stake_amounts = self._bulk_calculate_stake_amounts(addr_ids)
 
-                yield [self._serialize_delegation_with_stake(delegation) for delegation in batch]
-                offset += self.batch_size
+                batch_data = []
+                for delegation in batch:
+                    serialized = self._serialize_delegation_with_stake(delegation)
+                    serialized['stake_amount'] = stake_amounts.get(delegation.addr_id, 0)
+                    batch_data.append(serialized)
+
+                span.set_attribute("batch_size", len(batch))
+                yield batch_data
+
+    def _bulk_calculate_stake_amounts(self, addr_ids: list[int]) -> dict[int, int]:
+        """Calculate stake amounts for multiple addresses in one query."""
+        from sqlalchemy import and_, not_, exists, case
+
+        if not addr_ids:
+            return {}
+
+        # Subquery for spent outputs
+        spent_outputs = self.db_session.query(
+            TxIn.tx_out_id,
+            TxIn.tx_out_index
+        ).subquery()
+
+        # Get all unspent outputs for the addresses
+        results = self.db_session.query(
+            TxOut.stake_address_id,
+            func.sum(TxOut.value).label('total_stake')
+        ).filter(
+            TxOut.stake_address_id.in_(addr_ids),
+            ~exists().where(
+                and_(
+                    spent_outputs.c.tx_out_id == TxOut.tx_id,
+                    spent_outputs.c.tx_out_index == TxOut.index
+                )
+            )
+        ).group_by(TxOut.stake_address_id).all()
+
+        return {addr_id: int(stake or 0) for addr_id, stake in results}
 
     def _serialize_delegation_with_stake(self, delegation: Delegation) -> dict[str, Any]:
         """Serialize delegation with calculated stake amount."""
@@ -245,53 +280,48 @@ class StakeAddressExtractor(BaseExtractor):
 
             query = query.order_by(StakeAddress.id)
 
-            offset = 0
-            while True:
+            for offset in range(0, self.db_session.query(func.count(StakeAddress.id)).scalar() or 0, self.batch_size):
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
+                batch_data = []
+                for stake_addr in batch:
+                    serialized = {
+                        'id': stake_addr.id,
+                        'hash_raw': stake_addr.hash_raw.hex() if stake_addr.hash_raw else None,
+                        'view': stake_addr.view,
+                        'script_hash': stake_addr.script_hash.hex() if stake_addr.script_hash else None,
+                        'has_script': bool(stake_addr.script_hash),
+                        'stake_amount': self._calculate_stake_amount(stake_addr.id)
+                    }
+                    batch_data.append(serialized)
+
                 span.set_attribute("batch_size", len(batch))
-                span.set_attribute("offset", offset)
-
-                yield [self._serialize_stake_address(stake_addr) for stake_addr in batch]
-                offset += self.batch_size
-
-    def _serialize_stake_address(self, stake_addr: StakeAddress) -> dict[str, Any]:
-        """Serialize stake address to dictionary."""
-        stake_amount = self._calculate_stake_amount(stake_addr.id)
-
-        return {
-            'id': stake_addr.id,
-            'hash_raw': stake_addr.hash_raw.hex() if stake_addr.hash_raw else None,
-            'view': stake_addr.view,
-            'script_hash': stake_addr.script_hash.hex() if stake_addr.script_hash else None,
-            'has_script': bool(stake_addr.script_hash),
-            'stake_amount': stake_amount
-        }
+                yield batch_data
 
     def _calculate_stake_amount(self, stake_addr_id: int) -> int:
         """Calculate the total stake amount for a stake address."""
-        # Get all UTXOs for this stake address
-        utxos = self.db_session.query(TxOut).filter(
-            TxOut.stake_address_id == stake_addr_id
-        ).all()
+        # Subquery for spent outputs
+        spent_outputs = self.db_session.query(
+            TxIn.tx_out_id,
+            TxIn.tx_out_index
+        ).subquery()
 
-        # Filter out spent UTXOs and sum the values
-        total_stake = 0
-        for utxo in utxos:
-            # Check if this output has been spent
-            spent = self.db_session.query(TxIn).filter(
+        # Calculate sum directly in database
+        result = self.db_session.query(
+            func.coalesce(func.sum(TxOut.value), 0)
+        ).filter(
+            TxOut.stake_address_id == stake_addr_id,
+            ~exists().where(
                 and_(
-                    TxIn.tx_out_id == utxo.tx_id,
-                    TxIn.tx_out_index == utxo.index
+                    spent_outputs.c.tx_out_id == TxOut.tx_id,
+                    spent_outputs.c.tx_out_index == TxOut.index
                 )
-            ).first()
+            )
+        ).scalar()
 
-            if not spent:
-                total_stake += int(utxo.value)
-
-        return total_stake
+        return int(result)
 
     def get_total_count(self) -> int:
         return self.db_session.query(func.count(StakeAddress.id)).scalar()

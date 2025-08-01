@@ -4,6 +4,7 @@ Handles loading transformed RDF data into Virtuoso triplestore.
 """
 
 import logging
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -60,15 +61,17 @@ class CDBLoader:
                 prefix_lines = []
                 data_lines = []
                 for line in lines:
-                    if line.strip().startswith('PREFIX') or line.strip().startswith('@prefix'):
+                    line_stripped = line.strip()
+                    if line_stripped.startswith('PREFIX') or line.strip().startswith('@prefix'):
                         prefix_lines.append(line)
-                    elif line.strip():
+                    elif line_stripped:
                         data_lines.append(line)
 
                 # Process in chunks, ensuring we break at complete statements
                 chunk_size = 1000
                 prefixes = '\n'.join(prefix_lines) + '\n' if prefix_lines else ''
 
+                chunks = []
                 i = 0
                 chunk_num = 1
                 while i < len(data_lines):
@@ -89,16 +92,23 @@ class CDBLoader:
 
                     chunk_lines = data_lines[i:end_idx]
                     chunk_data = prefixes + '\n'.join(chunk_lines)
-
-                    # Load chunk to Virtuoso
-                    await self._load_to_virtuoso(graph_uri, chunk_data, additional_prefixes=additional_prefixes)
-
-                    logger.debug(f"Loaded chunk {chunk_num} to graph: {graph_uri}")
+                    chunks.append((chunk_data, chunk_num))
 
                     i = end_idx
                     chunk_num += 1
 
-                logger.debug(f"Successfully loaded all {chunk_num - 1} chunks to graph: {graph_uri}")
+                load_tasks = []
+                for chunk_data, chunk_num in chunks:
+                    task = self._load_to_virtuoso(graph_uri, chunk_data, additional_prefixes=additional_prefixes)
+                    load_tasks.append(task)
+
+                # Process in batches of 4 to avoid overwhelming Virtuoso
+                for i in range(0, len(load_tasks), 4):
+                    batch_tasks = load_tasks[i:i+4]
+                    await asyncio.gather(*batch_tasks)
+                    logger.debug(f"Loaded chunks {i+1} to {min(i+4, len(load_tasks))} of {len(load_tasks)}")
+
+                logger.debug(f"Successfully loaded all {len(chunks)} chunks to graph: {graph_uri}")
                 return True
 
             except Exception as e:
@@ -194,28 +204,19 @@ class CDBLoader:
                     return
 
                 # First delete the specific progress node
-                delete_query = f"""
+                update_query = f"""
                 {DEFAULT_PREFIX}
-                DELETE WHERE {{
-                    GRAPH <{metadata_graph_uri}> {{
-                        <{progress_uri}> ?p ?o .
-                    }}
+                WITH <{metadata_graph_uri}>
+                DELETE {{ <{progress_uri}> ?p ?o }}
+                INSERT {{
+                    {turtle_data}
+                }}
+                WHERE {{
+                    OPTIONAL {{ <{progress_uri}> ?p ?o }}
                 }}
                 """
 
-                await self.virtuoso_client.execute_query(delete_query)
-
-                # Then insert the new data
-                insert_query = f"""
-                {DEFAULT_PREFIX}
-                INSERT DATA {{
-                    GRAPH <{metadata_graph_uri}> {{
-                        {turtle_data}
-                    }}
-                }}
-                """
-
-                await self.virtuoso_client.execute_query(insert_query)
+                await self.virtuoso_client.execute_query(update_query)
 
                 logger.debug(f"Saved progress metadata for {entity_type}")
                 span.set_attribute("success", True)

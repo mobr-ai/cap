@@ -1,5 +1,5 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import subqueryload
 from sqlalchemy import func
 from opentelemetry import trace
 import logging
@@ -17,7 +17,7 @@ class BlockExtractor(BaseExtractor):
         """Extract blocks in batches."""
         with tracer.start_as_current_span("block_extraction") as span:
             query = self.db_session.query(Block).options(
-                joinedload(Block.slot_leader).joinedload(SlotLeader.pool_hash)
+                subqueryload(Block.slot_leader).subqueryload(SlotLeader.pool_hash)
             )
 
             if last_processed_id:
@@ -25,17 +25,35 @@ class BlockExtractor(BaseExtractor):
 
             query = query.order_by(Block.id)
 
-            offset = 0
-            while True:
+            # Pre-fetch transaction hashes in bulk
+            for offset in range(0, self.db_session.query(func.count(Block.id)).scalar() or 0, self.batch_size):
                 batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
-                span.set_attribute("batch_size", len(batch))
-                span.set_attribute("offset", offset)
+                # Bulk fetch transactions for all blocks in batch
+                block_ids = [block.id for block in batch]
+                tx_map = {}
+                if block_ids:
+                    txs = self.db_session.query(Tx.block_id, Tx.hash).filter(
+                        Tx.block_id.in_(block_ids)
+                    ).all()
+                    for block_id, tx_hash in txs:
+                        if block_id not in tx_map:
+                            tx_map[block_id] = []
+                        tx_map[block_id].append({'hash': tx_hash.hex(), 'epoch_no': None})
 
-                yield [self._serialize_block(block) for block in batch]
-                offset += self.batch_size
+                # Serialize with pre-fetched data
+                batch_data = []
+                for block in batch:
+                    serialized = self._serialize_block(block)
+                    serialized['transactions'] = tx_map.get(block.id, [])
+                    for tx in serialized['transactions']:
+                        tx['epoch_no'] = block.epoch_no
+                    batch_data.append(serialized)
+
+                span.set_attribute("batch_size", len(batch))
+                yield batch_data
 
     def _serialize_block(self, block: Block) -> dict[str, Any]:
         """Serialize a block to dictionary."""

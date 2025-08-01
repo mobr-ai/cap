@@ -17,11 +17,12 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
 
     # ETL settings
-    ETL_BATCH_SIZE: int = 1000
-    ETL_SYNC_INTERVAL: int = 300  # seconds
-    ETL_AUTO_START: bool = False
-    ETL_CONTINUOUS: bool = True
+    ETL_BATCH_SIZE: int
+    ETL_SYNC_INTERVAL: int
+    ETL_AUTO_START: bool
+    ETL_CONTINUOUS: bool
     ETL_PROGRESS_GRAPH: str
+    ETL_PARALLEL_WORKERS: int
 
     # Monitoring settings
     ENABLE_TRACING: bool

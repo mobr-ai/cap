@@ -49,7 +49,29 @@ class VirtuosoClient:
     def __init__(self, config: VirtuosoConfig | None = None):
         self.config = config or VirtuosoConfig()
         self._sparql_wrapper = None
+        self._http_client = None
         self._initialize_sparql_wrapper()
+
+    async def _get_http_client(self):
+        """Get or create reusable HTTP client with optimized settings."""
+        if not self._http_client:
+            timeout = httpx.Timeout(30.0, connect=10.0)
+            self._http_client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=httpx.Limits(
+                    max_keepalive_connections=20,
+                    max_connections=50,
+                    keepalive_expiry=30.0
+                ),
+                http2=True  # Enable HTTP/2 for better performance
+            )
+        return self._http_client
+
+    async def close(self):
+        """Close the HTTP client connection."""
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
 
     def _initialize_sparql_wrapper(self):
         """Initialize the SPARQL wrapper with proper configuration."""
@@ -133,41 +155,73 @@ class VirtuosoClient:
                         detail=f"Failed to delete graph: {str(e)}"
                     )
 
-            timeout = httpx.Timeout(30.0, connect=10.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                try:
-                    str_prefixes = self._build_turtle_prefixes(additional_prefixes)
-                    response = await client.request(
-                        method=method,
-                        url=self.config.crud_endpoint,
-                        params={"graph-uri": graph_uri},
-                        headers=default_headers,
-                        content=str_prefixes+data,
-                        auth=(self.config.username, self.config.password)
-                    )
+            client = await self._get_http_client()
 
-                    if response.status_code not in {200, 201, 204}:
-                        error_msg = f"Virtuoso CRUD operation failed: HTTP {response.status_code} - {response.text}"
-                        span.set_attribute("error", error_msg)
-                        logger.error(error_msg)
-                        raise HTTPException(
-                            status_code=response.status_code,
-                            detail=error_msg
+            try:
+                str_prefixes = self._build_turtle_prefixes(additional_prefixes)
+
+                # Prepare content
+                content = str_prefixes + data if data else str_prefixes
+
+                # Make request with retry logic
+                max_retries = 3
+                retry_delay = 0.5
+
+                for attempt in range(max_retries):
+                    try:
+                        response = await client.request(
+                            method=method,
+                            url=self.config.crud_endpoint,
+                            params={"graph-uri": graph_uri},
+                            headers=default_headers,
+                            content=content,
+                            auth=(self.config.username, self.config.password)
                         )
 
-                    logger.debug(f"Successfully executed {method} operation on graph {graph_uri}")
-                    return True
+                        if response.status_code not in {200, 201, 204}:
+                            if attempt < max_retries - 1 and response.status_code >= 500:
+                                # Retry on server errors
+                                await asyncio.sleep(retry_delay * (attempt + 1))
+                                continue
 
-                except httpx.TimeoutException:
-                    error_msg = f"Timeout during {method} operation on graph {graph_uri}"
-                    span.set_attribute("error", error_msg)
-                    logger.error(error_msg)
-                    raise HTTPException(status_code=504, detail=error_msg)
-                except httpx.RequestError as e:
-                    error_msg = f"Request error during {method} operation: {str(e)}"
-                    span.set_attribute("error", error_msg)
-                    logger.error(error_msg)
-                    raise HTTPException(status_code=503, detail=error_msg)
+                            error_msg = f"Virtuoso CRUD operation failed: HTTP {response.status_code} - {response.text}"
+                            span.set_attribute("error", error_msg)
+                            logger.error(error_msg)
+                            raise HTTPException(
+                                status_code=response.status_code,
+                                detail=error_msg
+                            )
+
+                        logger.debug(f"Successfully executed {method} operation on graph {graph_uri}")
+                        return True
+
+                    except httpx.TimeoutException:
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay * (attempt + 1))
+                            continue
+
+                        error_msg = f"Timeout during {method} operation on graph {graph_uri} after {max_retries} attempts"
+                        span.set_attribute("error", error_msg)
+                        logger.error(error_msg)
+                        raise HTTPException(status_code=504, detail=error_msg)
+
+                    except httpx.RequestError as e:
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay * (attempt + 1))
+                            continue
+
+                        error_msg = f"Request error during {method} operation: {str(e)}"
+                        span.set_attribute("error", error_msg)
+                        logger.error(error_msg)
+                        raise HTTPException(status_code=503, detail=error_msg)
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                error_msg = f"Unexpected error during {method} operation: {str(e)}"
+                span.set_attribute("error", error_msg)
+                logger.error(error_msg)
+                raise HTTPException(status_code=500, detail=error_msg)
 
     async def create_graph(
             self,

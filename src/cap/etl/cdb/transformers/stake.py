@@ -11,60 +11,54 @@ class StakePoolTransformer(BaseTransformer):
     def transform(self, pools: list[dict[str, Any]]) -> str:
         """Transform stake pools to RDF Turtle format with complete coverage."""
         turtle_lines = []
+        turtle_lines_append = turtle_lines.append
 
         for pool in pools:
             pool_uri = self.create_pool_uri(pool['pool_hash'])
 
-            # Pool as cardano:StakePool (correct ontology class)
-            turtle_lines.append(f"{pool_uri} a cardano:StakePool ;")
+            pool_lines = [f"{pool_uri} a cardano:StakePool ;"]
 
-            # Use only properties that exist in the ontology
             if pool['pool_hash']:
-                # No hasPoolHash property in ontology
-                turtle_lines.append(f"    blockchain:hasHash \"{pool['pool_hash']}\" ;")
+                pool_lines.append(f"    blockchain:hasHash \"{pool['pool_hash']}\" ;")
 
             if pool['pledge']:
-                turtle_lines.append(f"    cardano:hasPoolPledge {self.create_amount_literal(pool['pledge'])} ;")
+                pool_lines.append(f"    cardano:hasPoolPledge {self.create_amount_literal(pool['pledge'])} ;")
 
             if pool['margin'] is not None:
-                turtle_lines.append(f"    cardano:hasMargin {self.format_literal(pool['margin'], 'xsd:decimal')} ;")
+                pool_lines.append(f"    cardano:hasMargin {self.format_literal(pool['margin'], 'xsd:decimal')} ;")
 
             if pool['fixed_cost']:
-                turtle_lines.append(f"    cardano:hasFixedCost {self.create_amount_literal(pool['fixed_cost'])} ;")
+                pool_lines.append(f"    cardano:hasFixedCost {self.create_amount_literal(pool['fixed_cost'])} ;")
 
             if pool['reward_addr']:
-                # Create a stake account for the reward address
                 reward_addr_uri = self.create_stake_address_uri(pool['reward_addr'])
-                turtle_lines.append(f"    cardano:hasStakeAccount {reward_addr_uri} ;")
+                pool_lines.append(f"    cardano:hasStakeAccount {reward_addr_uri} ;")
 
-            # Pool metadata
             if pool['metadata_url']:
                 metadata_uri = self.create_uri('pool_metadata', pool['id'])
-                turtle_lines.append(f"    cardano:hasPoolMetadata {metadata_uri} ;")
+                pool_lines.append(f"    cardano:hasPoolMetadata {metadata_uri} ;")
 
-            # Pool retirement
             if pool.get('retirement_epoch'):
                 retirement_uri = self.create_uri('pool_retirement', pool['id'])
-                turtle_lines.append(f"    cardano:hasRetirement {retirement_uri} ;")
+                pool_lines.append(f"    cardano:hasRetirement {retirement_uri} ;")
 
-            # Remove trailing semicolon and add period
-            if turtle_lines and turtle_lines[-1].endswith(' ;'):
-                turtle_lines[-1] = turtle_lines[-1][:-2] + ' .'
+            pool_lines[-1] = pool_lines[-1][:-2] + ' .'
 
-            turtle_lines.append("")
+            for line in pool_lines:
+                turtle_lines_append(line)
+            turtle_lines_append("")
 
-            # Now create the separate entities AFTER closing the pool entity
-            # Pool metadata entity
+            # Add metadata entity
             if pool['metadata_url']:
                 metadata_uri = self.create_uri('pool_metadata', pool['id'])
-                turtle_lines.append(f"{metadata_uri} a cardano:PoolMetadata .")
-                turtle_lines.append("")
+                turtle_lines_append(f"{metadata_uri} a cardano:PoolMetadata .")
+                turtle_lines_append("")
 
-            # Pool retirement entity
+            # Add retirement entity
             if pool.get('retirement_epoch'):
                 retirement_uri = self.create_uri('pool_retirement', pool['id'])
-                turtle_lines.append(f"{retirement_uri} a cardano:PoolRetirement .")
-                turtle_lines.append("")
+                turtle_lines_append(f"{retirement_uri} a cardano:PoolRetirement .")
+                turtle_lines_append("")
 
         return '\n'.join(turtle_lines)
 
