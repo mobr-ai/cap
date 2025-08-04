@@ -33,8 +33,11 @@ async def initialize_graph(client: VirtuosoClient, graph_uri: str, ontology_path
             if not exists:
                 span.set_attribute("creating_new_graph", True)
 
-                with open("src/ontologies/cardano.ttl", "r") as f:
-                    turtle_data = f.read()
+                if ontology_path != "":
+                    with open(ontology_path, "r") as f:
+                        turtle_data = f.read()
+                else:
+                    turtle_data = ""
 
                 await client.create_graph(graph_uri, turtle_data)
                 exists = await client.check_graph_exists(graph_uri)
@@ -58,7 +61,8 @@ async def initialize_required_graphs(client: VirtuosoClient) -> None:
     """Initialize all required graphs for the application."""
     with tracer.start_as_current_span("initialize_required_graphs") as span:
         required_graphs = [
-            (settings.CARDANO_GRAPH, "src/ontologies/cardano.ttl")
+            (settings.CARDANO_GRAPH, "src/ontologies/cardano.ttl"),
+            (f"{settings.CARDANO_GRAPH}/metadata", "")
         ]
 
         initialization_results = []
