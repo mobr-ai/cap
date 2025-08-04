@@ -402,7 +402,7 @@ class ETLPipeline:
                         progress.last_updated = datetime.now()
 
                         # Save progress periodically (every 50 batches for better performance)
-                        if batch_count % 50 == 0:
+                        if batch_count % 500 == 0:
                             await self.loader.save_progress_metadata(
                                 entity_type,
                                 progress,

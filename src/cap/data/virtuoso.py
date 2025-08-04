@@ -55,13 +55,13 @@ class VirtuosoClient:
     async def _get_http_client(self):
         """Get or create reusable HTTP client with optimized settings."""
         if not self._http_client:
-            timeout = httpx.Timeout(30.0, connect=10.0)
+            timeout = httpx.Timeout(120.0, connect=10.0)
             self._http_client = httpx.AsyncClient(
                 timeout=timeout,
                 limits=httpx.Limits(
                     max_keepalive_connections=20,
                     max_connections=50,
-                    keepalive_expiry=30.0
+                    keepalive_expiry=120.0
                 ),
                 http2=True  # Enable HTTP/2 for better performance
             )
