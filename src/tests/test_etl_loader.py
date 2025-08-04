@@ -141,6 +141,8 @@ async def test_loader_save_progress_metadata(virtuoso_client: VirtuosoClient):
     )
 
     await loader.save_progress_metadata("test_entity", progress, TEST_METADATA_GRAPH)
+    exists = await virtuoso_client.check_graph_exists(TEST_METADATA_GRAPH)
+    assert exists
 
     # Verify metadata was saved
     query = f"""

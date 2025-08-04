@@ -214,7 +214,7 @@ Before running CAP, ensure you have the following installed on your system:
 3. **Set up Python environment:**
 
    ```bash
-   python3.11 -m venv venv
+   virtualenv venv
    source venv/bin/activate
 
    poetry install
@@ -326,4 +326,4 @@ Distributed tracing is enabled with Jaeger. You can monitor traces and debug per
 
 Queries is alse enabled with Virtuos Conductor. You can access the conductor at:
 
-- **Jaeger UI:** [http://localhost:8890](http://localhost:8890)
+- **Virtuoso UI:** [http://localhost:8890](http://localhost:8890)
