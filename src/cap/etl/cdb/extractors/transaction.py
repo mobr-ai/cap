@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
@@ -16,25 +16,30 @@ class TransactionExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract transactions in batches with all related data."""
         with tracer.start_as_current_span("transaction_extraction") as span:
-            query = self.db_session.query(Tx).options(
-                joinedload(Tx.block),
-                joinedload(Tx.inputs).joinedload(TxIn.redeemer),
-                joinedload(Tx.outputs).joinedload(TxOut.stake_address),
-                joinedload(Tx.outputs).joinedload(TxOut.multi_assets).joinedload(MaTxOut.multi_asset),
-                joinedload(Tx.outputs).joinedload(TxOut.inline_datum),
-                joinedload(Tx.outputs).joinedload(TxOut.reference_script),
-                joinedload(Tx.minted_assets).joinedload(MaTxMint.multi_asset),
-                joinedload(Tx.tx_metadata)
+            stmt = (
+                select(Tx)
+                .options(
+                    selectinload(Tx.block),
+                    selectinload(Tx.inputs).selectinload(TxIn.redeemer),
+                    selectinload(Tx.outputs).selectinload(TxOut.stake_address),
+                    selectinload(Tx.outputs).selectinload(TxOut.multi_assets).selectinload(MaTxOut.multi_asset),
+                    selectinload(Tx.outputs).selectinload(TxOut.inline_datum),
+                    selectinload(Tx.outputs).selectinload(TxOut.reference_script),
+                    selectinload(Tx.minted_assets).selectinload(MaTxMint.multi_asset),
+                    selectinload(Tx.tx_metadata)
+                )
+                .order_by(Tx.id)
             )
 
             if last_processed_id:
-                query = query.filter(Tx.id > last_processed_id)
-
-            query = query.order_by(Tx.id)
+                stmt = stmt.filter(Tx.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 

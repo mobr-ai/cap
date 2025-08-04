@@ -1,6 +1,5 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
@@ -16,16 +15,17 @@ class MultiAssetExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract multi-assets in batches."""
         with tracer.start_as_current_span("multi_asset_extraction") as span:
-            query = self.db_session.query(MultiAsset)
+            stmt = select(MultiAsset).order_by(MultiAsset.id)
 
             if last_processed_id:
-                query = query.filter(MultiAsset.id > last_processed_id)
-
-            query = query.order_by(MultiAsset.id)
+                stmt = stmt.filter(MultiAsset.id > last_processed_id)
 
             offset = 0
             while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
+
                 if not batch:
                     break
 
@@ -46,8 +46,9 @@ class MultiAssetExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(MultiAsset.id)).scalar()
+        stmt = select(func.count(MultiAsset.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(MultiAsset.id)).scalar()
-        return result
+        stmt = select(func.max(MultiAsset.id))
+        return self.db_session.execute(stmt).scalar()

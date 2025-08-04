@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
 from opentelemetry import trace
 import logging
 
@@ -16,33 +16,55 @@ class BlockExtractor(BaseExtractor):
     def extract_batch(self, last_processed_id: Optional[int] = None) -> Iterator[list[dict[str, Any]]]:
         """Extract blocks in batches."""
         with tracer.start_as_current_span("block_extraction") as span:
-            query = self.db_session.query(Block).options(
-                joinedload(Block.slot_leader).joinedload(SlotLeader.pool_hash)
+            stmt = (
+                select(Block)
+                .options(
+                    selectinload(Block.slot_leader).selectinload(SlotLeader.pool_hash)
+                )
+                .order_by(Block.id)
             )
 
             if last_processed_id:
-                query = query.filter(Block.id > last_processed_id)
+                stmt = stmt.filter(Block.id > last_processed_id)
 
-            query = query.order_by(Block.id)
+            # Pre-fetch transaction hashes in bulk
+            total_count = self.get_total_count()
+            for offset in range(0, total_count or 0, self.batch_size):
+                batch = self.db_session.execute(
+                    stmt.offset(offset).limit(self.batch_size)
+                ).scalars().all()
 
-            offset = 0
-            while True:
-                batch = query.offset(offset).limit(self.batch_size).all()
                 if not batch:
                     break
 
-                span.set_attribute("batch_size", len(batch))
-                span.set_attribute("offset", offset)
+                # Bulk fetch transactions for all blocks in batch
+                block_ids = [block.id for block in batch]
+                tx_map = {}
+                if block_ids:
+                    tx_stmt = select(Tx.block_id, Tx.hash).filter(Tx.block_id.in_(block_ids))
+                    txs = self.db_session.execute(tx_stmt).all()
 
-                yield [self._serialize_block(block) for block in batch]
-                offset += self.batch_size
+                    for block_id, tx_hash in txs:
+                        if block_id not in tx_map:
+                            tx_map[block_id] = []
+                        tx_map[block_id].append({'hash': tx_hash.hex(), 'epoch_no': None})
+
+                # Serialize with pre-fetched data
+                batch_data = []
+                for block in batch:
+                    serialized = self._serialize_block(block)
+                    serialized['transactions'] = tx_map.get(block.id, [])
+                    for tx in serialized['transactions']:
+                        tx['epoch_no'] = block.epoch_no
+                    batch_data.append(serialized)
+
+                span.set_attribute("batch_size", len(batch))
+                yield batch_data
 
     def _serialize_block(self, block: Block) -> dict[str, Any]:
         """Serialize a block to dictionary."""
-
-        transactions = self.db_session.query(Tx).filter(
-            Tx.block_id == block.id
-        ).all()
+        stmt = select(Tx).filter(Tx.block_id == block.id)
+        transactions = self.db_session.execute(stmt).scalars().all()
 
         return {
             'id': block.id,
@@ -66,8 +88,9 @@ class BlockExtractor(BaseExtractor):
         }
 
     def get_total_count(self) -> int:
-        return self.db_session.query(func.count(Block.id)).scalar()
+        stmt = select(func.count(Block.id))
+        return self.db_session.execute(stmt).scalar()
 
     def get_last_id(self) -> Optional[int]:
-        result = self.db_session.query(func.max(Block.id)).scalar()
-        return result
+        stmt = select(func.max(Block.id))
+        return self.db_session.execute(stmt).scalar()

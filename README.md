@@ -69,6 +69,9 @@ Before running CAP, ensure you have the following installed on your system:
 1. **Config and environment files:**
 
    Run script to fetch necessary cardano-node and cardano-db-sync config files
+
+   **ATTENTION**: If you wish to run on mainnet, just replace "preview" with "mainnet" in the fetch script and the names in the step by step.
+
    ```bash
    ./fetch_config_files.sh
    ```
@@ -82,7 +85,7 @@ Before running CAP, ensure you have the following installed on your system:
 
 2. **Run supporting services:**
 
-   ATTENTION: remove --platform linux/amd64 if you are *NOT* using an amd64 platform (e.g. Mac with M1, M2, M3, M4 chips)
+   **ATTENTION**: remove --platform linux/amd64 if you are *NOT* using an amd64 platform (e.g. Mac with M1, M2, M3, M4 chips)
 
    Jaeger for CAP tracing support:
    ```bash
@@ -91,6 +94,11 @@ Before running CAP, ensure you have the following installed on your system:
      -p 4318:4318 \
      -p 16686:16686 \
      jaegertracing/all-in-one:latest
+   ```
+
+   ```bash
+   #OR check if it is running if you had it before
+   docker ps --filter "name=jaeger"
    ```
 
    Virtuoso for CAP triplestore:
@@ -102,6 +110,11 @@ Before running CAP, ensure you have the following installed on your system:
      tenforce/virtuoso
    ```
 
+   ```bash
+   #OR check if it is running if you had it before
+   docker ps --filter "name=virtuoso"
+   ```
+
    PostgreSQL:
    ```bash
    docker run --platform linux/amd64 -d --name postgres \
@@ -111,6 +124,11 @@ Before running CAP, ensure you have the following installed on your system:
       -e POSTGRES_PASSWORD=mysecretpassword \
       -p 5432:5432 \
       postgres:17.5-alpine
+   ```
+
+   ```bash
+   #OR check if it is running if you had it before
+   docker ps --filter "name=postgres"
    ```
 
    Verify PostgreSQL is running:
@@ -161,6 +179,11 @@ Before running CAP, ensure you have the following installed on your system:
       --port 3001
    ```
 
+   ```bash
+   #OR check if it is running if you had it before
+   docker ps --filter "name=cardano-node-preview"
+   ```
+
    cardano-db-sync:
    ```bash
    docker run --platform linux/amd64 -d --name cardano-db-sync-preview \
@@ -176,6 +199,11 @@ Before running CAP, ensure you have the following installed on your system:
       -e POSTGRES_PASSWORD=mysecretpassword \
       -e DB_SYNC_CONFIG=/config/db-sync-config.json \
       ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2
+   ```
+
+   ```bash
+   #OR check if it is running if you had it before
+   docker ps --filter "name=cardano-db-sync-preview"
    ```
 
    Wait a few seconds and verify if database is syncing:
@@ -202,7 +230,7 @@ Before running CAP, ensure you have the following installed on your system:
 
 
 #### Testing
-With CAP and its dependencies running, you can also run its tests
+With CAP and its dependencies running (i.e., cardano-node, cardano-db-sync, postgresql, virtuos, jaeger, and cap with uvicorn), you can now run its tests
 ```bash
 # activate virtual environment
 source venv/bin/activate
@@ -293,3 +321,9 @@ Once running, access API documentation at:
 Distributed tracing is enabled with Jaeger. You can monitor traces and debug performance at:
 
 - **Jaeger UI:** [http://localhost:16686](http://localhost:16686)
+
+### Using virtuoso conductor to make queries
+
+Queries is alse enabled with Virtuos Conductor. You can access the conductor at:
+
+- **Jaeger UI:** [http://localhost:8890](http://localhost:8890)

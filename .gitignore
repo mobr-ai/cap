@@ -137,3 +137,4 @@ __pycache__
 _pytest.out
 _docker.out
 catalog*.xml
+poetry.lock

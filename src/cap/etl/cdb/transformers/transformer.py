@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from urllib.parse import quote
 import logging
+from functools import lru_cache
 
 from cap.config import settings
 
@@ -17,6 +18,7 @@ class BaseTransformer(ABC):
     def __init__(self):
         self.base_uri = settings.CARDANO_GRAPH
 
+    @lru_cache(maxsize=10000)
     def create_uri(self, entity_type: str, identifier: Any) -> str:
         """Create a URI for an entity with proper encoding."""
         if identifier is None:
