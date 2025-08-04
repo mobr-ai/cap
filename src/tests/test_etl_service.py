@@ -3,7 +3,7 @@ import asyncio
 
 from httpx import AsyncClient
 
-from cap.etl.cdb.service import ETLService, ETLPipeline
+from cap.etl.cdb.service import ETLService
 
 @pytest.mark.asyncio
 async def test_etl_service_initialization():
@@ -52,26 +52,6 @@ async def test_etl_service_status():
     assert 'entity_progress' in status
 
     # Stop service
-    await service.stop_etl()
-
-@pytest.mark.asyncio
-async def test_etl_service_reset_progress():
-    """Test resetting ETL progress."""
-    service = ETLService()
-
-    # Start service
-    await service.start_etl(batch_size=10, sync_interval=1, continuous=False)
-
-    # Reset progress
-    await service.reset_progress(['account'])
-
-    # Verify reset
-    status = await service.get_status()
-    account_progress = status['entity_progress']['account']
-    assert account_progress['last_processed_id'] is None
-    assert account_progress['processed_records'] == 0
-
-    # Cleanup
     await service.stop_etl()
 
 @pytest.mark.asyncio

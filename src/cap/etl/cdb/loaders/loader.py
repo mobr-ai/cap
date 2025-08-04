@@ -177,7 +177,7 @@ class CDBLoader:
         """Save ETL progress metadata to Virtuoso."""
 
         if progress.error_message:
-            logger.error(f"Cant save progress for {entity_type}: {progress.error_message}")
+            logger.error(f"Can't save progress for {entity_type}: {progress.error_message}")
             return
 
         with tracer.start_as_current_span("save_progress_metadata") as span:
@@ -191,32 +191,41 @@ class CDBLoader:
 
                 # Build RDF data for progress
                 turtle_data = f"""
-                <{progress_uri}> a cardano:ETLProgress ;
-                    cardano:hasEntityType "{entity_type}" ;
-                    cardano:hasLastProcessedId "{progress.last_processed_id if isinstance(progress.last_processed_id, (int, str)) else 0}" ;
-                    cardano:hasTotalRecords {progress.total_records} ;
-                    cardano:hasProcessedRecords {progress.processed_records} ;
-                    cardano:hasStatus "{progress.status.value}" ;
-                    cardano:hasLastUpdated "{progress.last_updated.isoformat() if progress.last_updated else datetime.now().isoformat()}"^^xsd:dateTime ."""
-
-                if progress.error_message:
-                    logger.error(f"Error saving progress for {entity_type}: {progress.error_message}")
-                    return
-
-                # First delete the specific progress node
-                update_query = f"""
-                {DEFAULT_PREFIX}
-                WITH <{metadata_graph_uri}>
-                DELETE {{ <{progress_uri}> ?p ?o }}
-                INSERT {{
-                    {turtle_data}
-                }}
-                WHERE {{
-                    OPTIONAL {{ <{progress_uri}> ?p ?o }}
-                }}
+                    <{progress_uri}> a cardano:ETLProgress ;
+                        cardano:hasEntityType "{entity_type}" ;
+                        cardano:hasLastProcessedId "{progress.last_processed_id if isinstance(progress.last_processed_id, (int, str)) else 0}" ;
+                        cardano:hasTotalRecords {progress.total_records} ;
+                        cardano:hasProcessedRecords {progress.processed_records} ;
+                        cardano:hasStatus "{progress.status.value}" ;
+                        cardano:hasLastUpdated "{progress.last_updated.isoformat() if progress.last_updated else datetime.now().isoformat()}"^^xsd:dateTime .
                 """
 
-                await self.virtuoso_client.execute_query(update_query)
+                # First, ensure the graph exists
+                exists = await self.virtuoso_client.check_graph_exists(metadata_graph_uri)
+                if not exists:
+                    await self.virtuoso_client.create_graph(metadata_graph_uri, "")
+
+                # Delete existing progress data
+                delete_query = f"""
+                {DEFAULT_PREFIX}
+                DELETE WHERE {{
+                    GRAPH <{metadata_graph_uri}> {{
+                        <{progress_uri}> ?p ?o
+                    }}
+                }}
+                """
+                await self.virtuoso_client.execute_query(delete_query)
+
+                # Insert new progress data
+                insert_query = f"""
+                {DEFAULT_PREFIX}
+                INSERT DATA {{
+                    GRAPH <{metadata_graph_uri}> {{
+                        {turtle_data}
+                    }}
+                }}
+                """
+                await self.virtuoso_client.execute_query(insert_query)
 
                 logger.debug(f"Saved progress metadata for {entity_type}")
                 span.set_attribute("success", True)

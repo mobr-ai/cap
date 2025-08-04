@@ -140,6 +140,17 @@ async def test_loader_save_progress_metadata(virtuoso_client: VirtuosoClient):
         last_updated=datetime.now()
     )
 
+    initial_data = f"""
+    @prefix test: <{TEST_METADATA_GRAPH}#> .
+    test:placeholder test:property "value" .
+    """
+
+    created = await virtuoso_client.create_graph(TEST_METADATA_GRAPH, initial_data)
+    assert created
+
+    exists = await virtuoso_client.check_graph_exists(TEST_METADATA_GRAPH)
+    assert exists
+
     await loader.save_progress_metadata("test_entity", progress, TEST_METADATA_GRAPH)
 
     # Verify metadata was saved
