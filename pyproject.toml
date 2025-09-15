@@ -1,39 +1,41 @@
-[project]
+[tool.poetry]
 name = "CAP"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cardano Analytics Platform"
-authors = [{name = "MOBR Systems", email = "contact@mobr.ai"}]
+authors = ["MOBR Systems <contact@mobr.ai>"]
 readme = "README.md"
-requires-python = ">=3.11"
+license = "MIT"
 
-dependencies = [
-    "fastapi>=0.110.0",
-    "uvicorn>=0.27.1",
-    "httpx>=0.26.0",
-    "pydantic>=2.6.1",
-    "pydantic-settings>=2.1.0",
-    "opentelemetry-api>=1.23.0",
-    "opentelemetry-sdk>=1.23.0",
-    "opentelemetry-instrumentation-fastapi>=0.44b0",
-    "opentelemetry-exporter-otlp>=1.23.0",
-    "SPARQLWrapper>=2.0.0",
-    "python-dotenv>=1.0.0",
-]
+[tool.poetry.dependencies]
+python = ">=3.11"
+fastapi = ">=0.115.2"
+uvicorn = ">=0.32.0"
+uvloop = ">=0.21.0"
+httpx = { version = ">=0.28.1", extras = ["http2"] }
+pydantic = ">=2.6.1"
+pydantic-settings = ">=2.7.1"
+opentelemetry-api = ">=1.23.0"
+opentelemetry-sdk = ">=1.23.0"
+opentelemetry-instrumentation-fastapi = ">=0.44b0"
+opentelemetry-exporter-otlp = ">=1.23.0"
+SPARQLWrapper = ">=2.0.0"
+python-dotenv = ">=1.0.0"
+sqlalchemy = ">=2.0.0"
+psycopg2-binary = ">=2.9.5"
+asyncpg = ">=0.29.0"
 
-[project.optional-dependencies]
-dev = [
-    "hatchling>=1.21.1",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.5",
-    "pytest-cov>=4.1.0",
-    "black>=24.1.1",
-    "isort>=5.13.2",
-    "mypy>=1.8.0",
-]
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0"
+pytest-asyncio = ">=0.23.5"
+pytest-cov = ">=4.1.0"
+black = ">=24.1.1"
+isort = ">=5.13.2"
+mypy = ">=1.8.0"
+ruff = ">=0.3.0"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
@@ -44,5 +46,82 @@ profile = "black"
 line_length = 100
 multi_line_output = 3
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cap"]
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "SPARQLWrapper.*",
+    "opentelemetry.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["src/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src/cap",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["src/cap"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

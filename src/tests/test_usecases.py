@@ -2,14 +2,14 @@ import pytest
 from datetime import datetime, timedelta
 import logging
 from httpx import AsyncClient
-from cap.virtuoso import VirtuosoClient
+from cap.data.virtuoso import VirtuosoClient
 
 PREFIXES = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
     PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-     
+
 """
 TEST_GRAPH = "http://test.cardano.queries"
 logger = logging.getLogger(__name__)
@@ -24,9 +24,9 @@ async def cleanup(virtuoso_client: VirtuosoClient):
             await virtuoso_client.delete_graph(TEST_GRAPH)
     except Exception as e:
         logger.error(f"Cleanup failed: {e}")
-    
+
     yield
-    
+
     try:
         exists = await virtuoso_client.check_graph_exists(TEST_GRAPH)
         if exists:
@@ -100,15 +100,15 @@ def generate_test_data():
         # Transaction outputs
         <http://test/output1> blockchain:hasTokenAmount <http://test/amount1> .
         <http://test/amount1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "5000000000"^^xsd:integer .
+            blockchain:hasAmountValue "5000000000"^^xsd:decimal .
 
         <http://test/output2> blockchain:hasTokenAmount <http://test/amount2> .
         <http://test/amount2> blockchain:hasCurrency <http://test/token1> ;
-            blockchain:hasAmountValue "1000"^^xsd:integer .
+            blockchain:hasAmountValue "1000"^^xsd:decimal .
 
         <http://test/output3> blockchain:hasTokenAmount <http://test/amount3> .
         <http://test/amount3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "3000000000"^^xsd:integer .
+            blockchain:hasAmountValue "3000000000"^^xsd:decimal .
 
         # Accounts
         <http://test/account1> rdf:type blockchain:Account ;
@@ -127,20 +127,20 @@ def generate_test_data():
 
         # Account holdings
         <http://test/holding1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "250000000000000"^^xsd:integer .
+            blockchain:hasAmountValue "27670109999999999998"^^xsd:decimal .
 
         <http://test/holding2> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "150000000000"^^xsd:integer .
+            blockchain:hasAmountValue "150000000000"^^xsd:decimal .
 
         <http://test/holding3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "180000000000"^^xsd:integer .
+            blockchain:hasAmountValue "180000000000"^^xsd:decimal .
 
         # Rewards
         <http://test/reward1> cardano:hasRewardAmount <http://test/rewardAmount1> .
-        <http://test/rewardAmount1> blockchain:hasAmountValue "1000000"^^xsd:integer .
+        <http://test/rewardAmount1> blockchain:hasAmountValue "1000000"^^xsd:decimal .
 
         <http://test/reward2> cardano:hasRewardAmount <http://test/rewardAmount2> .
-        <http://test/rewardAmount2> blockchain:hasAmountValue "1500000"^^xsd:integer .
+        <http://test/rewardAmount2> blockchain:hasAmountValue "1500000"^^xsd:decimal .
 
         # Smart Contracts
         <http://test/contract1> rdf:type blockchain:SmartContract ;
@@ -161,11 +161,11 @@ def generate_test_data():
 
         # Staking
         <http://test/account1> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "100000000000"^^xsd:integer .
+            cardano:hasStakeAmount "100000000000"^^xsd:decimal .
         <http://test/account2> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "80000000000"^^xsd:integer .
+            cardano:hasStakeAmount "80000000000"^^xsd:decimal .
         <http://test/account3> cardano:delegatesTo <http://test/pool2> ;
-            cardano:hasStakeAmount "90000000000"^^xsd:integer .
+            cardano:hasStakeAmount "90000000000"^^xsd:decimal .
 
         # Governance
         <http://test/proposal1> rdf:type cardano:GovernanceProposal .
@@ -195,7 +195,7 @@ async def test_sparql_queries(async_client: AsyncClient):
         PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
         PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
 
-        SELECT (COUNT(?s) as ?count) 
+        SELECT (COUNT(?s) as ?count)
         FROM <{graph}>
         WHERE {{ ?s ?p ?o }}
     """
@@ -305,7 +305,7 @@ async def test_sparql_queries(async_client: AsyncClient):
             "type": "SELECT"
         }
     )
-    
+
     assert response.status_code == 200
     timestamp_results = response.json()["results"]["results"]
     logger.debug(f"Timestamp debugging now - comparison results: {timestamp_results}")
@@ -364,7 +364,7 @@ async def test_sparql_queries(async_client: AsyncClient):
         ORDER BY DESC(?amount)
         LIMIT 10
         """,
-        
+
         # Query 2: What were the average transaction fees last week?
         """
         SELECT (AVG(?fee) as ?avgFee)
@@ -555,12 +555,12 @@ async def test_sparql_queries(async_client: AsyncClient):
             # Expected average from sample data (1000000 + 900000 + 950000 + 980000) / 4
             expected_avg = 957500
             assert abs(avg_fee - expected_avg) < 1  # Allow for small floating-point differences
-            
+
         elif i == 3:  # Accounts with > 200K ADA
             assert "numAccounts" in results["bindings"][0]
             num_accounts = int(results["bindings"][0]["numAccounts"]["value"])
             assert num_accounts == 1  # Only account1 has > 200K ADA
-            
+
         elif i == 4:  # Average rewards
             assert "avgReward" in results["bindings"][0]
             avg_reward = float(results["bindings"][0]["avgReward"]["value"])
@@ -576,18 +576,18 @@ async def test_sparql_queries(async_client: AsyncClient):
                 assert "deployments" in binding
                 month = int(binding["month"]["value"])
                 assert 1 <= month <= 12
-                
+
         elif i == 6:  # NFT mints in last month
             assert "nftCount" in results["bindings"][0]
             nft_count = int(results["bindings"][0]["nftCount"]["value"])
             assert nft_count == 2  # Two NFTs in sample data
-            
+
         elif i == 7:  # Top tokens by transfer
             assert len(results["bindings"]) > 0
             # Verify transfers are in descending order
             transfers = [int(r["transfers"]["value"]) for r in results["bindings"]]
             assert transfers == sorted(transfers, reverse=True)
-            
+
         elif i == 8:  # New accounts per day
             assert len(results["bindings"]) > 0
             for binding in results["bindings"]:
@@ -595,7 +595,7 @@ async def test_sparql_queries(async_client: AsyncClient):
                 assert "new_accounts" in binding
                 new_accounts = int(binding["new_accounts"]["value"])
                 assert new_accounts > 0
-                
+
         elif i == 9:  # Top pools stake percentage
             assert len(results["bindings"]) > 0
             # Verify stake amounts
@@ -607,7 +607,7 @@ async def test_sparql_queries(async_client: AsyncClient):
                 # Stake percentage should be calculable
                 percentage = (stake_amount * 100) / total_staked
                 assert 0 <= percentage <= 100
-                
+
         elif i == 10:  # Vote count on latest proposal
             assert "voteCount" in results["bindings"][0]
             vote_count = int(results["bindings"][0]["voteCount"]["value"])
