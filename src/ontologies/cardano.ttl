@@ -179,6 +179,11 @@ cardano:ProtocolEra a owl:Class ;
     rdfs:comment "A major upgrade phase in Cardano's protocol evolution, each introducing new features and capabilities. Examples include Byron (legacy), Shelley (decentralization), Allegra (token locking), Mary (multi-asset), Alonzo (smart contracts), Babbage (Plutus V2), and Conway (governance)"@en .
 
 # Staking and Pool Classes
+cardano:StakeAccount a owl:Class ;
+    rdfs:subClassOf blockchain:Account ;
+    rdfs:label "Stake Account"@en ;
+    rdfs:comment "A Cardano blockchain account staking ADA."@en .
+
 cardano:StakePool a owl:Class ;
     rdfs:label "Stake Pool"@en ;
     rdfs:comment "An entity that participates in Cardano block production and network consensus."@en .
@@ -435,12 +440,6 @@ cardano:hasProcessedRecords a owl:DatatypeProperty ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:decimal .
 
-cardano:hasStatus a owl:DatatypeProperty ;
-    rdfs:label "has status"@en ;
-    rdfs:comment "Current status of processing"@en ;
-    rdfs:domain cardano:ETLProgress ;
-    rdfs:range xsd:string .
-
 cardano:hasLastUpdated a owl:DatatypeProperty ;
     rdfs:label "has last updated"@en ;
     rdfs:comment "Last update timestamp"@en ;
@@ -475,6 +474,12 @@ blockchain:hasTransaction a owl:ObjectProperty ;
 blockchain:hasAccountAddress a owl:DatatypeProperty ;
     rdfs:label "has account address"@en ;
     rdfs:comment "Relates an account with its addresses."@en ;
+    rdfs:domain blockchain:Account ;
+    rdfs:range xsd:string .
+
+blockchain:hasAccountStatus a owl:DatatypeProperty ;
+    rdfs:label "has account status"@en ;
+    rdfs:comment "Relates an account with its current status."@en ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:string .
 
