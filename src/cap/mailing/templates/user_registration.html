@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif">
+    <h2>{{ translations.title or "Confirm your email for CAP" }}</h2>
+    <p>{{ translations.hello or "Hi" }} {{ username }},</p>
+    <p>
+      {{ translations.instructions or "Click the button below to confirm your
+      email and finish your signup." }}
+    </p>
+    <p>
+      <a href="{{ activation_link }}"
+        >{{ translations.confirm or "Confirm email" }}</a
+      >
+    </p>
+    <p>
+      {{ translations.footer or "If you didn’t request this, you can ignore this
+      email." }}
+    </p>
+  </body>
+</html>

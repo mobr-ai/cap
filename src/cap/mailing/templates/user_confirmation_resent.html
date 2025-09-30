@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif">
+    <h2>{{ translations.title or "Your confirmation email was resent" }}</h2>
+    <p>
+      {{ translations.lead or "We’ve just sent you a new confirmation email.
+      Please check your inbox (and spam folder)." }}
+    </p>
+    <p>
+      {{ translations.help or "If you still don’t see it, try resending again in
+      a few minutes or contact support." }}
+    </p>
+    <p style="color: #666; font-size: 12px">
+      {{ translations.footer or "This is an automated message from the Cardano
+      Analytics Platform (CAP)." }}
+    </p>
+  </body>
+</html>

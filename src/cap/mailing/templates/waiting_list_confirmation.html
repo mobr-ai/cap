@@ -1,0 +1,4 @@
+{# src/cap/mailing/templates/waiting_list_confirmation.html #} {% extends
+"base_email.html" %} {% block content %} {{
+translations['message'].format(referral_link=referral_link, app_url=app_url) |
+safe }} {% endblock %}
