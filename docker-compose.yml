@@ -1,25 +1,27 @@
 services:
   api:
     build: .
-    platform: linux/arm64
+    platform: linux/amd64 # linux/arm64 on mac or linux/amd64 if you build on x86_64
+    container_name: cap_server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      - VIRTUOSO_HOST=virtuoso
-      - VIRTUOSO_PORT=8890
-      - VIRTUOSO_USER=dba
-      - VIRTUOSO_PASSWORD=mysecretpassword
-      - SPARQL_UPDATE=true
+      - .env.docker
     command: >
       sh -c "sleep 15 && uvicorn src.cap.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      - virtuoso
+      - jaeger
     networks:
       - app-network
 
   virtuoso:
-    image: tenforce/virtuoso    # Changed from openlink to tenforce
+    image: tenforce/virtuoso
     platform: linux/amd64
+    container_name: virtuoso
     ports:
       - "8890:8890"
       - "1111:1111"
@@ -29,20 +31,74 @@ services:
       - DEFAULT_GRAPH=http://www.mobr.ai/ontologies/cardano
     volumes:
       - virtuoso-data:/database
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8890/sparql >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     networks:
       - app-network
 
   jaeger:
     image: jaegertracing/all-in-one:latest
-    platform: linux/arm64
+    platform: linux/amd64
+    container_name: jaeger
     ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
+      - "16686:16686" # UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
       - app-network
+
+  cardano-node-preview:
+    image: ghcr.io/intersectmbo/cardano-node:10.4.0
+    platform: linux/amd64
+    container_name: cardano-node-preview
+    command: >
+      run
+      --config /config/config.json
+      --topology /config/topology.json
+      --database-path /data
+      --socket-path /data/node.socket
+      --host-addr 0.0.0.0
+      --port 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ${HOME}/cardano/preview-config:/config
+      - ${PWD}/backend/assets:/assets
+      - ${HOME}/cardano/db:/data
+    # Optional healthcheck: node creates a UNIX socket when ready
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /data/node.socket"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+    networks:
+      - app-network
+
+  # One-shot job to run the db setup script for cardano-db-sync
+  dbsetup:
+    image: ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2
+    platform: linux/amd64
+    # Use host networking so the container can reach your local Postgres on localhost:5432
+    network_mode: "host"
+    # Mount your scripts and pgpass (ensure chmod 600 on ~/.pgpass)
+    volumes:
+      - ${PWD}/cardano-db-sync/scripts:/scripts:ro
+      - ${HOME}/.pgpass:/root/.pgpass:ro
+    environment:
+      - PGPASSFILE=/root/.pgpass
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["/scripts/postgresql-setup.sh --createdb"]
+    # No need to run by default; invoke on demand:
+    profiles: ["manual"] # requires `--profile manual` or explicit service name
 
 networks:
   app-network:

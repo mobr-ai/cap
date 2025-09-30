@@ -131,6 +131,7 @@ dist
 
 # project specific
 .env
+.env.docker
 .DS_Store
 __pycache__
 .coverage

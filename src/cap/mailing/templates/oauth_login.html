@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif">
+    <h2>{{ translations.title or "New sign-in notification" }}</h2>
+    <p>
+      {{ translations.lead or "A new sign-in just occurred via" }} {{ provider
+      or "OAuth" }}.
+    </p>
+    <p>
+      {{ translations.tip or "If this wasn’t you, please reset your password and
+      check your account activity." }}
+    </p>
+    <p style="color: #666; font-size: 12px">
+      {{ translations.footer or "This security notice was sent by the Cardano
+      Analytics Platform (CAP)." }}
+    </p>
+  </body>
+</html>

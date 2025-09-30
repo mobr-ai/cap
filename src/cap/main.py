@@ -1,15 +1,29 @@
+# src/cap/main.py
 import logging
 import uvloop
 import asyncio
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from opentelemetry import trace
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
-from cap.api.router import router
+from starlette.responses import FileResponse  # <- add
+from opentelemetry import trace
+from sqlalchemy import text
+
+from cap.api.router import router as api_router
 from cap.telemetry import setup_telemetry, instrument_app
 from cap.data.virtuoso import VirtuosoClient
 from cap.config import settings
 from cap.etl.cdb.service import etl_service
+
+from cap.database.session import engine
+from cap.database.model import Base
+from cap.api.auth import router as auth_router
+from cap.api.waitlist import router as wait_router
+
+from dotenv import load_dotenv
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -153,19 +167,60 @@ def setup_tracing():
         trace.set_tracer_provider(trace.NoOpTracerProvider())
 
 def create_application() -> FastAPI:
-    """Create and configure the FastAPI application with ETL integration."""
-
     setup_tracing()
     app = FastAPI(
         title="CAP",
         description="Cardano Analytics Platform with ETL Pipeline",
         version="0.1.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     instrument_app(app)
-    app.include_router(router)
+
+    # Place all backend routes under /api
+    app.include_router(api_router, prefix="/api")
+    app.include_router(auth_router, prefix="/api")
+    app.include_router(wait_router, prefix="/api")
 
     return app
 
 app = create_application()
+
+# DB init
+Base.metadata.create_all(bind=engine)
+with engine.begin() as conn:
+    conn.execute(text("""
+    CREATE TABLE IF NOT EXISTS waiting_list (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      ref TEXT,
+      language TEXT
+    )
+    """))
+
+FRONTEND_DIST = os.getenv(
+    "FRONTEND_DIST",
+    os.path.join(os.path.dirname(__file__), "static")  # must contain index.html
+)
+
+# 1) Serve built assets (Vite puts them under 'assets/')
+assets_dir = os.path.join(FRONTEND_DIST, "assets")
+if os.path.isdir(assets_dir):
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+# 2) Root -> index.html
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+# 3) Catch-all SPA fallback (except API routes). Also serve real files if they exist.
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    candidate = os.path.join(FRONTEND_DIST, full_path)
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
+
+    return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
