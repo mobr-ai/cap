@@ -123,11 +123,6 @@ cardano:TransactionInput a owl:Class ;
     rdfs:label "Transaction Input"@en ;
     rdfs:comment "An input to a transaction."@en .
 
-cardano:RegularInput a owl:Class ;
-    rdfs:subClassOf cardano:TransactionInput ;
-    rdfs:label "Regular Input"@en ;
-    rdfs:comment "Standard transaction input spending a UTXO."@en .
-
 cardano:CollateralInput a owl:Class ;
     rdfs:subClassOf cardano:TransactionInput ;
     rdfs:label "Collateral Input"@en ;
@@ -141,11 +136,6 @@ cardano:ReferenceInput a owl:Class ;
 cardano:TransactionOutput a owl:Class ;
     rdfs:label "Transaction Output"@en ;
     rdfs:comment "An output from a transaction."@en .
-
-cardano:RegularOutput a owl:Class ;
-    rdfs:subClassOf cardano:TransactionOutput ;
-    rdfs:label "Regular Output"@en ;
-    rdfs:comment "Standard transaction output creating a UTXO."@en .
 
 cardano:CollateralOutput a owl:Class ;
     rdfs:subClassOf cardano:TransactionOutput ;
@@ -623,8 +613,8 @@ blockchain:hasTimestamp a owl:DatatypeProperty ;
 
 cardano:belongsToEra a owl:ObjectProperty ;
     rdfs:label "belongs to era"@en ;
-    rdfs:comment "Associates a transaction with its corresponding Cardano protocol era, establishing the context of features and capabilities available for that entity"@en ;
-    rdfs:domain blockchain:Transaction ;
+    rdfs:comment "Associates a block with its corresponding Cardano protocol era, establishing the context of features and capabilities available for that entity"@en ;
+    rdfs:domain blockchain:Block ;
     rdfs:range cardano:ProtocolEra .
 
 # Properties - Transaction Related
@@ -751,7 +741,7 @@ cardano:hasBlockSize a owl:DatatypeProperty ;
 
 cardano:hasBlockNumber a owl:DatatypeProperty ;
     rdfs:label "has block number"@en ;
-    rdfs:comment "The number of the block."@en ;
+    rdfs:comment "The number of the block (height)."@en ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
@@ -1231,11 +1221,59 @@ cardano:hasMinPoolCost a owl:DatatypeProperty ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
-cardano:hasMaxBlockSize a owl:DatatypeProperty ;
-    rdfs:label "has max block size"@en ;
-    rdfs:comment "Maximum allowed block size in an era"@en ;
+cardano:hasProtocolEraStartTime a owl:DatatypeProperty ;
+    rdfs:label "has protocol era start time"@en ;
+    rdfs:comment "The start instant of an era"@en ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraEndTime a owl:DatatypeProperty ;
+    rdfs:label "has protocol era end time"@en ;
+    rdfs:comment "The end instant of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraStartSlot a owl:DatatypeProperty ;
+    rdfs:label "has protocol era start slot number"@en ;
+    rdfs:comment "The start slot number of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraEndSlot a owl:DatatypeProperty ;
+    rdfs:label "has protocol era end slot number"@en ;
+    rdfs:comment "The end slot number of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraStartEpoch a owl:DatatypeProperty ;
+    rdfs:label "has protocol era start epoch number"@en ;
+    rdfs:comment "The start epoch number of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraEndEpoch a owl:DatatypeProperty ;
+    rdfs:label "has protocol era end epoch number"@en ;
+    rdfs:comment "The end epoch number of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraSlotLength a owl:DatatypeProperty ;
+    rdfs:label "has protocol era slot length"@en ;
+    rdfs:comment "The length of slots of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraEpochLength a owl:DatatypeProperty ;
+    rdfs:label "has protocol era epoch length"@en ;
+    rdfs:comment "The length of epochs of an era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:decimal .
+
+cardano:hasProtocolEraName a owl:DatatypeProperty ;
+    rdfs:label "has protocol era name"@en ;
+    rdfs:comment "The name of a protocol era"@en ;
+    rdfs:domain cardano:ProtocolEra ;
+    rdfs:range xsd:string .
 
 # Individuals
 cardano:ADA a cardano:CNT ;
