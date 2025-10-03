@@ -75,9 +75,9 @@ def render_template(template_name: str, language: str, **kwargs) -> str:
     return template.render(
         translations=merged_tr,
         language=lang,
-        cap_logo_url=os.getenv("CAP_LOGO_URL", "https://cap.ai/logo512.png"),
-        unsubscribe_url=os.getenv("CAP_UNSUB_URL", os.getenv("PUBLIC_BASE_URL", "https://cap.ai").rstrip("/") + "/unsubscribe"),
-        public_base_url=os.getenv("PUBLIC_BASE_URL", "https://cap.ai").rstrip("/"),
+        cap_logo_url=CAP_LOGO_URL,
+        unsubscribe_url=CAP_UNSUB_URL,
+        public_base_url=PUBLIC_BASE_URL.rstrip("/"),
         **kwargs,
     )
 
@@ -97,7 +97,7 @@ def send_email(
             "subject": subject,
             "html": html,
             # Optional:
-            # "reply_to": "support@cap.ai",
+            # "reply_to": "support@cap.mobr.ai",
             # "text": strip_tags_if_you_want(html),
         })
         print(f"[mailing] ✅ sent '{template_name}' to {to_email}")
