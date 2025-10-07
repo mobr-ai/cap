@@ -15,8 +15,8 @@ load_dotenv()
 # ---- Config ----
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 SERVICE_MAIL = os.environ.get("SERVICE_MAIL", "team@mail.cap.mobr.ai")  # verified in Resend
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://mobr.cap.ai")    # used to build absolute links
-CAP_LOGO_URL = os.environ.get("CAP_LOGO_URL", "https://mobr.cap.ai/icons/logo.png")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://cap.mobr.ai")    # used to build absolute links
+CAP_LOGO_URL = os.environ.get("CAP_LOGO_URL", "https://cap.mobr.ai/icons/logo.png")
 CAP_UNSUB_URL = os.environ.get("CAP_UNSUB_URL", f"{PUBLIC_BASE_URL}/unsubscribe")
 
 HERE = Path(__file__).resolve().parent
