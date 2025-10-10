@@ -1,7 +1,7 @@
 services:
   api:
     build: .
-    platform: linux/amd64 # linux/arm64 on mac or linux/amd64 if you build on x86_64
+    platform: linux/amd64
     container_name: cap_server
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -9,34 +9,50 @@ services:
       - "8000:8000"
     env_file:
       - .env
-      - .env.docker
     command: >
       sh -c "sleep 15 && uvicorn src.cap.main:app --host 0.0.0.0 --port 8000"
     depends_on:
-      - virtuoso
-      - jaeger
+      virtuoso:
+        condition: service_started
+      jaeger:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5433:5432"   # host access (avoid clashing with any local 5432)
+    env_file:
+      - .env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./ops/sql/init-cap.sql:/docker-entrypoint-initdb.d/10-init-cap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-postgres} -h localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     networks:
       - app-network
 
   virtuoso:
-    image: tenforce/virtuoso
+    image: openlink/virtuoso-opensource-7:latest
     platform: linux/amd64
     container_name: virtuoso
     ports:
-      - "8890:8890"
-      - "1111:1111"
-    environment:
-      - DBA_PASSWORD=mysecretpassword
-      - SPARQL_UPDATE=true
-      - DEFAULT_GRAPH=http://www.mobr.ai/ontologies/cardano
+      - "8892:8890"   # host access (avoid clashing with any local 8890)
+      - "1113:1111"   # host access (avoid clashing with any local 1111)
+    env_file:
+      - .env
     volumes:
-      - virtuoso-data:/database
+      - /home/marcio/data/cardano/virtuoso:/database
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:8890/sparql >/dev/null || exit 1",
-        ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8890/sparql >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -48,11 +64,55 @@ services:
     platform: linux/amd64
     container_name: jaeger
     ports:
-      - "16686:16686" # UI
-      - "4317:4317" # OTLP gRPC
-      - "4318:4318" # OTLP HTTP
+      - "16688:16686" # UI
+      - "4319:4317"   # OTLP gRPC
+      - "4322:4318"   # OTLP HTTP
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: ollama-setup
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      echo 'Waiting for Ollama service to be ready...' &&
+      sleep 5 &&
+      echo 'Pulling mobr/cap model...' &&
+      ollama pull mobr/cap &&
+      echo 'Model pulled successfully!'
+      "
     environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - OLLAMA_HOST=ollama:11434
     networks:
       - app-network
 
@@ -74,7 +134,6 @@ services:
       - ${HOME}/cardano/preview-config:/config
       - ${PWD}/backend/assets:/assets
       - ${HOME}/cardano/db:/data
-    # Optional healthcheck: node creates a UNIX socket when ready
     healthcheck:
       test: ["CMD-SHELL", "test -S /data/node.socket"]
       interval: 15s
@@ -83,22 +142,22 @@ services:
     networks:
       - app-network
 
-  # One-shot job to run the db setup script for cardano-db-sync
   dbsetup:
     image: ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2
     platform: linux/amd64
-    # Use host networking so the container can reach your local Postgres on localhost:5432
-    network_mode: "host"
-    # Mount your scripts and pgpass (ensure chmod 600 on ~/.pgpass)
+    container_name: cardano-dbsetup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - app-network
     volumes:
       - ${PWD}/cardano-db-sync/scripts:/scripts:ro
-      - ${HOME}/.pgpass:/root/.pgpass:ro
-    environment:
-      - PGPASSFILE=/root/.pgpass
     entrypoint: ["/bin/bash", "-lc"]
     command: ["/scripts/postgresql-setup.sh --createdb"]
-    # No need to run by default; invoke on demand:
-    profiles: ["manual"] # requires `--profile manual` or explicit service name
+    profiles: ["manual"]  # run with: docker compose run --rm dbsetup
 
 networks:
   app-network:
@@ -106,3 +165,5 @@ networks:
 
 volumes:
   virtuoso-data:
+  postgres-data:
+  ollama-data:

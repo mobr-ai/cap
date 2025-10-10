@@ -19,7 +19,7 @@ class OllamaClient:
     def __init__(
         self,
         base_url: Optional[str] = None,
-        llm_model: str = "cap-nl-sparql",
+        llm_model: str = None,
         timeout: float = 120.0
     ):
         """
@@ -31,7 +31,7 @@ class OllamaClient:
             timeout: Request timeout in seconds
         """
         self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
-        self.llm_model = llm_model
+        self.llm_model = (llm_model or os.getenv("OLLAMA_MODEL_NAME", "mobr/cap"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
