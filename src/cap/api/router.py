@@ -14,7 +14,7 @@ from cap.api.models import (
 from cap.data.virtuoso import VirtuosoClient
 from cap.etl.cdb.service import etl_service
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1/")
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
