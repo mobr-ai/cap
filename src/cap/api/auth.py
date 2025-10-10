@@ -33,7 +33,7 @@ except Exception:
     def on_oauth_login(*args, **kwargs): pass
     def on_wallet_login(*args, **kwargs): pass
 
-router = APIRouter(prefix="/api", tags=["auth"])
+router = APIRouter(prefix="/api/v1/", tags=["auth"])
 
 # ---- Pydantic shapes ----
 class RegisterIn(BaseModel):
@@ -216,7 +216,7 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.wallet_address == data.address).first()
     if not user:
-        # make a stable username derived from address 
+        # make a stable username derived from address
         suffix = int(hashlib.sha256(data.address.encode()).hexdigest(), 16) % 1_000_000
         username = f"cardano_user{suffix}"
         # ensure uniqueness
