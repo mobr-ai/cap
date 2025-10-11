@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAP - Natural Language</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --secondary: #64748b;
+            --background: #0f172a;
+            --surface: #1e293b;
+            --surface-light: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #475569;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header .logo {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .sync-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .sync-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sync-label {
+            font-weight: 500;
+            min-width: 100px;
+            text-align: right;
+        }
+
+        .sync-value {
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            min-width: 80px;
+        }
+
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            padding: 0.5rem 0.75rem;
+            background: var(--surface-light);
+            border-radius: 6px;
+        }
+
+        .sync-status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--secondary);
+        }
+
+        .sync-status-indicator.synced {
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .sync-status-indicator.syncing {
+            background: var(--error);
+            animation: pulse 2s infinite;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--secondary);
+        }
+
+        .status-indicator.online {
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        .chat-container {
+            flex: 1;
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 500px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            display: flex;
+            gap: 1rem;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: var(--surface-light);
+            color: var(--text-secondary);
+        }
+
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+
+        .message.user .message-content {
+            text-align: right;
+        }
+
+        .message-bubble {
+            padding: 0.875rem 1.125rem;
+            border-radius: 12px;
+            display: inline-block;
+            max-width: 100%;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .message.user .message-bubble {
+            background: var(--primary);
+            color: white;
+        }
+
+        .message.assistant .message-bubble {
+            background: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .message.status {
+            opacity: 0.8;
+        }
+
+        .message.status .message-avatar {
+            background: transparent;
+        }
+
+        .message.status .message-bubble {
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-style: italic;
+            padding: 0.5rem 1rem;
+            border-left: 2px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .thinking-animation {
+            display: inline-flex;
+            gap: 0.25rem;
+            margin-left: 0.5rem;
+        }
+
+        .thinking-animation span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: thinking 1.4s infinite;
+        }
+
+        .thinking-animation span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-animation span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes thinking {
+            0%, 60%, 100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+            30% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        .input-container {
+            padding: 1.5rem;
+            background: var(--background);
+            border-top: 1px solid var(--border);
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .input-field {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 60px;
+            max-height: 200px;
+            padding: 0.875rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.938rem;
+            resize: vertical;
+            transition: border-color 0.2s, opacity 0.2s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        textarea:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        textarea::placeholder {
+            color: var(--secondary);
+        }
+
+        .char-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .send-button {
+            padding: 0.875rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            height: 44px;
+            align-self: flex-start;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .send-button:disabled {
+            background: var(--secondary);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .send-button.processing {
+            background: var(--secondary);
+        }
+
+        .button-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .examples {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 0 1.5rem;
+        }
+
+        .example-chip {
+            padding: 0.5rem 1rem;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .example-chip:hover:not(.disabled) {
+            background: var(--surface);
+            border-color: var(--primary);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .example-chip.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            gap: 1rem;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--surface-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin-top: 0.5rem;
+        }
+
+        .empty-state p {
+            max-width: 500px;
+            line-height: 1.6;
+        }
+
+        .error-message {
+            padding: 1rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            border-radius: 8px;
+            color: var(--error);
+            font-size: 0.875rem;
+            margin: 0.5rem 0;
+        }
+
+        /* Scrollbar styling */
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: var(--surface);
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .messages::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .header-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+
+            .examples {
+                padding: 0 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <img src="/assets/logo.png" alt="CAP Logo" class="logo" onerror="this.style.display='none'">
+            Natural Language Analysis
+        </h1>
+        <div class="header-right">
+            <div class="sync-info" id="syncInfo">
+                <div class="sync-row">
+                    <span class="sync-label">CAP Block:</span>
+                    <span class="sync-value" id="capBlock">—</span>
+                </div>
+                <div class="sync-row">
+                    <span class="sync-label">Cardano Block:</span>
+                    <span class="sync-value" id="cardanoBlock">—</span>
+                </div>
+            </div>
+            <div class="sync-status" id="syncStatus">
+                <div class="sync-status-indicator" id="syncStatusIndicator"></div>
+                <span id="syncStatusText">Checking...</span>
+            </div>
+            <div class="status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="statusText">Checking...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🤖</div>
+                    <h2>Ask anything about Cardano</h2>
+                    <p>Query the Cardano blockchain using natural language. Ask about transactions, blocks, stake pools, governance, or any on-chain data.</p>
+                </div>
+            </div>
+            <div class="input-container">
+                <div class="examples" id="examples">
+                    <div class="example-chip" data-query="Show me the latest 5 blocks">Latest blocks</div>
+                    <div class="example-chip" data-query="What is the total ADA in circulation?">ADA circulation</div>
+                    <div class="example-chip" data-query="List the top 10 stake pools by stake amount">Top stake pools</div>
+                    <div class="example-chip" data-query="Show me recent governance proposals">Governance proposals</div>
+                </div>
+                <div></div>
+                <div class="input-wrapper">
+                    <div class="input-field">
+                        <textarea
+                            id="queryInput"
+                            placeholder="Ask a question about Cardano..."
+                            rows="2"
+                            maxlength="1000"></textarea>
+                        <div class="char-count">
+                            <span id="charCount">0</span>/1000
+                        </div>
+                    </div>
+                    <button class="send-button" id="sendButton">
+                        <span id="buttonText">Send</span>
+                        <span id="buttonIcon">→</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messagesContainer = document.getElementById('messages');
+        const queryInput = document.getElementById('queryInput');
+        const sendButton = document.getElementById('sendButton');
+        const buttonText = document.getElementById('buttonText');
+        const buttonIcon = document.getElementById('buttonIcon');
+        const charCount = document.getElementById('charCount');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const syncStatusIndicator = document.getElementById('syncStatusIndicator');
+        const syncStatusText = document.getElementById('syncStatusText');
+        const examples = document.getElementById('examples');
+        const capBlock = document.getElementById('capBlock');
+        const cardanoBlock = document.getElementById('cardanoBlock');
+
+        let isProcessing = false;
+        let currentStatusMessage = null;
+        let lastCapBlock = null;
+        let lastCardanoBlock = null;
+
+        // Check service health on load
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/v1/nl/health');
+                const data = await response.json();
+
+                if (data.status === 'healthy') {
+                    statusIndicator.classList.add('online');
+                    statusText.textContent = 'Online';
+                } else {
+                    statusIndicator.classList.remove('online');
+                    statusText.textContent = 'Offline';
+                }
+            } catch (error) {
+                statusIndicator.classList.remove('online');
+                statusText.textContent = 'Offline';
+            }
+        }
+
+        // Fetch sync information
+        async function fetchSyncInfo() {
+            try {
+                const sparqlQuery = `PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum)
+WHERE {
+  cardano:Cardano blockchain:hasCurrentBlockHeight ?currentCardanoHeight .
+  ?block a blockchain:Block .
+  ?block cardano:hasBlockNumber ?blockNum .
+}`;
+
+                const response = await fetch('/api/v1/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: sparqlQuery,
+                        type: 'SELECT'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const bindings = data.results?.results?.bindings;
+
+                    if (bindings && bindings.length > 0) {
+                        const result = bindings[0];
+                        const capBlockNum = result.capBlockNum?.value;
+                        const cardanoHeight = result.currentCardanoHeight?.value;
+
+                        if (capBlockNum) {
+                            lastCapBlock = parseInt(capBlockNum);
+                            capBlock.textContent = lastCapBlock.toLocaleString();
+                        }
+                        if (cardanoHeight) {
+                            lastCardanoBlock = parseInt(cardanoHeight);
+                            cardanoBlock.textContent = lastCardanoBlock.toLocaleString();
+                        }
+
+                        // Update sync status
+                        updateSyncStatus();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch sync info:', error);
+                syncStatusIndicator.classList.remove('synced', 'syncing');
+                syncStatusText.textContent = 'Unknown';
+            }
+        }
+
+        // Update sync status based on block heights
+        function updateSyncStatus() {
+            if (lastCapBlock === null || lastCardanoBlock === null) {
+                syncStatusIndicator.classList.remove('synced', 'syncing');
+                syncStatusText.textContent = 'Checking...';
+                return;
+            }
+
+            const blockDiff = lastCardanoBlock - lastCapBlock;
+
+            if (blockDiff <= 5) {
+                // Consider synced if within 5 blocks (allows for minor network delays)
+                syncStatusIndicator.classList.remove('syncing');
+                syncStatusIndicator.classList.add('synced');
+                syncStatusText.textContent = 'Synced';
+            } else {
+                // Syncing
+                syncStatusIndicator.classList.remove('synced');
+                syncStatusIndicator.classList.add('syncing');
+                const percentage = Math.round((lastCapBlock / lastCardanoBlock) * 100);
+                syncStatusText.textContent = `Syncing (${percentage}%)`;
+            }
+        }
+
+        // Initialize
+        checkHealth();
+        fetchSyncInfo();
+        setInterval(checkHealth, 30000); // Check every 30 seconds
+        setInterval(fetchSyncInfo, 60000); // Update sync info every minute
+
+        // Character count
+        queryInput.addEventListener('input', () => {
+            charCount.textContent = queryInput.value.length;
+        });
+
+        // Auto-resize textarea
+        queryInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Example chips
+        examples.addEventListener('click', (e) => {
+            const chip = e.target.closest('.example-chip');
+            if (chip && !isProcessing && !chip.classList.contains('disabled')) {
+                queryInput.value = chip.dataset.query;
+                queryInput.focus();
+                charCount.textContent = queryInput.value.length;
+            }
+        });
+
+        // Send button click
+        sendButton.addEventListener('click', () => {
+            if (!isProcessing && queryInput.value.trim()) {
+                sendQuery(queryInput.value.trim());
+            }
+        });
+
+        // Enter to send (Shift+Enter for new line)
+        queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!isProcessing && queryInput.value.trim()) {
+                    sendQuery(queryInput.value.trim());
+                }
+            }
+        });
+
+        function setProcessing(processing) {
+            isProcessing = processing;
+            queryInput.disabled = processing;
+            sendButton.disabled = processing;
+
+            // Update button appearance
+            if (processing) {
+                sendButton.classList.add('processing');
+                buttonIcon.innerHTML = '<div class="button-spinner"></div>';
+                buttonText.textContent = 'Processing';
+            } else {
+                sendButton.classList.remove('processing');
+                buttonIcon.textContent = '→';
+                buttonText.textContent = 'Send';
+            }
+
+            // Update example chips
+            document.querySelectorAll('.example-chip').forEach(chip => {
+                if (processing) {
+                    chip.classList.add('disabled');
+                } else {
+                    chip.classList.remove('disabled');
+                }
+            });
+        }
+
+        function clearEmptyState() {
+            const emptyState = messagesContainer.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+        }
+
+        function addMessage(type, content, avatar = '') {
+            clearEmptyState();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            avatarDiv.textContent = avatar || (type === 'user' ? 'U' : '🤖');
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            bubbleDiv.textContent = content;
+
+            contentDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+
+            scrollToBottom();
+            return bubbleDiv;
+        }
+
+        function addStatusMessage(content) {
+            clearEmptyState();
+
+            // Remove previous status message if exists
+            if (currentStatusMessage) {
+                currentStatusMessage.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message status';
+
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            bubbleDiv.innerHTML = `${content}<span class="thinking-animation"><span></span><span></span><span></span></span>`;
+
+            contentDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+
+            currentStatusMessage = messageDiv;
+            scrollToBottom();
+        }
+
+        function removeStatusMessage() {
+            if (currentStatusMessage) {
+                currentStatusMessage.remove();
+                currentStatusMessage = null;
+            }
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        async function sendQuery(query) {
+            setProcessing(true);
+
+            // Add user message
+            addMessage('user', query);
+
+            // Clear input
+            const originalQuery = query;
+            queryInput.value = '';
+            charCount.textContent = '0';
+            queryInput.style.height = 'auto';
+
+            let assistantBubble = null;
+
+            try {
+                const response = await fetch('/api/v1/nl/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: originalQuery
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let isStatusPhase = true;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line === '' || line === 'data: [DONE]') {
+                            if (line === 'data: [DONE]') {
+                                removeStatusMessage();
+                            }
+                            continue;
+                        }
+
+                        // Remove 'data: ' prefix if present
+                        let content = line.startsWith('data: ') ? line.slice(6) : line;
+
+                        if (content.trim() === '[DONE]') {
+                            removeStatusMessage();
+                            continue;
+                        }
+                        // A line is a status message if it exactly matches or starts with these patterns
+                        const isStatus = content.startsWith('status: ') ? true : false;
+                        if (isStatus) content = content.slice(8);
+
+                        // Handle errors
+                        if (content.startsWith('Error:')) {
+                            removeStatusMessage();
+                            isStatusPhase = false;
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error-message';
+                            errorDiv.textContent = content;
+                            messagesContainer.appendChild(errorDiv);
+                            scrollToBottom();
+                            continue;
+                        }
+
+                        if (isStatus) {
+                            // Show as status message
+                            addStatusMessage(content);
+                        } else {
+                            // This is the actual answer - any content that's not a status message
+                            if (isStatusPhase) {
+                                // First non-status content chunk - create assistant message
+                                removeStatusMessage();
+                                isStatusPhase = false;
+
+                                const messageDiv = document.createElement('div');
+                                messageDiv.className = 'message assistant';
+
+                                const avatarDiv = document.createElement('div');
+                                avatarDiv.className = 'message-avatar';
+                                avatarDiv.textContent = '🤖';
+
+                                const contentDiv = document.createElement('div');
+                                contentDiv.className = 'message-content';
+
+                                assistantBubble = document.createElement('div');
+                                assistantBubble.className = 'message-bubble';
+                                assistantBubble.textContent = '';
+
+                                contentDiv.appendChild(assistantBubble);
+                                messageDiv.appendChild(avatarDiv);
+                                messageDiv.appendChild(contentDiv);
+                                messagesContainer.appendChild(messageDiv);
+                            }
+
+                            // Append content to assistant message
+                            if (assistantBubble) {
+                                assistantBubble.textContent += content;
+                                scrollToBottom();
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Query error:', error);
+                removeStatusMessage();
+
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = `Error: ${error.message}. Please try again.`;
+                messagesContainer.appendChild(errorDiv);
+                scrollToBottom();
+            } finally {
+                setProcessing(false);
+                queryInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>

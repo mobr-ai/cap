@@ -45,10 +45,12 @@ services:
     platform: linux/amd64
     container_name: virtuoso
     ports:
-      - "8890:8890"   # host access (avoid clashing with any local 8890)
-      - "1111:1111"   # host access (avoid clashing with any local 1111)
+      - "8890:8890"
+      - "1111:1111"
     env_file:
       - .env
+    environment:
+      - DBA_PASSWORD=mysecretpassword
     volumes:
       - /home/marcio/data/cardano/virtuoso:/database
     healthcheck:

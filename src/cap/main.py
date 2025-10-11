@@ -134,21 +134,22 @@ async def stop_etl_service():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager with ETL integration."""
-    with tracer.start_as_current_span("application_startup") as span:
-        client = VirtuosoClient()
+    if settings.ETL_AUTO_START:
+        with tracer.start_as_current_span("application_startup") as span:
+            client = VirtuosoClient()
 
-        try:
-            # Initialize graphs
-            await initialize_required_graphs(client)
-            logger.info("Application startup completed successfully")
+            try:
+                # Initialize graphs
+                await initialize_required_graphs(client)
+                logger.info("Application startup completed successfully")
 
-            # Start ETL service
-            await start_etl_service()
+                # Start ETL service
+                await start_etl_service()
 
-        except Exception as e:
-            span.set_attribute("startup_error", str(e))
-            logger.error(f"Application startup failed: {e}")
-            raise RuntimeError(f"Application startup failed: {e}")
+            except Exception as e:
+                span.set_attribute("startup_error", str(e))
+                logger.error(f"Application startup failed: {e}")
+                raise RuntimeError(f"Application startup failed: {e}")
 
     try:
         yield
@@ -210,12 +211,21 @@ assets_dir = os.path.join(FRONTEND_DIST, "assets")
 if os.path.isdir(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-# 2) Root -> index.html
+# 2) LLM interface route (must come before catch-all)
+@app.get("/llm", include_in_schema=False)
+async def llm_interface():
+    """Serve the LLM natural language query interface."""
+    llm_page = os.path.join(os.path.dirname(__file__), "templates", "llm.html")
+    if os.path.isfile(llm_page):
+        return FileResponse(llm_page)
+    raise HTTPException(status_code=404, detail="LLM interface not found")
+
+# 3) Root -> index.html
 @app.get("/", include_in_schema=False)
 async def index():
     return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
 
-# 3) Catch-all SPA fallback
+# 4) Catch-all SPA fallback (must be last)
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str):
     if full_path.startswith("api/"):

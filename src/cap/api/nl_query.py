@@ -28,23 +28,23 @@ class StatusMessage:
 
     @staticmethod
     def processing_query() -> str:
-        return "Processing your query...\n\n"
+        return "status: Processing your query\n\n"
 
     @staticmethod
     def generating_sparql() -> str:
-        return "Converting to knowledge graph query...\n\n"
+        return "status: Analyzing contexts in the knowledge graph\n\n"
 
     @staticmethod
     def executing_query() -> str:
-        return "Fetching data from knowledge graph...\n\n"
+        return "status: Fetching contextual data from knowledge graph\n\n"
 
     @staticmethod
     def no_results() -> str:
-        return "No results found. The query executed successfully but returned no data.\n\n"
+        return "status: No results found. The query executed successfully but returned no data.\n\n"
 
     @staticmethod
     def processing_results() -> str:
-        return "Analyzing results and preparing answer...\n\n"
+        return "status: Analyzing results and preparing answer...\n\n"
 
     @staticmethod
     def error(message: str) -> str:
@@ -69,7 +69,7 @@ async def natural_language_query(request: NLQueryRequest):
         async def response_stream():
             try:
                 # Status: Processing query
-                yield f"data: {StatusMessage.processing_query()}\n\n"
+                yield f"{StatusMessage.processing_query()}"
 
                 # Get clients
                 ollama = get_ollama_client()
@@ -79,8 +79,8 @@ async def natural_language_query(request: NLQueryRequest):
                 is_healthy = await ollama.health_check()
                 if not is_healthy:
                     error_msg = StatusMessage.error("Ollama service is not available")
-                    yield f"data: {error_msg}\n\n"
-                    yield "data: [DONE]\n\n"
+                    yield f"{error_msg}\n"
+                    yield "data: [DONE]\n"
                     return
 
                 # Build the user query
@@ -90,7 +90,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                 # Stage 1: Convert NL to SPARQL
                 span.set_attribute("stage", "nl_to_sparql")
-                yield f"data: {StatusMessage.generating_sparql()}\n\n"
+                yield f"{StatusMessage.generating_sparql()}"
 
                 try:
                     sparql_query = await ollama.nl_to_sparql(natural_query=user_query)
@@ -100,13 +100,13 @@ async def natural_language_query(request: NLQueryRequest):
                 except Exception as e:
                     logger.error(f"SPARQL generation error: {e}", exc_info=True)
                     error_msg = StatusMessage.error(f"Failed to generate query: {str(e)}")
-                    yield f"data: {error_msg}\n\n"
-                    yield "data: [DONE]\n\n"
+                    yield f"{error_msg}\n"
+                    yield "data: [DONE]\n"
                     return
 
                 # Stage 2: Execute SPARQL query
                 span.set_attribute("stage", "execute_sparql")
-                yield f"data: {StatusMessage.executing_query()}\n\n"
+                yield f"{StatusMessage.executing_query()}"
 
                 try:
                     sparql_results = await virtuoso.execute_query(sparql_query)
@@ -123,47 +123,48 @@ async def natural_language_query(request: NLQueryRequest):
                     logger.info(f"    SPARQL query results: {sparql_results}")
 
                     if result_count == 0:
-                        yield f"data: {StatusMessage.no_results()}\n\n"
-                        yield "data: [DONE]\n\n"
+                        yield f"{StatusMessage.no_results()}"
+                        yield "data: [DONE]\n"
                         return
 
                 except Exception as e:
                     logger.error(f"SPARQL execution error: {e}", exc_info=True)
                     error_msg = StatusMessage.error(f"Failed to execute query: {str(e)}")
-                    yield f"data: {error_msg}\n\n"
-                    yield "data: [DONE]\n\n"
+                    yield f"{error_msg}\n"
+                    yield "data: [DONE]\n"
                     return
 
                 # Stage 3: Contextualize results with LLM
                 span.set_attribute("stage", "contextualize")
-                yield f"data: {StatusMessage.processing_results()}\n\n"
+                yield f"{StatusMessage.processing_results()}"
 
                 try:
                     # Stream the contextualized answer
                     async for chunk in ollama.contextualize_answer(
                         user_query=request.query,
                         sparql_query=sparql_query,
-                        sparql_results=sparql_results
+                        sparql_results=sparql_results,
+                        system_prompt=""
                     ):
-                        yield f"data: {chunk}\n\n"
+                        yield f"{chunk}\n"
 
                     span.set_attribute("stage", "completed")
 
                 except Exception as e:
                     logger.error(f"Contextualization error: {e}", exc_info=True)
                     error_msg = StatusMessage.error(f"Failed to process results: {str(e)}")
-                    yield f"data: {error_msg}\n\n"
-                    yield "data: [DONE]\n\n"
+                    yield f"{error_msg}\n"
+                    yield "data: [DONE]\n"
                     return
 
                 # Completion signal
-                yield "data: [DONE]\n\n"
+                yield "data: [DONE]\n"
 
             except Exception as e:
                 logger.error(f"Pipeline error: {e}", exc_info=True)
                 error_msg = StatusMessage.error(f"Unexpected error: {str(e)}")
-                yield f"data: {error_msg}\n\n"
-                yield "data: [DONE]\n\n"
+                yield f"{error_msg}\n"
+                yield "data: [DONE]\n"
 
         return StreamingResponse(
             response_stream(),
