@@ -33,7 +33,7 @@ except Exception:
     def on_oauth_login(*args, **kwargs): pass
     def on_wallet_login(*args, **kwargs): pass
 
-router = APIRouter(prefix="/api/v1/", tags=["auth"])
+router = APIRouter(prefix="/api/v1", tags=["auth"])
 
 # ---- Pydantic shapes ----
 class RegisterIn(BaseModel):

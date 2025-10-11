@@ -15,7 +15,7 @@ from cap.data.virtuoso import VirtuosoClient
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-router = APIRouter(prefix="/api/v1/nl/", tags=["Natural Language Queries"])
+router = APIRouter(prefix="/api/v1/nl", tags=["llm"])
 
 
 class NLQueryRequest(BaseModel):
@@ -120,6 +120,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                     span.set_attribute("result_count", result_count)
                     logger.info(f"SPARQL query returned {result_count} results")
+                    logger.info(f"    SPARQL query results: {sparql_results}")
 
                     if result_count == 0:
                         yield f"data: {StatusMessage.no_results()}\n\n"
@@ -186,7 +187,7 @@ async def health_check():
             "status": "healthy" if is_healthy else "unhealthy",
             "service": "ollama",
             "models": {
-                "nl_to_sparql": ollama.llm_model
+                "llm_model": ollama.llm_model
             }
         }
 

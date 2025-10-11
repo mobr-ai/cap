@@ -135,7 +135,7 @@ class VirtuosoClient:
             span.set_attribute("graph_uri", graph_uri)
 
             default_headers = {
-                "Accept": "application/json",
+                "Accept": "text/html",
                 "Content-Type": "text/turtle"
             }
             if headers:

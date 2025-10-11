@@ -45,8 +45,8 @@ services:
     platform: linux/amd64
     container_name: virtuoso
     ports:
-      - "8892:8890"   # host access (avoid clashing with any local 8890)
-      - "1113:1111"   # host access (avoid clashing with any local 1111)
+      - "8890:8890"   # host access (avoid clashing with any local 8890)
+      - "1111:1111"   # host access (avoid clashing with any local 1111)
     env_file:
       - .env
     volumes:
@@ -95,69 +95,6 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-
-  ollama-setup:
-    image: ollama/ollama:latest
-    container_name: ollama-setup
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: /bin/sh
-    command: >
-      -c "
-      echo 'Waiting for Ollama service to be ready...' &&
-      sleep 5 &&
-      echo 'Pulling mobr/cap model...' &&
-      ollama pull mobr/cap &&
-      echo 'Model pulled successfully!'
-      "
-    environment:
-      - OLLAMA_HOST=ollama:11434
-    networks:
-      - app-network
-
-  cardano-node-preview:
-    image: ghcr.io/intersectmbo/cardano-node:10.4.0
-    platform: linux/amd64
-    container_name: cardano-node-preview
-    command: >
-      run
-      --config /config/config.json
-      --topology /config/topology.json
-      --database-path /data
-      --socket-path /data/node.socket
-      --host-addr 0.0.0.0
-      --port 3001
-    ports:
-      - "3001:3001"
-    volumes:
-      - ${HOME}/cardano/preview-config:/config
-      - ${PWD}/backend/assets:/assets
-      - ${HOME}/cardano/db:/data
-    healthcheck:
-      test: ["CMD-SHELL", "test -S /data/node.socket"]
-      interval: 15s
-      timeout: 5s
-      retries: 30
-    networks:
-      - app-network
-
-  dbsetup:
-    image: ghcr.io/intersectmbo/cardano-db-sync:13.6.0.2
-    platform: linux/amd64
-    container_name: cardano-dbsetup
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - .env
-    networks:
-      - app-network
-    volumes:
-      - ${PWD}/cardano-db-sync/scripts:/scripts:ro
-    entrypoint: ["/bin/bash", "-lc"]
-    command: ["/scripts/postgresql-setup.sh --createdb"]
-    profiles: ["manual"]  # run with: docker compose run --rm dbsetup
 
 networks:
   app-network:
