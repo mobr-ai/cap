@@ -569,9 +569,15 @@ blockchain:hasNFTContent a owl:DatatypeProperty ;
     rdfs:domain blockchain:NFT ;
     rdfs:range xsd:string .
 
+blockchain:hasTotalSupply a owl:DatatypeProperty ;
+    rdfs:label "has total supply" ;
+    rdfs:comment "The current total supply of a token." ;
+    rdfs:domain blockchain:Token ;
+    rdfs:range xsd:decimal .
+
 blockchain:hasMaxSupply a owl:DatatypeProperty ;
-    rdfs:label "has maximum supply" ;
-    rdfs:comment "The maximum supply of a token." ;
+    rdfs:label "has max supply" ;
+    rdfs:comment "The maximum supply (cap) of a token." ;
     rdfs:domain blockchain:Token ;
     rdfs:range xsd:decimal .
 
@@ -1287,7 +1293,8 @@ cardano:ADA a cardano:CNT ;
     rdfs:comment "The native cryptocurrency of the Cardano blockchain, used for transaction fees, staking, governance, and value transfer." ;
     blockchain:hasTokenName "Cardano ADA" ;
     blockchain:hasTokenSymbol "ADA" ;
-    blockchain:hasMaxSupply 45000000000 ;
+    blockchain:hasTotalSupply 44994581887000000 ;
+    blockchain:hasMaxSupply 45000000000000000 ;
     blockchain:hasConversionRate 1000000 ;
     blockchain:hasDenominationName "Lovelace" .
 
