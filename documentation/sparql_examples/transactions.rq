@@ -1,0 +1,12 @@
+# How many transactions in the last 24h?
+PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+
+SELECT (COUNT(?tx) AS ?count)
+WHERE {
+    ?block a blockchain:Block ;
+        blockchain:hasTransaction ?tx ;
+        blockchain:hasTimestamp ?timestamp .
+
+    BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?oneDayAgo)
+    FILTER (?timestamp >= ?oneDayAgo)
+}

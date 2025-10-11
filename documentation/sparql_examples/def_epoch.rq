@@ -1,0 +1,7 @@
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?def
+WHERE {
+    ?x rdfs:label "Epoch" .
+    ?x rdfs:comment ?def .
+}

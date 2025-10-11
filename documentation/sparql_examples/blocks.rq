@@ -1,0 +1,7 @@
+# how many blocks
+PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+
+SELECT (COUNT(?s) AS ?count)
+WHERE {
+  ?s a blockchain:Block .
+}
