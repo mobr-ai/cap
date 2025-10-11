@@ -18,7 +18,7 @@
 	dc:creator "MOBR Systems" ;
 	dc:title "An ontology for the Cardano ecosystem" ;
 	vann:preferredNamespacePrefix "cardano" ;
-	rdfs:comment "This ontology specification uses W3C RDF Schema and the Web Ontology Language. Its main source of information comes from Cardano official documentation and cardano-db-sync data schema."@en ;
+	rdfs:comment "This ontology specification uses W3C RDF Schema and the Web Ontology Language. Its main source of information comes from Cardano official documentation and cardano-db-sync data schema." ;
 	rdfs:seeAlso <https://github.com/mobr-ai/cap> ;
 	owl:versionInfo "0.0.1" ;
 	ns:term_status "unstable" ;
@@ -32,816 +32,822 @@
 
 # Core Blockchain Classes
 blockchain:Blockchain a owl:Class ;
-    rdfs:label "Blockchain"@en ;
-    rdfs:comment "A distributed ledger recording transactions across a network"@en .
+    rdfs:label "Blockchain" ;
+    rdfs:comment "A distributed ledger recording transactions across a network" .
 
 blockchain:Block a owl:Class ;
-    rdfs:label "Block"@en ;
-    rdfs:comment "A collection of validated transactions in the blockchain"@en .
+    rdfs:label "Block" ;
+    rdfs:comment "A collection of validated transactions in the blockchain" .
 
 blockchain:Transaction a owl:Class ;
-    rdfs:label "Transaction"@en ;
-    rdfs:comment "A record of data registration or value transfer between accounts"@en .
+    rdfs:label "Transaction" ;
+    rdfs:comment "A record of data registration or value transfer between accounts" .
 
 blockchain:Node a owl:Class ;
-    rdfs:label "Node"@en ;
-    rdfs:comment "Computer participating in blockchain network validation"@en .
+    rdfs:label "Node" ;
+    rdfs:comment "Computer participating in blockchain network validation" .
 
 blockchain:Token a owl:Class ;
-    rdfs:label "Token"@en ;
-    rdfs:comment "Digital asset representing value on blockchain"@en .
+    rdfs:label "Token" ;
+    rdfs:comment "Digital asset representing value on blockchain" .
 
 blockchain:FungibleToken a owl:Class ;
-    rdfs:label "Fungible Token"@en ;
-    rdfs:comment "Interchangeable tokens of equal value"@en ;
+    rdfs:label "Fungible Token" ;
+    rdfs:comment "Interchangeable tokens of equal value" ;
     rdfs:subClassOf blockchain:Token .
 
 blockchain:NFT a owl:Class ;
-    rdfs:label "Non-Fungible Token"@en ;
-    rdfs:comment "Unique digital asset"@en ;
+    rdfs:label "Non-Fungible Token" ;
+    rdfs:comment "Unique digital asset" ;
     rdfs:subClassOf blockchain:Token .
 
 blockchain:NativeToken a owl:Class ;
     rdfs:subClassOf cardano:FungibleToken ;
-    rdfs:label "Native Token"@en ;
-    rdfs:comment "A native token in a blockchain."@en .
+    rdfs:label "Native Token" ;
+    rdfs:comment "A native token in a blockchain." .
 
 blockchain:Account a owl:Class ;
-    rdfs:label "Account"@en ;
-    rdfs:comment "Entity holding tokens and interacting with blockchain"@en .
+    rdfs:label "Account" ;
+    rdfs:comment "Entity holding tokens and interacting with blockchain" .
 
 blockchain:TokenAmount a owl:Class ;
-    rdfs:label "Token Amount Description"@en ;
-    rdfs:comment "Describes an asset in an account. E.g., amount and currency"@en .
+    rdfs:label "Token Amount Description" ;
+    rdfs:comment "Describes an asset in an account. E.g., amount and currency" .
 
 blockchain:SmartContract a owl:Class ;
-    rdfs:label "Smart Contract"@en ;
-    rdfs:comment "Self-executing contract with terms written in code"@en ;
+    rdfs:label "Smart Contract" ;
+    rdfs:comment "Self-executing contract with terms written in code" ;
     rdfs:subClassOf blockchain:Account .
 
 blockchain:Metadata a owl:Class ;
-    rdfs:label "Metadata"@en ;
-    rdfs:comment "Additional information attached to blockchain entities."@en .
+    rdfs:label "Metadata" ;
+    rdfs:comment "Additional information attached to blockchain entities." .
 
 blockchain:OffChainData a owl:Class ;
-    rdfs:label "Off-chain Data"@en ;
-    rdfs:comment "Data stored outside the blockchain but referenced by it."@en .
+    rdfs:label "Off-chain Data" ;
+    rdfs:comment "Data stored outside the blockchain but referenced by it." .
 
 # General Blockchain Consensus Classes
 blockchain:ConsensusProtocol a owl:Class ;
-    rdfs:label "Consensus Protocol"@en ;
-    rdfs:comment "The protocol governing how nodes reach agreement on the blockchain state, including rules for block production, validation, and chain selection."@en .
+    rdfs:label "Consensus Protocol" ;
+    rdfs:comment "The protocol governing how nodes reach agreement on the blockchain state, including rules for block production, validation, and chain selection." .
 
 blockchain:ConsensusState a owl:Class ;
-    rdfs:label "Consensus State"@en ;
-    rdfs:comment "The current state of the consensus protocol, including relevant metrics and parameters."@en .
+    rdfs:label "Consensus State" ;
+    rdfs:comment "The current state of the consensus protocol, including relevant metrics and parameters." .
 
 blockchain:ProofOfWork a owl:Class ;
     rdfs:subClassOf blockchain:ConsensusProtocol ;
-    rdfs:label "Proof of Work"@en ;
-    rdfs:comment "A consensus mechanism where block production requires solving computationally intensive cryptographic puzzles."@en .
+    rdfs:label "Proof of Work" ;
+    rdfs:comment "A consensus mechanism where block production requires solving computationally intensive cryptographic puzzles." .
 
 blockchain:ProofOfStake a owl:Class ;
     rdfs:subClassOf blockchain:ConsensusProtocol ;
-    rdfs:label "Proof of Stake"@en ;
-    rdfs:comment "A consensus mechanism where block production rights are proportional to staked tokens in the system."@en .
+    rdfs:label "Proof of Stake" ;
+    rdfs:comment "A consensus mechanism where block production rights are proportional to staked tokens in the system." .
 
 blockchain:LeadershipProof a owl:Class ;
-    rdfs:label "Leadership Proof"@en ;
-    rdfs:comment "Cryptographic evidence demonstrating an entity's right to produce a block in consensus systems."@en .
+    rdfs:label "Leadership Proof" ;
+    rdfs:comment "Cryptographic evidence demonstrating an entity's right to produce a block in consensus systems." .
 
 blockchain:ChainSelectionRule a owl:Class ;
-    rdfs:label "Chain Selection Rule"@en ;
-    rdfs:comment "The method used to determine the best chain when multiple valid chain options exist."@en .
+    rdfs:label "Chain Selection Rule" ;
+    rdfs:comment "The method used to determine the best chain when multiple valid chain options exist." .
 
 blockchain:ValidationRule a owl:Class ;
-    rdfs:label "Validation Rule"@en ;
-    rdfs:comment "A specific rule for verifying the validity of blocks and transactions."@en .
+    rdfs:label "Validation Rule" ;
+    rdfs:comment "A specific rule for verifying the validity of blocks and transactions." .
 
 # Cardano core blockchain classes
 cardano:TransactionInput a owl:Class ;
-    rdfs:label "Transaction Input"@en ;
-    rdfs:comment "An input to a transaction."@en .
+    rdfs:label "Transaction Input" ;
+    rdfs:comment "An input to a transaction." .
 
 cardano:CollateralInput a owl:Class ;
     rdfs:subClassOf cardano:TransactionInput ;
-    rdfs:label "Collateral Input"@en ;
-    rdfs:comment "Input provided as collateral for script execution."@en .
+    rdfs:label "Collateral Input" ;
+    rdfs:comment "Input provided as collateral for script execution." .
 
 cardano:ReferenceInput a owl:Class ;
     rdfs:subClassOf cardano:TransactionInput ;
-    rdfs:label "Reference Input"@en ;
-    rdfs:comment "Input referenced but not spent by a transaction."@en .
+    rdfs:label "Reference Input" ;
+    rdfs:comment "Input referenced but not spent by a transaction." .
 
 cardano:TransactionOutput a owl:Class ;
-    rdfs:label "Transaction Output"@en ;
-    rdfs:comment "An output from a transaction."@en .
+    rdfs:label "Transaction Output" ;
+    rdfs:comment "An output from a transaction." .
 
 cardano:CollateralOutput a owl:Class ;
     rdfs:subClassOf cardano:TransactionOutput ;
-    rdfs:label "Collateral Output"@en ;
-    rdfs:comment "Output returned when script execution succeeds."@en .
+    rdfs:label "Collateral Output" ;
+    rdfs:comment "Output returned when script execution succeeds." .
 
 cardano:TransactionWitness a owl:Class ;
-    rdfs:label "Transaction Witness"@en ;
-    rdfs:comment "Cryptographic proof authorizing transaction execution."@en .
+    rdfs:label "Transaction Witness" ;
+    rdfs:comment "Cryptographic proof authorizing transaction execution." .
 
 cardano:KeyWitness a owl:Class ;
     rdfs:subClassOf cardano:TransactionWitness ;
-    rdfs:label "Key Witness"@en ;
-    rdfs:comment "Signature-based proof of authorization."@en .
+    rdfs:label "Key Witness" ;
+    rdfs:comment "Signature-based proof of authorization." .
 
 cardano:ScriptWitness a owl:Class ;
     rdfs:subClassOf cardano:TransactionWitness ;
-    rdfs:label "Script Witness"@en ;
-    rdfs:comment "Script-based proof of authorization."@en .
+    rdfs:label "Script Witness" ;
+    rdfs:comment "Script-based proof of authorization." .
 
 cardano:Slot a owl:Class ;
-    rdfs:label "Slot"@en ;
-    rdfs:comment "A unit of time in the Cardano blockchain."@en .
+    rdfs:label "Slot" ;
+    rdfs:comment "A unit of time in the Cardano blockchain." .
 
 cardano:SlotLeader a owl:Class ;
-    rdfs:label "Slot Leader"@en ;
-    rdfs:comment "An entity authorized to produce blocks in a slot."@en .
+    rdfs:label "Slot Leader" ;
+    rdfs:comment "An entity authorized to produce blocks in a slot." .
 
 cardano:ProtocolEra a owl:Class ;
-    rdfs:label "Protocol Era"@en ;
-    rdfs:comment "A major upgrade phase in Cardano's protocol evolution, each introducing new features and capabilities. Examples include Byron (legacy), Shelley (decentralization), Allegra (token locking), Mary (multi-asset), Alonzo (smart contracts), Babbage (Plutus V2), and Conway (governance)"@en .
+    rdfs:label "Protocol Era" ;
+    rdfs:comment "A major upgrade phase in Cardano's protocol evolution, each introducing new features and capabilities. Examples include Byron (legacy), Shelley (decentralization), Allegra (token locking), Mary (multi-asset), Alonzo (smart contracts), Babbage (Plutus V2), and Conway (governance)" .
 
 # Staking and Pool Classes
 cardano:StakeAccount a owl:Class ;
     rdfs:subClassOf blockchain:Account ;
-    rdfs:label "Stake Account"@en ;
-    rdfs:comment "A Cardano blockchain account staking ADA."@en .
+    rdfs:label "Stake Account" ;
+    rdfs:comment "A Cardano blockchain account staking ADA." .
 
 cardano:StakePool a owl:Class ;
-    rdfs:label "Stake Pool"@en ;
-    rdfs:comment "An entity that participates in Cardano block production and network consensus."@en .
+    rdfs:label "Stake Pool" ;
+    rdfs:comment "An entity that participates in Cardano block production and network consensus." .
 
 cardano:PoolStatus a owl:Class ;
-    rdfs:label "Pool Status"@en ;
-    rdfs:comment "The operational status of a stake pool."@en .
+    rdfs:label "Pool Status" ;
+    rdfs:comment "The operational status of a stake pool." .
 
 cardano:PoolTicker a owl:Class ;
-    rdfs:label "Pool Ticker"@en ;
-    rdfs:comment "A unique identifier for a stake pool."@en .
+    rdfs:label "Pool Ticker" ;
+    rdfs:comment "A unique identifier for a stake pool." .
 
 cardano:PoolOwner a owl:Class ;
-    rdfs:label "Pool Owner"@en ;
-    rdfs:comment "An entity that owns and operates a stake pool."@en .
+    rdfs:label "Pool Owner" ;
+    rdfs:comment "An entity that owns and operates a stake pool." .
 
 cardano:PoolMetadata a owl:Class ;
-    rdfs:label "Pool Metadata"@en ;
-    rdfs:comment "Off-chain metadata describing a stake pool."@en .
+    rdfs:label "Pool Metadata" ;
+    rdfs:comment "Off-chain metadata describing a stake pool." .
 
 cardano:PoolRelay a owl:Class ;
-    rdfs:label "Pool Relay"@en ;
-    rdfs:comment "Network information for connecting to a stake pool."@en .
+    rdfs:label "Pool Relay" ;
+    rdfs:comment "Network information for connecting to a stake pool." .
 
 cardano:StakeRegistration a owl:Class ;
-    rdfs:label "Stake Registration"@en ;
-    rdfs:comment "Record of stake address registration."@en .
+    rdfs:label "Stake Registration" ;
+    rdfs:comment "Record of stake address registration." .
 
 cardano:StakeDeregistration a owl:Class ;
-    rdfs:label "Stake Deregistration"@en ;
-    rdfs:comment "Record of stake address deregistration."@en .
+    rdfs:label "Stake Deregistration" ;
+    rdfs:comment "Record of stake address deregistration." .
 
 # Epoch and Network Classes
 cardano:Epoch a owl:Class ;
-    rdfs:label "Epoch"@en ;
-    rdfs:comment "A fixed period in the Cardano blockchain."@en .
+    rdfs:label "Epoch" ;
+    rdfs:comment "A fixed period in the Cardano blockchain." .
 
 cardano:EpochStake a owl:Class ;
-    rdfs:label "Epoch Stake"@en ;
-    rdfs:comment "The stake distribution within an epoch."@en .
+    rdfs:label "Epoch Stake" ;
+    rdfs:comment "The stake distribution within an epoch." .
 
 cardano:EpochParameters a owl:Class ;
-    rdfs:label "Epoch Parameters"@en ;
-    rdfs:comment "Protocol parameters active during an epoch."@en .
+    rdfs:label "Epoch Parameters" ;
+    rdfs:comment "Protocol parameters active during an epoch." .
 
 cardano:EpochState a owl:Class ;
-    rdfs:label "Epoch State"@en ;
-    rdfs:comment "Governance and operational state within an epoch."@en .
+    rdfs:label "Epoch State" ;
+    rdfs:comment "Governance and operational state within an epoch." .
 
 cardano:AdaPots a owl:Class ;
-    rdfs:label "Ada Pots"@en ;
-    rdfs:comment "Different types of Ada reserves in the system."@en .
+    rdfs:label "Ada Pots" ;
+    rdfs:comment "Different types of Ada reserves in the system." .
 
 # Asset Classes
 cardano:CNT a owl:Class ;
     rdfs:subClassOf blockchain:NativeToken ;
-    rdfs:label "Cardano Native Token"@en ;
-    rdfs:comment "A native token in the Cardano blockchain."@en .
+    rdfs:label "Cardano Native Token" ;
+    rdfs:comment "A native token in the Cardano blockchain." .
 
 cardano:AssetMint a owl:Class ;
-    rdfs:label "Asset Mint"@en ;
-    rdfs:comment "Record of native asset creation or destruction."@en .
+    rdfs:label "Asset Mint" ;
+    rdfs:comment "Record of native asset creation or destruction." .
 
 cardano:AssetPolicy a owl:Class ;
-    rdfs:label "Asset Policy"@en ;
-    rdfs:comment "Rules governing the minting of cardano native tokens."@en .
+    rdfs:label "Asset Policy" ;
+    rdfs:comment "Rules governing the minting of cardano native tokens." .
 
 cardano:MultiAssetCNT a owl:Class ;
     rdfs:subClassOf cardano:CNT ;
-    rdfs:label "Multi Asset Cardano Native Token"@en ;
-    rdfs:comment "A native token with custom attributes."@en .
+    rdfs:label "Multi Asset Cardano Native Token" ;
+    rdfs:comment "A native token with custom attributes." .
 
 # Script Classes
 cardano:Script a owl:Class ;
-    rdfs:label "Script"@en ;
-    rdfs:comment "A program controlling asset spending or contract execution."@en .
+    rdfs:label "Script" ;
+    rdfs:comment "A program controlling asset spending or contract execution." .
 
 cardano:PlutusScript a owl:Class ;
     rdfs:subClassOf cardano:Script ;
-    rdfs:label "Plutus Script"@en ;
-    rdfs:comment "A smart contract written in Plutus."@en .
+    rdfs:label "Plutus Script" ;
+    rdfs:comment "A smart contract written in Plutus." .
 
 cardano:NativeScript a owl:Class ;
     rdfs:subClassOf cardano:Script ;
-    rdfs:label "Native Script"@en ;
-    rdfs:comment "A simple script using native operations."@en .
+    rdfs:label "Native Script" ;
+    rdfs:comment "A simple script using native operations." .
 
 cardano:Datum a owl:Class ;
-    rdfs:label "Datum"@en ;
-    rdfs:comment "Data attached to script outputs."@en .
+    rdfs:label "Datum" ;
+    rdfs:comment "Data attached to script outputs." .
 
 cardano:Redeemer a owl:Class ;
-    rdfs:label "Redeemer"@en ;
-    rdfs:comment "Input parameters for script execution."@en .
+    rdfs:label "Redeemer" ;
+    rdfs:comment "Input parameters for script execution." .
 
 cardano:CostModel a owl:Class ;
-    rdfs:label "Cost Model"@en ;
-    rdfs:comment "Parameters defining execution costs for scripts."@en .
+    rdfs:label "Cost Model" ;
+    rdfs:comment "Parameters defining execution costs for scripts." .
 
 cardano:ExecutionUnits a owl:Class ;
-    rdfs:label "Execution Units"@en ;
-    rdfs:comment "Measures of script execution resource usage."@en .
+    rdfs:label "Execution Units" ;
+    rdfs:comment "Measures of script execution resource usage." .
 
 # Governance Classes
 cardano:Committee a owl:Class ;
-    rdfs:label "Constitutional Committee"@en ;
-    rdfs:comment "A group overseeing governance and constitutional matters."@en .
+    rdfs:label "Constitutional Committee" ;
+    rdfs:comment "A group overseeing governance and constitutional matters." .
 
 cardano:CommitteeMember a owl:Class ;
-    rdfs:label "Committee Member"@en ;
-    rdfs:comment "An individual member of the constitutional committee."@en .
+    rdfs:label "Committee Member" ;
+    rdfs:comment "An individual member of the constitutional committee." .
 
 cardano:CommitteeCredential a owl:Class ;
-    rdfs:label "Committee Credential"@en ;
-    rdfs:comment "Authentication credentials for committee members."@en .
+    rdfs:label "Committee Credential" ;
+    rdfs:comment "Authentication credentials for committee members." .
 
 cardano:HotCredential a owl:Class ;
     rdfs:subClassOf cardano:CommitteeCredential ;
-    rdfs:label "Hot Credential"@en ;
-    rdfs:comment "Online voting credentials for committee members."@en .
+    rdfs:label "Hot Credential" ;
+    rdfs:comment "Online voting credentials for committee members." .
 
 cardano:ColdCredential a owl:Class ;
     rdfs:subClassOf cardano:CommitteeCredential ;
-    rdfs:label "Cold Credential"@en ;
-    rdfs:comment "Offline administrative credentials for committee members."@en .
+    rdfs:label "Cold Credential" ;
+    rdfs:comment "Offline administrative credentials for committee members." .
 
 cardano:DRep a owl:Class ;
-    rdfs:label "Delegated Representative"@en ;
-    rdfs:comment "An entity that can vote on behalf of delegators."@en .
+    rdfs:label "Delegated Representative" ;
+    rdfs:comment "An entity that can vote on behalf of delegators." .
 
 cardano:DRepRegistration a owl:Class ;
-    rdfs:label "DRep Registration"@en ;
-    rdfs:comment "Record of DRep registration or update."@en .
+    rdfs:label "DRep Registration" ;
+    rdfs:comment "Record of DRep registration or update." .
 
 cardano:GovernanceProposal a owl:Class ;
-    rdfs:label "Governance Proposal"@en ;
-    rdfs:comment "A formal suggestion submitted by a participant to bring about a change or initiate an activity within the Cardano ecosystem. Proposals are the starting point in the governance lifecycle."@en .
+    rdfs:label "Governance Proposal" ;
+    rdfs:comment "A formal suggestion submitted by a participant to bring about a change or initiate an activity within the Cardano ecosystem. Proposals are the starting point in the governance lifecycle." .
 
 cardano:GovernanceAction a owl:Class ;
-    rdfs:label "Governance Action"@en ;
-    rdfs:comment "An executable step that implements the decision made through the governance process. It is triggered after a governance proposal has been approved or rejected."@en .
+    rdfs:label "Governance Action" ;
+    rdfs:comment "An executable step that implements the decision made through the governance process. It is triggered after a governance proposal has been approved or rejected." .
 
 cardano:Constitution a owl:Class ;
-    rdfs:label "Constitution"@en ;
-    rdfs:comment "The fundamental rules governing the Cardano network."@en .
+    rdfs:label "Constitution" ;
+    rdfs:comment "The fundamental rules governing the Cardano network." .
 
 cardano:Vote a owl:Class ;
-    rdfs:label "Vote"@en ;
-    rdfs:comment "A formal expression of opinion on governance actions."@en .
+    rdfs:label "Vote" ;
+    rdfs:comment "A formal expression of opinion on governance actions." .
 
 cardano:VotingProcedure a owl:Class ;
-    rdfs:label "Voting Procedure"@en ;
-    rdfs:comment "The process and rules for governance voting."@en .
+    rdfs:label "Voting Procedure" ;
+    rdfs:comment "The process and rules for governance voting." .
 
 # Protocol Parameter Classes
 cardano:ProtocolParameters a owl:Class ;
-    rdfs:label "Protocol Parameters"@en ;
-    rdfs:comment "Configuration values controlling network behavior."@en .
+    rdfs:label "Protocol Parameters" ;
+    rdfs:comment "Configuration values controlling network behavior." .
 
 cardano:NetworkParameters a owl:Class ;
     rdfs:subClassOf cardano:ProtocolParameters ;
-    rdfs:label "Network Parameters"@en ;
-    rdfs:comment "Parameters controlling network operations."@en .
+    rdfs:label "Network Parameters" ;
+    rdfs:comment "Parameters controlling network operations." .
 
 cardano:EconomicParameters a owl:Class ;
     rdfs:subClassOf cardano:ProtocolParameters ;
-    rdfs:label "Economic Parameters"@en ;
-    rdfs:comment "Parameters controlling economic aspects."@en .
+    rdfs:label "Economic Parameters" ;
+    rdfs:comment "Parameters controlling economic aspects." .
 
 cardano:TechnicalParameters a owl:Class ;
     rdfs:subClassOf cardano:ProtocolParameters ;
-    rdfs:label "Technical Parameters"@en ;
-    rdfs:comment "Parameters controlling technical aspects."@en .
+    rdfs:label "Technical Parameters" ;
+    rdfs:comment "Parameters controlling technical aspects." .
 
 # Metadata and Off-chain Classes
 cardano:TransactionMetadata a owl:Class ;
     rdfs:subClassOf blockchain:Metadata ;
-    rdfs:label "Transaction Metadata"@en ;
-    rdfs:comment "Metadata attached to transactions."@en .
+    rdfs:label "Transaction Metadata" ;
+    rdfs:comment "Metadata attached to transactions." .
 
 cardano:OffChainMetadata a owl:Class ;
     rdfs:subClassOf blockchain:OffChainData ;
-    rdfs:label "Off-chain Metadata"@en ;
-    rdfs:comment "Metadata stored off-chain."@en .
+    rdfs:label "Off-chain Metadata" ;
+    rdfs:comment "Metadata stored off-chain." .
 
 cardano:OffChainPoolData a owl:Class ;
     rdfs:subClassOf cardano:OffChainMetadata ;
-    rdfs:label "Off-chain Pool Data"@en ;
-    rdfs:comment "Pool-specific metadata stored off-chain."@en .
+    rdfs:label "Off-chain Pool Data" ;
+    rdfs:comment "Pool-specific metadata stored off-chain." .
 
 cardano:OffChainVoteData a owl:Class ;
     rdfs:subClassOf cardano:OffChainMetadata ;
-    rdfs:label "Off-chain Vote Data"@en ;
-    rdfs:comment "Vote-specific metadata stored off-chain."@en .
+    rdfs:label "Off-chain Vote Data" ;
+    rdfs:comment "Vote-specific metadata stored off-chain." .
 
 cardano:VotingAnchor a owl:Class ;
-    rdfs:label "Voting Anchor"@en ;
-    rdfs:comment "Reference to off-chain governance metadata."@en .
+    rdfs:label "Voting Anchor" ;
+    rdfs:comment "Reference to off-chain governance metadata." .
 
 cardano:Reward a owl:Class ;
-    rdfs:label "Reward"@en ;
-    rdfs:comment "A staking reward distributed to an account"@en .
+    rdfs:label "Reward" ;
+    rdfs:comment "A staking reward distributed to an account" .
 
 cardano:Withdrawal a owl:Class ;
-    rdfs:label "Withdrawal"@en ;
-    rdfs:comment "A withdrawal of rewards from a stake address"@en .
+    rdfs:label "Withdrawal" ;
+    rdfs:comment "A withdrawal of rewards from a stake address" .
 
 cardano:PoolRetirement a owl:Class ;
-    rdfs:label "Pool Retirement"@en ;
-    rdfs:comment "A certificate announcing pool retirement"@en .
+    rdfs:label "Pool Retirement" ;
+    rdfs:comment "A certificate announcing pool retirement" .
 
 cardano:TreasuryMovement a owl:Class ;
-    rdfs:label "Treasury Movement"@en ;
-    rdfs:comment "Movement of funds from/to the treasury"@en .
+    rdfs:label "Treasury Movement" ;
+    rdfs:comment "Movement of funds from/to the treasury" .
 
 cardano:ReserveMovement a owl:Class ;
-    rdfs:label "Reserve Movement"@en ;
-    rdfs:comment "Movement of funds from/to the reserves"@en .
+    rdfs:label "Reserve Movement" ;
+    rdfs:comment "Movement of funds from/to the reserves" .
 
 cardano:PotTransfer a owl:Class ;
-    rdfs:label "Pot Transfer"@en ;
-    rdfs:comment "Transfer between treasury and reserves"@en .
+    rdfs:label "Pot Transfer" ;
+    rdfs:comment "Transfer between treasury and reserves" .
 
 cardano:ETLProgress a owl:Class ;
-    rdfs:label "ETL Progress"@en ;
-    rdfs:comment "Metadata about ETL pipeline progress"@en .
+    rdfs:label "ETL Progress" ;
+    rdfs:comment "Metadata about ETL pipeline progress" .
 
 cardano:NetworkMetric a owl:Class ;
-    rdfs:label "Network Metric"@en ;
-    rdfs:comment "Aggregated metrics about the network"@en .
+    rdfs:label "Network Metric" ;
+    rdfs:comment "Aggregated metrics about the network" .
 
 # Properties for ETL metadata
 cardano:hasEntityType a owl:DatatypeProperty ;
-    rdfs:label "has entity type"@en ;
-    rdfs:comment "The type of entity being processed"@en ;
+    rdfs:label "has entity type" ;
+    rdfs:comment "The type of entity being processed" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:string .
 
 cardano:hasLastProcessedId a owl:DatatypeProperty ;
-    rdfs:label "has last processed id"@en ;
-    rdfs:comment "The last ID processed by ETL"@en ;
+    rdfs:label "has last processed id" ;
+    rdfs:comment "The last ID processed by ETL" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:decimal .
 
 cardano:hasTotalRecords a owl:DatatypeProperty ;
-    rdfs:label "has total records"@en ;
-    rdfs:comment "Total number of records to process"@en ;
+    rdfs:label "has total records" ;
+    rdfs:comment "Total number of records to process" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:decimal .
 
 cardano:hasProcessedRecords a owl:DatatypeProperty ;
-    rdfs:label "has processed records"@en ;
-    rdfs:comment "Number of records processed"@en ;
+    rdfs:label "has processed records" ;
+    rdfs:comment "Number of records processed" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:decimal .
 
 cardano:hasLastUpdated a owl:DatatypeProperty ;
-    rdfs:label "has last updated"@en ;
-    rdfs:comment "Last update timestamp"@en ;
+    rdfs:label "has last updated" ;
+    rdfs:comment "Last update timestamp" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:dateTime .
 
 cardano:hasErrorMessage a owl:DatatypeProperty ;
-    rdfs:label "has error message"@en ;
-    rdfs:comment "Error message if any"@en ;
+    rdfs:label "has error message" ;
+    rdfs:comment "Error message if any" ;
     rdfs:domain cardano:ETLProgress ;
     rdfs:range xsd:string .
 
 cardano:hasMetricType a owl:DatatypeProperty ;
-    rdfs:label "has metric type"@en ;
-    rdfs:comment "Type of network metric"@en ;
+    rdfs:label "has metric type" ;
+    rdfs:comment "Type of network metric" ;
     rdfs:domain cardano:NetworkMetric ;
     rdfs:range xsd:string .
 
 cardano:hasMetricValue a owl:DatatypeProperty ;
-    rdfs:label "has metric value"@en ;
-    rdfs:comment "Value of the network metric"@en ;
+    rdfs:label "has metric value" ;
+    rdfs:comment "Value of the network metric" ;
     rdfs:domain cardano:NetworkMetric ;
     rdfs:range xsd:decimal .
 
 # Properties - Core Blockchain
 blockchain:hasTransaction a owl:ObjectProperty ;
-    rdfs:label "has transaction"@en ;
-    rdfs:comment "Relates a block with the transactions recorded in it."@en ;
+    rdfs:label "has transaction" ;
+    rdfs:comment "Relates a block with the transactions recorded in it." ;
     rdfs:domain blockchain:Block ;
     rdfs:range blockchain:Transaction .
 
 blockchain:hasAccountAddress a owl:DatatypeProperty ;
-    rdfs:label "has account address"@en ;
-    rdfs:comment "Relates an account with its addresses."@en ;
+    rdfs:label "has account address" ;
+    rdfs:comment "Relates an account with its addresses." ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:string .
 
 blockchain:hasAccountStatus a owl:DatatypeProperty ;
-    rdfs:label "has account status"@en ;
-    rdfs:comment "Relates an account with its current status."@en ;
+    rdfs:label "has account status" ;
+    rdfs:comment "Relates an account with its current status." ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:string .
 
 blockchain:firstAppearedInTransaction a owl:ObjectProperty ;
-    rdfs:label "first appeared in transaction"@en ;
-    rdfs:comment "Relates the transaction that an account first appears (considered as account creation)."@en ;
+    rdfs:label "first appeared in transaction" ;
+    rdfs:comment "Relates the transaction that an account first appears (considered as account creation)." ;
     rdfs:domain blockchain:Account ;
     rdfs:range blockchain:Transaction .
 
 blockchain:hasConsensusProtocol a owl:ObjectProperty ;
-    rdfs:label "has consensus protocol"@en ;
-    rdfs:comment "Relates the network to its active consensus protocol implementation."@en ;
+    rdfs:label "has consensus protocol" ;
+    rdfs:comment "Relates the network to its active consensus protocol implementation." ;
     rdfs:domain blockchain:Blockchain ;
     rdfs:range blockchain:ConsensusProtocol .
 
 blockchain:hasNativeToken a owl:ObjectProperty ;
-    rdfs:label "has native token"@en ;
-    rdfs:comment "Relates the network to its native token."@en ;
+    rdfs:label "has native token" ;
+    rdfs:comment "Relates the network to its native token." ;
     rdfs:domain blockchain:Blockchain ;
     rdfs:range blockchain:FungibleToken .
 
 blockchain:hasGenesisBlock a owl:ObjectProperty ;
-    rdfs:label "has genesis block"@en ;
-    rdfs:comment "Relates the network to its genesis block."@en ;
+    rdfs:label "has genesis block" ;
+    rdfs:comment "Relates the network to its genesis block." ;
     rdfs:domain blockchain:Blockchain ;
     rdfs:range blockchain:Block .
 
+blockchain:hasCurrentBlockHeight a owl:DatatypeProperty ;
+    rdfs:label "has current block height" ;
+    rdfs:comment "Relates the network to its current block height." ;
+    rdfs:domain blockchain:Blockchain ;
+    rdfs:range xsd:decimal .
+
 blockchain:hasPreviousBlock a owl:ObjectProperty ;
-    rdfs:label "has previous block"@en ;
-    rdfs:comment "Relates a block to its previous block."@en ;
+    rdfs:label "has previous block" ;
+    rdfs:comment "Relates a block to its previous block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range blockchain:Block .
 
 blockchain:hasNextBlock a owl:ObjectProperty ;
-    rdfs:label "has next block"@en ;
-    rdfs:comment "Relates a block to its next block."@en ;
+    rdfs:label "has next block" ;
+    rdfs:comment "Relates a block to its next block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range blockchain:Block .
 
 blockchain:usesSelectionRule a owl:ObjectProperty ;
-    rdfs:label "uses selection rule"@en ;
-    rdfs:comment "Relates a consensus protocol to its chain selection rule."@en ;
+    rdfs:label "uses selection rule" ;
+    rdfs:comment "Relates a consensus protocol to its chain selection rule." ;
     rdfs:domain blockchain:ConsensusProtocol ;
     rdfs:range blockchain:ChainSelectionRule .
 
 blockchain:usesValidationRule a owl:ObjectProperty ;
-    rdfs:label "uses validation rule"@en ;
-    rdfs:comment "Relates a consensus protocol to its validation rules."@en ;
+    rdfs:label "uses validation rule" ;
+    rdfs:comment "Relates a consensus protocol to its validation rules." ;
     rdfs:domain blockchain:ConsensusProtocol ;
     rdfs:range blockchain:ValidationRule .
 
 blockchain:hasLeadershipProof a owl:ObjectProperty ;
-    rdfs:label "has leadership proof"@en ;
-    rdfs:comment "Relates a block to its leadership proof."@en ;
+    rdfs:label "has leadership proof" ;
+    rdfs:comment "Relates a block to its leadership proof." ;
     rdfs:domain blockchain:Block ;
     rdfs:range blockchain:LeadershipProof .
 
 blockchain:isActiveProtocol a owl:DatatypeProperty ;
-    rdfs:label "is active protocol"@en ;
-    rdfs:comment "Indicates whether a consensus protocol is currently active."@en ;
+    rdfs:label "is active protocol" ;
+    rdfs:comment "Indicates whether a consensus protocol is currently active." ;
     rdfs:domain blockchain:ConsensusProtocol ;
     rdfs:range xsd:boolean .
 
 blockchain:hasTokenName a owl:DatatypeProperty ;
-    rdfs:label "has token name"@en ;
-    rdfs:comment "The name of a token."@en ;
+    rdfs:label "has token name" ;
+    rdfs:comment "The name of a token." ;
     rdfs:domain blockchain:Token ;
     rdfs:range xsd:string .
 
 blockchain:hasTokenSymbol a owl:DatatypeProperty ;
-    rdfs:label "has token symbol"@en ;
-    rdfs:comment "The symbol of a token."@en ;
+    rdfs:label "has token symbol" ;
+    rdfs:comment "The symbol of a token." ;
     rdfs:domain blockchain:Token ;
     rdfs:range xsd:string .
 
 blockchain:hasTokenDescription a owl:DatatypeProperty ;
-    rdfs:label "has token description"@en ;
-    rdfs:comment "The description of a token."@en ;
+    rdfs:label "has token description" ;
+    rdfs:comment "The description of a token." ;
     rdfs:domain blockchain:Token ;
     rdfs:range xsd:string .
 
 cardano:transferredIn a owl:ObjectProperty ;
-    rdfs:label "transferred in"@en ;
-    rdfs:comment "Links a token to a transaction where it was transferred"@en ;
+    rdfs:label "transferred in" ;
+    rdfs:comment "Links a token to a transaction where it was transferred" ;
     rdfs:domain blockchain:Token ;
     rdfs:range blockchain:Transaction .
 
 blockchain:hasNFTContent a owl:DatatypeProperty ;
-    rdfs:label "has nft content"@en ;
-    rdfs:comment "The address of a content of a non-fungible token."@en ;
+    rdfs:label "has nft content" ;
+    rdfs:comment "The address of a content of a non-fungible token." ;
     rdfs:domain blockchain:NFT ;
     rdfs:range xsd:string .
 
 blockchain:hasMaxSupply a owl:DatatypeProperty ;
-    rdfs:label "has maximum supply"@en ;
-    rdfs:comment "The maximum supply of a token."@en ;
+    rdfs:label "has maximum supply" ;
+    rdfs:comment "The maximum supply of a token." ;
     rdfs:domain blockchain:Token ;
     rdfs:range xsd:decimal .
 
 blockchain:hasDenominationName a owl:DatatypeProperty ;
-    rdfs:label "has denomination name"@en ;
-    rdfs:comment "Reference the name of the fractional unit of a cryptocurrency. For instance, Lovelace."@en ;
+    rdfs:label "has denomination name" ;
+    rdfs:comment "Reference the name of the fractional unit of a cryptocurrency. For instance, Lovelace." ;
     rdfs:domain blockchain:FungibleToken ;
     rdfs:range xsd:string .
 
 blockchain:hasConversionRate a owl:DatatypeProperty ;
-    rdfs:label "has conversion rate"@en ;
-    rdfs:comment "A property that defines the conversion between an asset and its denomination. For instance, 1 ADA = 1,000,000 Lovelace."@en ;
+    rdfs:label "has conversion rate" ;
+    rdfs:comment "A property that defines the conversion between an asset and its denomination. For instance, 1 ADA = 1,000,000 Lovelace." ;
     rdfs:domain blockchain:FungibleToken ;
     rdfs:range xsd:decimal .
 
 blockchain:hasTokenAmount a owl:ObjectProperty ;
-    rdfs:label "has token amount description"@en ;
-    rdfs:comment "Associates an account with a token amount description"@en ;
+    rdfs:label "has token amount description" ;
+    rdfs:comment "Associates an account with a token amount description" ;
     rdfs:domain blockchain:Account, cardano:TransactionOutput ;
     rdfs:range blockchain:TokenAmount .
 
 blockchain:hasCurrency a owl:ObjectProperty ;
-    rdfs:label "has currency"@en ;
-    rdfs:comment "Qualifies the asset that the token amount is describing"@en ;
+    rdfs:label "has currency" ;
+    rdfs:comment "Qualifies the asset that the token amount is describing" ;
     rdfs:domain blockchain:TokenAmount ;
     rdfs:range blockchain:Token .
 
 blockchain:hasAmountValue a owl:DatatypeProperty ;
-    rdfs:label "has amount value"@en ;
-    rdfs:comment "The amount of a token in an account."@en ;
+    rdfs:label "has amount value" ;
+    rdfs:comment "The amount of a token in an account." ;
     rdfs:domain blockchain:TokenAmount ;
     rdfs:range xsd:decimal .
 
 blockchain:hasHash a owl:DatatypeProperty ;
-    rdfs:label "has hash"@en ;
-    rdfs:comment "The cryptographic hash identifier of an entity."@en ;
+    rdfs:label "has hash" ;
+    rdfs:comment "The cryptographic hash identifier of an entity." ;
     rdfs:domain owl:Thing ;
     rdfs:range xsd:string .
 
 blockchain:hasTimestamp a owl:DatatypeProperty ;
-    rdfs:label "has timestamp"@en ;
-    rdfs:comment "The point in time of an event."@en ;
+    rdfs:label "has timestamp" ;
+    rdfs:comment "The point in time of an event." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:dateTime .
 
 cardano:belongsToEra a owl:ObjectProperty ;
-    rdfs:label "belongs to era"@en ;
-    rdfs:comment "Associates a block with its corresponding Cardano protocol era, establishing the context of features and capabilities available for that entity"@en ;
+    rdfs:label "belongs to era" ;
+    rdfs:comment "Associates a block with its corresponding Cardano protocol era, establishing the context of features and capabilities available for that entity" ;
     rdfs:domain blockchain:Block ;
     rdfs:range cardano:ProtocolEra .
 
 # Properties - Transaction Related
 cardano:hasTransactionID a owl:DatatypeProperty ;
-    rdfs:label "has transaction id"@en ;
-    rdfs:comment "Relates a transaction with its identifier."@en ;
+    rdfs:label "has transaction id" ;
+    rdfs:comment "Relates a transaction with its identifier." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range xsd:string .
 
 cardano:hasInput a owl:ObjectProperty ;
-    rdfs:label "has input"@en ;
-    rdfs:comment "Relates a transaction to its inputs."@en ;
+    rdfs:label "has input" ;
+    rdfs:comment "Relates a transaction to its inputs." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:TransactionInput .
 
 cardano:hasOutput a owl:ObjectProperty ;
-    rdfs:label "has output"@en ;
-    rdfs:comment "Relates a transaction to its outputs."@en ;
+    rdfs:label "has output" ;
+    rdfs:comment "Relates a transaction to its outputs." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:TransactionOutput .
 
 cardano:hasMintedAsset a owl:ObjectProperty ;
-    rdfs:label "is minted asset"@en ;
-    rdfs:comment "Relates a transaction to the asset it is minting."@en ;
+    rdfs:label "is minted asset" ;
+    rdfs:comment "Relates a transaction to the asset it is minting." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range blockchain:Token .
 
 cardano:hasTransactionMetadata a owl:ObjectProperty ;
-    rdfs:label "has transaction metadata"@en ;
-    rdfs:comment "Relates a transaction to its metadata."@en ;
+    rdfs:label "has transaction metadata" ;
+    rdfs:comment "Relates a transaction to its metadata." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:TransactionMetadata .
 
 cardano:hasGovernanceProposal a owl:ObjectProperty ;
-    rdfs:label "has governance proposal"@en ;
-    rdfs:comment "Relates a transaction metadata to a governance proposal."@en ;
+    rdfs:label "has governance proposal" ;
+    rdfs:comment "Relates a transaction metadata to a governance proposal." ;
     rdfs:domain cardano:TransactionMetadata ;
     rdfs:range cardano:GovernanceProposal .
 
 cardano:hasGovernanceAction a owl:ObjectProperty ;
-    rdfs:label "has governance action"@en ;
-    rdfs:comment "Relates a transaction metadata to a governance action."@en ;
+    rdfs:label "has governance action" ;
+    rdfs:comment "Relates a transaction metadata to a governance action." ;
     rdfs:domain cardano:TransactionMetadata ;
     rdfs:range cardano:GovernanceAction .
 
 cardano:hasConstitutionalCommittee a owl:ObjectProperty ;
-    rdfs:label "has constitutional committee"@en ;
-    rdfs:comment "Links the blockchain to its constitutional committee"@en ;
+    rdfs:label "has constitutional committee" ;
+    rdfs:comment "Links the blockchain to its constitutional committee" ;
     rdfs:domain blockchain:Blockchain ;
     rdfs:range cardano:Committee .
 
 cardano:hasVotingThreshold a owl:DatatypeProperty ;
-    rdfs:label "has voting threshold"@en ;
-    rdfs:comment "Required percentage of votes for proposal approval"@en ;
+    rdfs:label "has voting threshold" ;
+    rdfs:comment "Required percentage of votes for proposal approval" ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:decimal .
 
 cardano:hasFee a owl:DatatypeProperty ;
-    rdfs:label "has fee"@en ;
-    rdfs:comment "The transaction fee in lovelace."@en ;
+    rdfs:label "has fee" ;
+    rdfs:comment "The transaction fee in lovelace." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range xsd:decimal .
 
 cardano:hasWitness a owl:ObjectProperty ;
-    rdfs:label "has witness"@en ;
-    rdfs:comment "Relates a transaction to its witnesses."@en ;
+    rdfs:label "has witness" ;
+    rdfs:comment "Relates a transaction to its witnesses." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:TransactionWitness .
 
 cardano:hasCollateral a owl:ObjectProperty ;
-    rdfs:label "has collateral"@en ;
-    rdfs:comment "Relates a transaction to its collateral inputs."@en ;
+    rdfs:label "has collateral" ;
+    rdfs:comment "Relates a transaction to its collateral inputs." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:CollateralInput .
 
 cardano:hasReferenceInput a owl:ObjectProperty ;
-    rdfs:label "has reference input"@en ;
-    rdfs:comment "Relates a transaction to its reference inputs."@en ;
+    rdfs:label "has reference input" ;
+    rdfs:comment "Relates a transaction to its reference inputs." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:ReferenceInput .
 
 cardano:hasCBOREncoding a owl:DatatypeProperty ;
-    rdfs:label "has CBOR encoding"@en ;
-    rdfs:comment "The CBOR binary encoding of a transaction."@en ;
+    rdfs:label "has CBOR encoding" ;
+    rdfs:comment "The CBOR binary encoding of a transaction." ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range xsd:base64Binary .
 
 cardano:referencesTransactionID a owl:DatatypeProperty ;
-    rdfs:label "references transaction id"@en ;
-    rdfs:comment "Relates a transaction input with the UTXO being spent."@en ;
+    rdfs:label "references transaction id" ;
+    rdfs:comment "Relates a transaction input with the UTXO being spent." ;
     rdfs:domain blockchain:TransactionInput ;
     rdfs:range xsd:string .
 
 cardano:referencesOutputIndex a owl:DatatypeProperty ;
-    rdfs:label "references output index"@en ;
-    rdfs:comment "Relates a transaction input with the index of the specific UTXO in that transaction's list of outputs."@en ;
+    rdfs:label "references output index" ;
+    rdfs:comment "Relates a transaction input with the index of the specific UTXO in that transaction's list of outputs." ;
     rdfs:domain blockchain:TransactionInput ;
     rdfs:range xsd:decimal .
 
 # Properties - Block Related
 cardano:hasSlotLeader a owl:ObjectProperty ;
-    rdfs:label "has slot leader"@en ;
-    rdfs:comment "Relates a block to its producing slot leader."@en ;
+    rdfs:label "has slot leader" ;
+    rdfs:comment "Relates a block to its producing slot leader." ;
     rdfs:domain blockchain:Block ;
     rdfs:range cardano:SlotLeader .
 
 cardano:hasSlotNumber a owl:DatatypeProperty ;
-    rdfs:label "has slot number"@en ;
-    rdfs:comment "The absolute slot number of a block."@en ;
+    rdfs:label "has slot number" ;
+    rdfs:comment "The absolute slot number of a block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasEpochSlot a owl:DatatypeProperty ;
-    rdfs:label "has epoch slot"@en ;
-    rdfs:comment "The slot number within an epoch."@en ;
+    rdfs:label "has epoch slot" ;
+    rdfs:comment "The slot number within an epoch." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasBlockSize a owl:DatatypeProperty ;
-    rdfs:label "has block size"@en ;
-    rdfs:comment "The size of the block in bytes."@en ;
+    rdfs:label "has block size" ;
+    rdfs:comment "The size of the block in bytes." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasBlockNumber a owl:DatatypeProperty ;
-    rdfs:label "has block number"@en ;
-    rdfs:comment "The number of the block (height)."@en ;
+    rdfs:label "has block number" ;
+    rdfs:comment "The number of the block (height)." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasBlockTransactionCount a owl:DatatypeProperty ;
-    rdfs:label "has block transaction count"@en ;
-    rdfs:comment "The number of transactions recorded in the block."@en ;
+    rdfs:label "has block transaction count" ;
+    rdfs:comment "The number of transactions recorded in the block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolMajorVersion a owl:DatatypeProperty ;
-    rdfs:label "has protocol major version"@en ;
-    rdfs:comment "The protocol major version in the block."@en ;
+    rdfs:label "has protocol major version" ;
+    rdfs:comment "The protocol major version in the block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolMinorVersion a owl:DatatypeProperty ;
-    rdfs:label "has protocol minor version"@en ;
-    rdfs:comment "The protocol minor version in the block."@en ;
+    rdfs:label "has protocol minor version" ;
+    rdfs:comment "The protocol minor version in the block." ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
 # Properties - Staking and Pool Related
 cardano:delegatesTo a owl:ObjectProperty ;
-    rdfs:label "delegates to"@en ;
-    rdfs:comment "Relates an account to its delegation target."@en ;
+    rdfs:label "delegates to" ;
+    rdfs:comment "Relates an account to its delegation target." ;
     rdfs:domain blockchain:Account ;
     rdfs:range [
         owl:unionOf (cardano:StakePool cardano:DRep)
     ] .
 
 cardano:hasStakeAmount a owl:DatatypeProperty ;
-    rdfs:label "has stake amount"@en ;
-    rdfs:comment "Relate an account to its stake amount"@en ;
+    rdfs:label "has stake amount" ;
+    rdfs:comment "Relate an account to its stake amount" ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:decimal .
 
 cardano:hasStakeAccount a owl:ObjectProperty ;
-    rdfs:label "has stake address"@en ;
-    rdfs:comment "Relate a stake pool to its stake account"@en ;
+    rdfs:label "has stake address" ;
+    rdfs:comment "Relate a stake pool to its stake account" ;
     rdfs:domain cardano:StakePool ;
     rdfs:range blockchain:Account .
 
 cardano:hasPoolMetadata a owl:ObjectProperty ;
-    rdfs:label "has pool metadata"@en ;
-    rdfs:comment "Relates a pool to its metadata."@en ;
+    rdfs:label "has pool metadata" ;
+    rdfs:comment "Relates a pool to its metadata." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolMetadata .
 
 cardano:hasPoolOwner a owl:ObjectProperty ;
-    rdfs:label "has pool owner"@en ;
-    rdfs:comment "Relates a pool to its owners."@en ;
+    rdfs:label "has pool owner" ;
+    rdfs:comment "Relates a pool to its owners." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolOwner .
 
 cardano:hasPoolStatus a owl:ObjectProperty ;
-    rdfs:label "has pool status"@en ;
-    rdfs:comment "Relates a pool to its operational status."@en ;
+    rdfs:label "has pool status" ;
+    rdfs:comment "Relates a pool to its operational status." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolStatus .
 
 cardano:hasPoolPledge a owl:DatatypeProperty ;
-    rdfs:label "has pool pledge"@en ;
-    rdfs:comment "The amount of lovelace pledged to a pool."@en ;
+    rdfs:label "has pool pledge" ;
+    rdfs:comment "The amount of lovelace pledged to a pool." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 cardano:hasPoolEpochActiveNumber a owl:DatatypeProperty ;
-    rdfs:label "has pool epoch active number"@en ;
-    rdfs:comment "The pool active epoch number."@en ;
+    rdfs:label "has pool epoch active number" ;
+    rdfs:comment "The pool active epoch number." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 cardano:hasPoolVRFKeyHash a owl:DatatypeProperty ;
-    rdfs:label "has pool VRF key hash"@en ;
-    rdfs:comment "The pool vrf key hash."@en ;
+    rdfs:label "has pool VRF key hash" ;
+    rdfs:comment "The pool vrf key hash." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
 cardano:hasMargin a owl:DatatypeProperty ;
-    rdfs:label "has margin"@en ;
-    rdfs:comment "The pool's profit margin percentage."@en ;
+    rdfs:label "has margin" ;
+    rdfs:comment "The pool's profit margin percentage." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 cardano:hasFixedCost a owl:DatatypeProperty ;
-    rdfs:label "has fixed cost"@en ;
-    rdfs:comment "The pool's fixed operation cost in lovelace."@en ;
+    rdfs:label "has fixed cost" ;
+    rdfs:comment "The pool's fixed operation cost in lovelace." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 # Properties - Smart Contract and Script Related
 cardano:embeddedIn a owl:ObjectProperty ;
-    rdfs:label "embedded in"@en ;
-    rdfs:comment "Relates a smart contract with the transaction that it is embedded."@en ;
+    rdfs:label "embedded in" ;
+    rdfs:comment "Relates a smart contract with the transaction that it is embedded." ;
     rdfs:domain blockchain:SmartContract ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasScript a owl:ObjectProperty ;
-    rdfs:label "has script"@en ;
-    rdfs:comment "Relates an entity to its controlling script."@en ;
+    rdfs:label "has script" ;
+    rdfs:comment "Relates an entity to its controlling script." ;
     rdfs:domain [
         owl:unionOf (
             cardano:StakePool
@@ -853,69 +859,69 @@ cardano:hasScript a owl:ObjectProperty ;
     rdfs:range cardano:Script .
 
 cardano:hasTransactionDatum a owl:ObjectProperty ;
-    rdfs:label "has transaction datum"@en ;
-    rdfs:comment "Relates a transaction to a datum."@en ;
+    rdfs:label "has transaction datum" ;
+    rdfs:comment "Relates a transaction to a datum." ;
     rdfs:domain cardano:TransactionOutput ;
     rdfs:range cardano:Datum .
 
 cardano:datumEmbeddedIn a owl:ObjectProperty ;
-    rdfs:label "datum embedded in"@en ;
-    rdfs:comment "Relates a datum to a transaction."@en ;
+    rdfs:label "datum embedded in" ;
+    rdfs:comment "Relates a datum to a transaction." ;
     rdfs:domain cardano:Datum ;
     rdfs:range cardano:Transaction .
 
 cardano:hasRedeemer a owl:ObjectProperty ;
-    rdfs:label "has redeemer"@en ;
-    rdfs:comment "Relates a script execution to its input parameters."@en ;
+    rdfs:label "has redeemer" ;
+    rdfs:comment "Relates a script execution to its input parameters." ;
     rdfs:domain cardano:Script ;
     rdfs:range cardano:Redeemer .
 
 cardano:hasDatumContent a owl:DatatypeProperty ;
-    rdfs:label "has datum content"@en ;
-    rdfs:comment "Relates a datum to its content."@en ;
+    rdfs:label "has datum content" ;
+    rdfs:comment "Relates a datum to its content." ;
     rdfs:domain cardano:Datum ;
     rdfs:range xsd:string .
 
 cardano:hasDatumBytes a owl:DatatypeProperty ;
-    rdfs:label "has datum bytes"@en ;
-    rdfs:comment "Relates a datum to its bytes."@en ;
+    rdfs:label "has datum bytes" ;
+    rdfs:comment "Relates a datum to its bytes." ;
     rdfs:domain cardano:Datum ;
     rdfs:range xsd:string .
 
 cardano:hasScriptPurpose a owl:DatatypeProperty ;
-    rdfs:label "has script purpose"@en ;
-    rdfs:comment "Relates a script execution to its purpose."@en ;
+    rdfs:label "has script purpose" ;
+    rdfs:comment "Relates a script execution to its purpose." ;
     rdfs:domain cardano:Script ;
     rdfs:range xsd:string .
 
 cardano:hasScriptAddress a owl:DatatypeProperty ;
-    rdfs:label "has script address"@en ;
-    rdfs:comment "Relates a script with its address."@en ;
+    rdfs:label "has script address" ;
+    rdfs:comment "Relates a script with its address." ;
     rdfs:domain cardano:Script ;
     rdfs:range xsd:string .
 
 cardano:hasExecutionUnits a owl:ObjectProperty ;
-    rdfs:label "has execution units"@en ;
-    rdfs:comment "Relates a script execution to its resource usage."@en ;
+    rdfs:label "has execution units" ;
+    rdfs:comment "Relates a script execution to its resource usage." ;
     rdfs:domain cardano:Redeemer ;
     rdfs:range cardano:ExecutionUnits .
 
 cardano:hasMemoryUnits a owl:DatatypeProperty ;
-    rdfs:label "has memory units"@en ;
-    rdfs:comment "The memory usage of script execution."@en ;
+    rdfs:label "has memory units" ;
+    rdfs:comment "The memory usage of script execution." ;
     rdfs:domain cardano:ExecutionUnits ;
     rdfs:range xsd:decimal .
 
 cardano:hasCPUSteps a owl:DatatypeProperty ;
-    rdfs:label "has CPU steps"@en ;
-    rdfs:comment "The CPU usage of script execution."@en ;
+    rdfs:label "has CPU steps" ;
+    rdfs:comment "The CPU usage of script execution." ;
     rdfs:domain cardano:ExecutionUnits ;
     rdfs:range xsd:decimal .
 
 # Properties - Governance Related
 cardano:hasVotingPower a owl:DatatypeProperty ;
-    rdfs:label "has voting power"@en ;
-    rdfs:comment "The voting influence of an entity."@en ;
+    rdfs:label "has voting power" ;
+    rdfs:comment "The voting influence of an entity." ;
     rdfs:domain [
         owl:unionOf (
             cardano:StakePool
@@ -926,225 +932,225 @@ cardano:hasVotingPower a owl:DatatypeProperty ;
     rdfs:range xsd:decimal .
 
 cardano:castsVote a owl:ObjectProperty ;
-    rdfs:label "casts vote"@en ;
-    rdfs:comment "Relates an account ti the vote it casts."@en ;
+    rdfs:label "casts vote" ;
+    rdfs:comment "Relates an account ti the vote it casts." ;
     rdfs:domain cardano:Account ;
     rdfs:range blockchain:Vote .
 
 cardano:hasVote a owl:ObjectProperty ;
-    rdfs:label "has vote"@en ;
-    rdfs:comment "Relates a governance proposal to votes cast on it."@en ;
+    rdfs:label "has vote" ;
+    rdfs:comment "Relates a governance proposal to votes cast on it." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range cardano:Vote .
 
 cardano:hasProposalId a owl:DatatypeProperty ;
-    rdfs:label "has proposal id"@en ;
-    rdfs:comment "Relates a governance proposal to its id."@en ;
+    rdfs:label "has proposal id" ;
+    rdfs:comment "Relates a governance proposal to its id." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:string .
 
 cardano:hasProposalTitle a owl:DatatypeProperty ;
-    rdfs:label "has proposal title"@en ;
-    rdfs:comment "Relates a governance proposal to its title."@en ;
+    rdfs:label "has proposal title" ;
+    rdfs:comment "Relates a governance proposal to its title." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:string .
 
 cardano:hasProposalDescription a owl:DatatypeProperty ;
-    rdfs:label "has proposal description"@en ;
-    rdfs:comment "Relates a governance proposal to its description."@en ;
+    rdfs:label "has proposal description" ;
+    rdfs:comment "Relates a governance proposal to its description." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:string .
 
 cardano:hasProposalProposer a owl:DatatypeProperty ;
-    rdfs:label "has proposal proposer"@en ;
-    rdfs:comment "Relates a governance proposal to its proposer address."@en ;
+    rdfs:label "has proposal proposer" ;
+    rdfs:comment "Relates a governance proposal to its proposer address." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:string .
 
 cardano:hasRequestedBudget a owl:DatatypeProperty ;
-    rdfs:label "has proposal proposer"@en ;
-    rdfs:comment "Relates a governance proposal to its budget."@en ;
+    rdfs:label "has proposal proposer" ;
+    rdfs:comment "Relates a governance proposal to its budget." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:decimal .
 
 cardano:hasProposalStatus a owl:DatatypeProperty ;
-    rdfs:label "has proposal status"@en ;
-    rdfs:comment "Relates a governance proposal to its current status."@en ;
+    rdfs:label "has proposal status" ;
+    rdfs:comment "Relates a governance proposal to its current status." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range xsd:string .
 
 cardano:createsGovernanceAction a owl:ObjectProperty ;
-    rdfs:label "creates governance action"@en ;
-    rdfs:comment "Relates a governance proposal to the governance action it has created."@en ;
+    rdfs:label "creates governance action" ;
+    rdfs:comment "Relates a governance proposal to the governance action it has created." ;
     rdfs:domain cardano:GovernanceProposal ;
     rdfs:range cardano:GovernanceAction .
 
 cardano:hasActionId a owl:DatatypeProperty ;
-    rdfs:label "has action id"@en ;
-    rdfs:comment "Relates a governance action to its id."@en ;
+    rdfs:label "has action id" ;
+    rdfs:comment "Relates a governance action to its id." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:string .
 
 cardano:executesGovernanceProposal a owl:ObjectProperty ;
-    rdfs:label "executes governance proposal"@en ;
-    rdfs:comment "Relates a governance action to its governance proposal."@en ;
+    rdfs:label "executes governance proposal" ;
+    rdfs:comment "Relates a governance action to its governance proposal." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range cardano:GovernanceProposal .
 
 cardano:hasActionType a owl:DatatypeProperty ;
-    rdfs:label "has action type"@en ;
-    rdfs:comment "Relates a governance action to its type."@en ;
+    rdfs:label "has action type" ;
+    rdfs:comment "Relates a governance action to its type." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:string .
 
 cardano:hasTargetParameter a owl:DatatypeProperty ;
-    rdfs:label "has target parameter"@en ;
-    rdfs:comment "Relates a governance action to its target parameter."@en ;
+    rdfs:label "has target parameter" ;
+    rdfs:comment "Relates a governance action to its target parameter." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:string .
 
 cardano:hasTargetValue a owl:DatatypeProperty ;
-    rdfs:label "has target value"@en ;
-    rdfs:comment "Relates a governance action to its target value."@en ;
+    rdfs:label "has target value" ;
+    rdfs:comment "Relates a governance action to its target value." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:string .
 
 cardano:hasActionStatus a owl:DatatypeProperty ;
-    rdfs:label "has action status"@en ;
-    rdfs:comment "Relates a governance action to its current status."@en ;
+    rdfs:label "has action status" ;
+    rdfs:comment "Relates a governance action to its current status." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:string .
 
 cardano:hasVoteAnchor a owl:ObjectProperty ;
-    rdfs:label "has vote anchor"@en ;
-    rdfs:comment "Relates a vote to its off-chain metadata reference."@en ;
+    rdfs:label "has vote anchor" ;
+    rdfs:comment "Relates a vote to its off-chain metadata reference." ;
     rdfs:domain cardano:Vote ;
     rdfs:range cardano:VotingAnchor .
 
 cardano:hasVotingResult a owl:DatatypeProperty ;
-    rdfs:label "has voting result"@en ;
-    rdfs:comment "The outcome of a governance vote."@en ;
+    rdfs:label "has voting result" ;
+    rdfs:comment "The outcome of a governance vote." ;
     rdfs:domain cardano:Vote ;
     rdfs:range [
         owl:oneOf ("yes" "no" "abstain")
     ] .
 
 cardano:hasQuorum a owl:DatatypeProperty ;
-    rdfs:label "has quorum"@en ;
-    rdfs:comment "The minimum participation required for a valid governance decision."@en ;
+    rdfs:label "has quorum" ;
+    rdfs:comment "The minimum participation required for a valid governance decision." ;
     rdfs:domain cardano:GovernanceAction ;
     rdfs:range xsd:decimal .
 
 cardano:hasConstitution a owl:ObjectProperty ;
-    rdfs:label "has constitution"@en ;
-    rdfs:comment "Relates the network to its current constitution."@en ;
+    rdfs:label "has constitution" ;
+    rdfs:comment "Relates the network to its current constitution." ;
     rdfs:domain cardano:Governance ;
     rdfs:range cardano:Constitution .
 
 # Properties - Asset Related
 cardano:hasPolicyId a owl:DatatypeProperty ;
-    rdfs:label "has policy ID"@en ;
-    rdfs:comment "The unique identifier of a native token policy."@en ;
+    rdfs:label "has policy ID" ;
+    rdfs:comment "The unique identifier of a native token policy." ;
     rdfs:domain cardano:CNT ;
     rdfs:range xsd:string .
 
 cardano:hasNFTStandard a owl:DatatypeProperty ;
-    rdfs:label "has NFT standard"@en ;
-    rdfs:comment "Relates a non-fungible token its standard."@en ;
+    rdfs:label "has NFT standard" ;
+    rdfs:comment "Relates a non-fungible token its standard." ;
     rdfs:domain blockchain:NFT ;
     rdfs:range xsd:string .
 
 cardano:hasMintingPolicy a owl:ObjectProperty ;
-    rdfs:label "has minting policy"@en ;
-    rdfs:comment "Relates a token to its minting policy."@en ;
+    rdfs:label "has minting policy" ;
+    rdfs:comment "Relates a token to its minting policy." ;
     rdfs:domain cardano:CNT ;
     rdfs:range cardano:AssetPolicy .
 
 cardano:hasTokenRegistry a owl:ObjectProperty ;
-    rdfs:label "has token registry"@en ;
-    rdfs:comment "Links native tokens to their metadata in the token registry"@en ;
+    rdfs:label "has token registry" ;
+    rdfs:comment "Links native tokens to their metadata in the token registry" ;
     rdfs:domain cardano:CNT ;
     rdfs:range cardano:OffChainMetadata .
 
 # Properties - Epoch Related
 cardano:belongsToEpoch a owl:ObjectProperty ;
-    rdfs:label "belongs to epoch"@en ;
-    rdfs:comment "Relates an entity to its epoch."@en ;
+    rdfs:label "belongs to epoch" ;
+    rdfs:comment "Relates an entity to its epoch." ;
     rdfs:domain owl:Thing ;
     rdfs:range cardano:Epoch .
 
 cardano:hasEpochNumber a owl:DatatypeProperty ;
-    rdfs:label "has epoch number"@en ;
-    rdfs:comment "The sequential number of an epoch."@en ;
+    rdfs:label "has epoch number" ;
+    rdfs:comment "The sequential number of an epoch." ;
     rdfs:domain cardano:Epoch ;
     rdfs:range xsd:decimal .
 
 cardano:hasStartTime a owl:DatatypeProperty ;
-    rdfs:label "has start time"@en ;
-    rdfs:comment "The start time of an epoch."@en ;
+    rdfs:label "has start time" ;
+    rdfs:comment "The start time of an epoch." ;
     rdfs:domain cardano:Epoch ;
     rdfs:range xsd:dateTime .
 
 cardano:hasEndTime a owl:DatatypeProperty ;
-    rdfs:label "has end time"@en ;
-    rdfs:comment "The end time of an epoch."@en ;
+    rdfs:label "has end time" ;
+    rdfs:comment "The end time of an epoch." ;
     rdfs:domain cardano:Epoch ;
     rdfs:range xsd:dateTime .
 
 # Properties - Reward and Treasury Related
 cardano:hasReward a owl:ObjectProperty ;
-    rdfs:label "has reward"@en ;
-    rdfs:comment "Relates an account with its current reward."@en ;
+    rdfs:label "has reward" ;
+    rdfs:comment "Relates an account with its current reward." ;
     rdfs:domain blockchain:Account ;
     rdfs:range cardano:Reward .
 
 cardano:hasRewardAmount a owl:ObjectProperty ;
-    rdfs:label "has reward amount"@en ;
-    rdfs:comment "The amount of a reward."@en ;
+    rdfs:label "has reward amount" ;
+    rdfs:comment "The amount of a reward." ;
     rdfs:domain cardano:Reward ;
     rdfs:range blockchain:TokenAmount .
 
 cardano:hasRewardType a owl:DatatypeProperty ;
-    rdfs:label "has reward type"@en ;
-    rdfs:comment "The type of reward."@en ;
+    rdfs:label "has reward type" ;
+    rdfs:comment "The type of reward." ;
     rdfs:domain cardano:Reward ;
     rdfs:range [
         owl:oneOf ("member" "leader" "treasury" "reserves")
     ] .
 
 cardano:hasWithdrawal a owl:ObjectProperty ;
-    rdfs:label "has withdrawal"@en ;
-    rdfs:comment "Links an account to its withdrawals"@en ;
+    rdfs:label "has withdrawal" ;
+    rdfs:comment "Links an account to its withdrawals" ;
     rdfs:domain blockchain:Account ;
     rdfs:range cardano:Withdrawal .
 
 cardano:withdrawnIn a owl:ObjectProperty ;
-    rdfs:label "withdrawn in"@en ;
-    rdfs:comment "Links a withdrawal to the transaction"@en ;
+    rdfs:label "withdrawn in" ;
+    rdfs:comment "Links a withdrawal to the transaction" ;
     rdfs:domain cardano:Withdrawal ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasWithdrawalAmount a owl:ObjectProperty ;
-    rdfs:label "has withdrawal amount"@en ;
-    rdfs:comment "The amount withdrawn from rewards."@en ;
+    rdfs:label "has withdrawal amount" ;
+    rdfs:comment "The amount withdrawn from rewards." ;
     rdfs:domain cardano:Withdrawal ;
     rdfs:range blockchain:TokenAmount .
 
 cardano:hasTreasuryAmount a owl:DatatypeProperty ;
-    rdfs:label "has treasury amount"@en ;
-    rdfs:comment "The amount involved in treasury movement"@en ;
+    rdfs:label "has treasury amount" ;
+    rdfs:comment "The amount involved in treasury movement" ;
     rdfs:domain cardano:TreasuryMovement ;
     rdfs:range xsd:decimal .
 
 cardano:hasReserveAmount a owl:DatatypeProperty ;
-    rdfs:label "has reserve amount"@en ;
-    rdfs:comment "The amount involved in reserve movement"@en ;
+    rdfs:label "has reserve amount" ;
+    rdfs:comment "The amount involved in reserve movement" ;
     rdfs:domain cardano:ReserveMovement ;
     rdfs:range xsd:decimal .
 
 cardano:hasCertIndex a owl:DatatypeProperty ;
-    rdfs:label "has certificate index"@en ;
-    rdfs:comment "The index of the certificate in the transaction"@en ;
+    rdfs:label "has certificate index" ;
+    rdfs:comment "The index of the certificate in the transaction" ;
     rdfs:domain [
         owl:unionOf (
             cardano:TreasuryMovement
@@ -1155,8 +1161,8 @@ cardano:hasCertIndex a owl:DatatypeProperty ;
     rdfs:range xsd:decimal .
 
 cardano:belongsToAccount a owl:ObjectProperty ;
-    rdfs:label "belongs to account"@en ;
-    rdfs:comment "Links a movement to an account"@en ;
+    rdfs:label "belongs to account" ;
+    rdfs:comment "Links a movement to an account" ;
     rdfs:domain [
         owl:unionOf (
             cardano:TreasuryMovement
@@ -1166,119 +1172,119 @@ cardano:belongsToAccount a owl:ObjectProperty ;
     rdfs:range blockchain:Account .
 
 cardano:hasTreasuryTransaction a owl:ObjectProperty ;
-    rdfs:label "has treasury transaction"@en ;
-    rdfs:comment "Links treasury movement to its transaction"@en ;
+    rdfs:label "has treasury transaction" ;
+    rdfs:comment "Links treasury movement to its transaction" ;
     rdfs:domain cardano:TreasuryMovement ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasReserveTransaction a owl:ObjectProperty ;
-    rdfs:label "has reserve transaction"@en ;
-    rdfs:comment "Links reserve movement to its transaction"@en ;
+    rdfs:label "has reserve transaction" ;
+    rdfs:comment "Links reserve movement to its transaction" ;
     rdfs:domain cardano:ReserveMovement ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasTreasuryTransfer a owl:DatatypeProperty ;
-    rdfs:label "has treasury transfer"@en ;
-    rdfs:comment "Amount transferred to/from treasury"@en ;
+    rdfs:label "has treasury transfer" ;
+    rdfs:comment "Amount transferred to/from treasury" ;
     rdfs:domain cardano:PotTransfer ;
     rdfs:range xsd:decimal .
 
 cardano:hasReserveTransfer a owl:DatatypeProperty ;
-    rdfs:label "has reserve transfer"@en ;
-    rdfs:comment "Amount transferred to/from reserves"@en ;
+    rdfs:label "has reserve transfer" ;
+    rdfs:comment "Amount transferred to/from reserves" ;
     rdfs:domain cardano:PotTransfer ;
     rdfs:range xsd:decimal .
 
 cardano:hasTransferTransaction a owl:ObjectProperty ;
-    rdfs:label "has transfer transaction"@en ;
-    rdfs:comment "Links pot transfer to its transaction"@en ;
+    rdfs:label "has transfer transaction" ;
+    rdfs:comment "Links pot transfer to its transaction" ;
     rdfs:domain cardano:PotTransfer ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasReserveValue a owl:DatatypeProperty ;
-    rdfs:label "has reserve value"@en ;
-    rdfs:comment "The current value in reserves."@en ;
+    rdfs:label "has reserve value" ;
+    rdfs:comment "The current value in reserves." ;
     rdfs:domain cardano:Reserve ;
     rdfs:range xsd:decimal .
 
 # Transaction and Pool Management
 cardano:hasAnchor a owl:ObjectProperty ;
-    rdfs:label "has anchor"@en ;
-    rdfs:comment "Links a transaction to its reference block for transaction ordering"@en ;
+    rdfs:label "has anchor" ;
+    rdfs:comment "Links a transaction to its reference block for transaction ordering" ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range blockchain:Block .
 
 cardano:hasRetirement a owl:ObjectProperty ;
-    rdfs:label "has retirement"@en ;
-    rdfs:comment "Associates a stake pool with its retirement certificate"@en ;
+    rdfs:label "has retirement" ;
+    rdfs:comment "Associates a stake pool with its retirement certificate" ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolRetirement .
 
 # Protocol Parameters
 cardano:hasMinPoolCost a owl:DatatypeProperty ;
-    rdfs:label "has minimum pool cost"@en ;
-    rdfs:comment "Minimum fixed cost a stake pool can declare"@en ;
+    rdfs:label "has minimum pool cost" ;
+    rdfs:comment "Minimum fixed cost a stake pool can declare" ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraStartTime a owl:DatatypeProperty ;
-    rdfs:label "has protocol era start time"@en ;
-    rdfs:comment "The start instant of an era"@en ;
+    rdfs:label "has protocol era start time" ;
+    rdfs:comment "The start instant of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraEndTime a owl:DatatypeProperty ;
-    rdfs:label "has protocol era end time"@en ;
-    rdfs:comment "The end instant of an era"@en ;
+    rdfs:label "has protocol era end time" ;
+    rdfs:comment "The end instant of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraStartSlot a owl:DatatypeProperty ;
-    rdfs:label "has protocol era start slot number"@en ;
-    rdfs:comment "The start slot number of an era"@en ;
+    rdfs:label "has protocol era start slot number" ;
+    rdfs:comment "The start slot number of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraEndSlot a owl:DatatypeProperty ;
-    rdfs:label "has protocol era end slot number"@en ;
-    rdfs:comment "The end slot number of an era"@en ;
+    rdfs:label "has protocol era end slot number" ;
+    rdfs:comment "The end slot number of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraStartEpoch a owl:DatatypeProperty ;
-    rdfs:label "has protocol era start epoch number"@en ;
-    rdfs:comment "The start epoch number of an era"@en ;
+    rdfs:label "has protocol era start epoch number" ;
+    rdfs:comment "The start epoch number of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraEndEpoch a owl:DatatypeProperty ;
-    rdfs:label "has protocol era end epoch number"@en ;
-    rdfs:comment "The end epoch number of an era"@en ;
+    rdfs:label "has protocol era end epoch number" ;
+    rdfs:comment "The end epoch number of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraSlotLength a owl:DatatypeProperty ;
-    rdfs:label "has protocol era slot length"@en ;
-    rdfs:comment "The length of slots of an era"@en ;
+    rdfs:label "has protocol era slot length" ;
+    rdfs:comment "The length of slots of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraEpochLength a owl:DatatypeProperty ;
-    rdfs:label "has protocol era epoch length"@en ;
-    rdfs:comment "The length of epochs of an era"@en ;
+    rdfs:label "has protocol era epoch length" ;
+    rdfs:comment "The length of epochs of an era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:decimal .
 
 cardano:hasProtocolEraName a owl:DatatypeProperty ;
-    rdfs:label "has protocol era name"@en ;
-    rdfs:comment "The name of a protocol era"@en ;
+    rdfs:label "has protocol era name" ;
+    rdfs:comment "The name of a protocol era" ;
     rdfs:domain cardano:ProtocolEra ;
     rdfs:range xsd:string .
 
 # Individuals
 cardano:ADA a cardano:CNT ;
-    rdfs:label "ADA"@en ;
-    rdfs:comment "The native cryptocurrency of the Cardano blockchain, used for transaction fees, staking, governance, and value transfer."@en ;
+    rdfs:label "ADA" ;
+    rdfs:comment "The native cryptocurrency of the Cardano blockchain, used for transaction fees, staking, governance, and value transfer." ;
     blockchain:hasTokenName "Cardano ADA" ;
     blockchain:hasTokenSymbol "ADA" ;
     blockchain:hasMaxSupply 45000000000 ;
@@ -1286,12 +1292,12 @@ cardano:ADA a cardano:CNT ;
     blockchain:hasDenominationName "Lovelace" .
 
 cardano:Ouroboros a blockchain:ProofOfStake ;
-    rdfs:label "Ouroboros"@en ;
-    rdfs:comment "A proof-of-stake protocol that provides and improves the security guarantees of proof-of-work at a fraction of the energy cost. Ouroboros applies cryptography, combinatorics, and mathematical game theory to guarantee the protocol’s integrity, longevity, and performance, and that of the distributed networks that depend upon it."@en ;
+    rdfs:label "Ouroboros" ;
+    rdfs:comment "A proof-of-stake protocol that provides and improves the security guarantees of proof-of-work at a fraction of the energy cost. Ouroboros applies cryptography, combinatorics, and mathematical game theory to guarantee the protocol’s integrity, longevity, and performance, and that of the distributed networks that depend upon it." ;
     blockchain:isActiveProtocol true .
 
 cardano:Cardano a blockchain:Blockchain ;
-    rdfs:label "Cardano"@en ;
-    rdfs:comment "Cardano is a decentralized blockchain platform that aims to provide more secure, sustainable, and accessible financial services globally using advanced proof-of-stake technology. It's designed to be more energy-efficient than traditional blockchains while offering security and scalability. Cardano is secured through an environmentally sustainable, verifiably secure PoS protocol that’s known as Ouroboros."@en ;
+    rdfs:label "Cardano" ;
+    rdfs:comment "Cardano is a decentralized blockchain platform that aims to provide more secure, sustainable, and accessible financial services globally using advanced proof-of-stake technology. It's designed to be more energy-efficient than traditional blockchains while offering security and scalability. Cardano is secured through an environmentally sustainable, verifiably secure PoS protocol that’s known as Ouroboros." ;
     blockchain:hasConsensusProtocol cardano:Ouroboros ;
     blockchain:hasNativeToken cardano:ADA .

@@ -1,4 +1,3 @@
-# cap/src/cap/api/waitlist.py
 from __future__ import annotations
 
 import os
@@ -15,7 +14,7 @@ from cap.database.session import get_db
 from cap.database.model import User
 from cap.mailing.event_triggers import on_waiting_list_joined
 
-router = APIRouter(prefix="/api/v1/", tags=["waitlist"])
+router = APIRouter(prefix="/api/v1", tags=["waitlist"])
 
 from dotenv import load_dotenv
 load_dotenv()
