@@ -377,8 +377,8 @@ cardano:Reward a owl:Class ;
     rdfs:label "Reward" ;
     rdfs:comment "A staking reward distributed to an account" .
 
-cardano:Withdrawal a owl:Class ;
-    rdfs:label "Withdrawal" ;
+cardano:RewardWithdrawal a owl:Class ;
+    rdfs:label "Reward Withdrawal" ;
     rdfs:comment "A withdrawal of rewards from a stake address" .
 
 cardano:PoolRetirement a owl:Class ;
@@ -1104,6 +1104,12 @@ cardano:hasEndTime a owl:DatatypeProperty ;
     rdfs:range xsd:dateTime .
 
 # Properties - Reward and Treasury Related
+cardano:hasRewardRecord a owl:ObjectProperty ;
+    rdfs:label "has reward record" ;
+    rdfs:comment "Transaction with a reward record." ;
+    rdfs:domain blockchain:Transaction ;
+    rdfs:range cardano:Reward .
+
 cardano:hasReward a owl:ObjectProperty ;
     rdfs:label "has reward" ;
     rdfs:comment "Relates an account with its current reward." ;
@@ -1124,22 +1130,28 @@ cardano:hasRewardType a owl:DatatypeProperty ;
         owl:oneOf ("member" "leader" "treasury" "reserves")
     ] .
 
-cardano:hasWithdrawal a owl:ObjectProperty ;
+cardano:hasRewardWithdrawalRecord a owl:ObjectProperty ;
+    rdfs:label "has reward withdrawal record" ;
+    rdfs:comment "transaction with the record of a reward withdrawal" ;
+    rdfs:domain blockchain:Transaction ;
+    rdfs:range cardano:RewardWithdrawal .
+
+cardano:hasRewardWithdrawal a owl:ObjectProperty ;
     rdfs:label "has withdrawal" ;
     rdfs:comment "Links an account to its withdrawals" ;
     rdfs:domain blockchain:Account ;
-    rdfs:range cardano:Withdrawal .
+    rdfs:range cardano:RewardWithdrawal .
 
 cardano:withdrawnIn a owl:ObjectProperty ;
     rdfs:label "withdrawn in" ;
     rdfs:comment "Links a withdrawal to the transaction" ;
-    rdfs:domain cardano:Withdrawal ;
+    rdfs:domain cardano:RewardWithdrawal ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasWithdrawalAmount a owl:ObjectProperty ;
     rdfs:label "has withdrawal amount" ;
     rdfs:comment "The amount withdrawn from rewards." ;
-    rdfs:domain cardano:Withdrawal ;
+    rdfs:domain cardano:RewardWithdrawal ;
     rdfs:range blockchain:TokenAmount .
 
 cardano:hasTreasuryAmount a owl:DatatypeProperty ;
