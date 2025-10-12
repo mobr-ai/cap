@@ -40,6 +40,22 @@ services:
     networks:
       - app-network
 
+  redis:
+      image: redis:7-alpine
+      container_name: cap_redis
+      ports:
+        - "6379:6379"
+      volumes:
+        - /home/marcio/data/cardano/redis:/data
+      command: redis-server --appendonly yes
+      healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 5s
+        timeout: 3s
+        retries: 20
+      networks:
+        - app-network
+
   virtuoso:
     image: openlink/virtuoso-opensource-7:latest
     platform: linux/amd64
@@ -50,7 +66,7 @@ services:
     env_file:
       - .env
     environment:
-      - DBA_PASSWORD=mysecretpassword
+      - DBA_PASSWORD=dba
     volumes:
       - /home/marcio/data/cardano/virtuoso:/database
     healthcheck:
@@ -106,3 +122,4 @@ volumes:
   virtuoso-data:
   postgres-data:
   ollama-data:
+  redis-data:

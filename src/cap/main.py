@@ -17,11 +17,14 @@ from cap.data.virtuoso import VirtuosoClient
 from cap.config import settings
 from cap.etl.cdb.service import etl_service
 from cap.services.ollama_client import cleanup_ollama_client
+from cap.services.redis_client import cleanup_redis_client
 
 from cap.database.session import engine
 from cap.database.model import Base
 from cap.api.auth import router as auth_router
 from cap.api.waitlist import router as wait_router
+from cap.api.cache_admin import router as cache_router
+from cap.api.etl_admin import router as etl_router
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -156,7 +159,8 @@ async def lifespan(app: FastAPI):
     finally:
         # Shutdown
         await stop_etl_service()
-        await cleanup_ollama_client()  # NEW: Cleanup Ollama client
+        await cleanup_ollama_client()
+        await cleanup_redis_client()
         logger.info("Application shutdown completed")
 
 def setup_tracing():
@@ -184,6 +188,8 @@ def create_application() -> FastAPI:
     app.include_router(nl_router)
     app.include_router(auth_router)
     app.include_router(wait_router)
+    app.include_router(cache_router)
+    app.include_router(etl_router)
 
     return app
 

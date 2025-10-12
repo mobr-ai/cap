@@ -185,8 +185,7 @@ class OllamaClient:
 
     async def nl_to_sparql(
         self,
-        natural_query: str,
-        system_prompt: str=""
+        natural_query: str
     ) -> str:
         """
         Convert natural language query to SPARQL.
@@ -200,12 +199,10 @@ class OllamaClient:
         """
         with tracer.start_as_current_span("nl_to_sparql") as span:
             span.set_attribute("query", natural_query)
-
             sparql_response = await self.generate_complete(
                 prompt=natural_query,
                 model=self.llm_model,
-                system_prompt=system_prompt,
-                temperature=0.1  # Low temperature for more deterministic SPARQL
+                temperature=0.0
             )
 
             # Clean the SPARQL query
@@ -283,16 +280,22 @@ class OllamaClient:
             Chunks of contextualized answer
         """
         with tracer.start_as_current_span("contextualize_answer") as span:
+            context_res = ""
+            if sparql_results:
+                context_res = json.dumps(sparql_results, indent=2)
+
             # Format the prompt with query and results
-            prompt = f"""User Question: {user_query}
+            prompt = f"""
+                User Question: {user_query}
 
-SPARQL Query Executed:
-{sparql_query}
+                SPARQL Query Executed:
+                {sparql_query}
 
-Query Results:
-{json.dumps(sparql_results, indent=2)}
+                Query Results:
+                {context_res}
 
-Based on the above information, provide a clear and helpful answer to the user's question."""
+                Based on the above information, provide a clear and helpful answer to the user's question.
+            """
 
             span.set_attribute("prompt_length", len(prompt))
 
