@@ -178,33 +178,30 @@ cardano:StakePool a owl:Class ;
     rdfs:label "Stake Pool" ;
     rdfs:comment "An entity that participates in Cardano block production and network consensus." .
 
-cardano:PoolStatus a owl:Class ;
-    rdfs:label "Pool Status" ;
-    rdfs:comment "The operational status of a stake pool." .
-
-cardano:PoolTicker a owl:Class ;
-    rdfs:label "Pool Ticker" ;
-    rdfs:comment "A unique identifier for a stake pool." .
-
-cardano:PoolOwner a owl:Class ;
-    rdfs:label "Pool Owner" ;
-    rdfs:comment "An entity that owns and operates a stake pool." .
-
-cardano:PoolMetadata a owl:Class ;
-    rdfs:label "Pool Metadata" ;
+cardano:StakePoolMetadata a owl:Class ;
+    rdfs:label "Stake Pool Metadata" ;
     rdfs:comment "Off-chain metadata describing a stake pool." .
 
-cardano:PoolRelay a owl:Class ;
-    rdfs:label "Pool Relay" ;
+cardano:StakePoolRelay a owl:Class ;
+    rdfs:label "Stake Pool Relay" ;
     rdfs:comment "Network information for connecting to a stake pool." .
 
-cardano:StakeRegistration a owl:Class ;
-    rdfs:label "Stake Registration" ;
+cardano:StakePoolRegistration a owl:Class ;
+    rdfs:label "Stake Pool Registration" ;
     rdfs:comment "Record of stake address registration." .
 
-cardano:StakeDeregistration a owl:Class ;
-    rdfs:label "Stake Deregistration" ;
+cardano:StakePoolDeregistration a owl:Class ;
+    rdfs:label "Stake Pool Deregistration" ;
     rdfs:comment "Record of stake address deregistration." .
+
+cardano:StakePoolRetirement a owl:Class ;
+    rdfs:label "Stake Pool Retirement" ;
+    rdfs:comment "A certificate announcing stake pool retirement" .
+
+cardano:OffChainStakePoolData a owl:Class ;
+    rdfs:subClassOf cardano:OffChainMetadata ;
+    rdfs:label "Off-chain Stake Pool Data" ;
+    rdfs:comment "Stake Pool specific metadata stored off-chain." .
 
 # Epoch and Network Classes
 cardano:Epoch a owl:Class ;
@@ -359,11 +356,6 @@ cardano:OffChainMetadata a owl:Class ;
     rdfs:label "Off-chain Metadata" ;
     rdfs:comment "Metadata stored off-chain." .
 
-cardano:OffChainPoolData a owl:Class ;
-    rdfs:subClassOf cardano:OffChainMetadata ;
-    rdfs:label "Off-chain Pool Data" ;
-    rdfs:comment "Pool-specific metadata stored off-chain." .
-
 cardano:OffChainVoteData a owl:Class ;
     rdfs:subClassOf cardano:OffChainMetadata ;
     rdfs:label "Off-chain Vote Data" ;
@@ -380,10 +372,6 @@ cardano:Reward a owl:Class ;
 cardano:RewardWithdrawal a owl:Class ;
     rdfs:label "Reward Withdrawal" ;
     rdfs:comment "A withdrawal of rewards from a stake address" .
-
-cardano:PoolRetirement a owl:Class ;
-    rdfs:label "Pool Retirement" ;
-    rdfs:comment "A certificate announcing pool retirement" .
 
 cardano:TreasuryMovement a owl:Class ;
     rdfs:label "Treasury Movement" ;
@@ -775,7 +763,7 @@ cardano:hasProtocolMinorVersion a owl:DatatypeProperty ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:decimal .
 
-# Properties - Staking and Pool Related
+# Properties - Stake accounts and Stake Pool Related
 cardano:delegatesTo a owl:ObjectProperty ;
     rdfs:label "delegates to" ;
     rdfs:comment "Relates an account to its delegation target." ;
@@ -784,65 +772,107 @@ cardano:delegatesTo a owl:ObjectProperty ;
         owl:unionOf (cardano:StakePool cardano:DRep)
     ] .
 
-cardano:hasStakeAmount a owl:DatatypeProperty ;
-    rdfs:label "has stake amount" ;
+cardano:hasAccountStakeAmount a owl:DatatypeProperty ;
+    rdfs:label "has account stake amount" ;
     rdfs:comment "Relate an account to its stake amount" ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:decimal .
 
-cardano:hasStakeAccount a owl:ObjectProperty ;
-    rdfs:label "has stake address" ;
-    rdfs:comment "Relate a stake pool to its stake account" ;
+cardano:hasStakePoolAmount a owl:DatatypeProperty ;
+    rdfs:label "has stake pool amount" ;
+    rdfs:comment "Relate a stake pool to its stake amount" ;
+    rdfs:domain blockchain:StakePool ;
+    rdfs:range xsd:decimal .
+
+cardano:hasStakePoolAccount a owl:ObjectProperty ;
+    rdfs:label "has stake pool account" ;
+    rdfs:comment "Relate a stake pool to the accounts" ;
     rdfs:domain cardano:StakePool ;
     rdfs:range blockchain:Account .
 
-cardano:hasPoolMetadata a owl:ObjectProperty ;
-    rdfs:label "has pool metadata" ;
+cardano:hasStakePoolMetadata a owl:ObjectProperty ;
+    rdfs:label "has stake pool metadata" ;
     rdfs:comment "Relates a pool to its metadata." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolMetadata .
 
-cardano:hasPoolOwner a owl:ObjectProperty ;
-    rdfs:label "has pool owner" ;
+cardano:hasStakePoolOwner a owl:ObjectProperty ;
+    rdfs:label "has stake pool owner" ;
     rdfs:comment "Relates a pool to its owners." ;
     rdfs:domain cardano:StakePool ;
-    rdfs:range cardano:PoolOwner .
+    rdfs:range cardano:Account .
 
-cardano:hasPoolStatus a owl:ObjectProperty ;
-    rdfs:label "has pool status" ;
+cardano:hasStakePoolStatus a owl:ObjectProperty ;
+    rdfs:label "has stake pool status" ;
     rdfs:comment "Relates a pool to its operational status." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range cardano:PoolStatus .
 
-cardano:hasPoolPledge a owl:DatatypeProperty ;
-    rdfs:label "has pool pledge" ;
+cardano:hasStakePoolPledge a owl:DatatypeProperty ;
+    rdfs:label "has stake pool pledge" ;
     rdfs:comment "The amount of lovelace pledged to a pool." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
-cardano:hasPoolEpochActiveNumber a owl:DatatypeProperty ;
-    rdfs:label "has pool epoch active number" ;
+cardano:hasStakePoolEpochActiveNumber a owl:DatatypeProperty ;
+    rdfs:label "has stake pool epoch active number" ;
     rdfs:comment "The pool active epoch number." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
-cardano:hasPoolVRFKeyHash a owl:DatatypeProperty ;
-    rdfs:label "has pool VRF key hash" ;
+cardano:hasStakePoolVRFKeyHash a owl:DatatypeProperty ;
+    rdfs:label "has stake pool VRF key hash" ;
     rdfs:comment "The pool vrf key hash." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
-cardano:hasMargin a owl:DatatypeProperty ;
-    rdfs:label "has margin" ;
-    rdfs:comment "The pool's profit margin percentage." ;
+cardano:hasStakePoolFee a owl:DatatypeProperty ;
+    rdfs:label "has stake pool margin" ;
+    rdfs:comment "The stake pool's fee percentage." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
-cardano:hasFixedCost a owl:DatatypeProperty ;
+cardano:hasStakePoolFixedCost a owl:DatatypeProperty ;
     rdfs:label "has fixed cost" ;
     rdfs:comment "The pool's fixed operation cost in lovelace." ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
+
+cardano:hasStakePoolIPv4 a owl:DatatypeProperty ;
+    rdfs:label "has stake pool ipv4" ;
+    rdfs:comment "Relates a stake pool with its ipv4." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
+
+cardano:hasStakePoolIPv6 a owl:DatatypeProperty ;
+    rdfs:label "has stake pool ipv6" ;
+    rdfs:comment "Relates a stake pool with its ipv6." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
+
+cardano:hasStakePoolIPPort a owl:DatatypeProperty ;
+    rdfs:label "has stake pool ip port" ;
+    rdfs:comment "Relates a stake pool with its ip port." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
+
+cardano:hasStakePoolHostname a owl:DatatypeProperty ;
+    rdfs:label "has stake pool host name" ;
+    rdfs:comment "Relates a stake pool with its host name." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
+
+cardano:hasStakePoolStatus a owl:DatatypeProperty ;
+    rdfs:label "has stake pool status" ;
+    rdfs:comment "Relates a stake pool with its status." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
+
+cardano:hasStakePoolTicker a owl:DatatypeProperty ;
+    rdfs:label "has stake pool ticker" ;
+    rdfs:comment "Relates a stake pool with its ticker." ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range xsd:string .
 
 # Properties - Smart Contract and Script Related
 cardano:embeddedIn a owl:ObjectProperty ;
