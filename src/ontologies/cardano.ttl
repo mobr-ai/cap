@@ -593,11 +593,17 @@ blockchain:hasCurrency a owl:ObjectProperty ;
     rdfs:domain blockchain:TokenAmount ;
     rdfs:range blockchain:Token .
 
-blockchain:hasAmountValue a owl:DatatypeProperty ;
-    rdfs:label "has amount value" ;
+blockchain:hasTokenAmountValue a owl:DatatypeProperty ;
+    rdfs:label "has token amount value" ;
     rdfs:comment "The amount of a token in an account." ;
     rdfs:domain blockchain:TokenAmount ;
     rdfs:range xsd:decimal .
+
+blockchain:hasTokenAmountTimestamp a owl:DatatypeProperty ;
+    rdfs:label "has token amount timestamp" ;
+    rdfs:comment "The timestamp in wich the amount of a token is in an account." ;
+    rdfs:domain blockchain:TokenAmount ;
+    rdfs:range xsd:dateTime .
 
 blockchain:hasHash a owl:DatatypeProperty ;
     rdfs:label "has hash" ;
