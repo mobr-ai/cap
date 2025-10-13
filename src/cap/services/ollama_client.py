@@ -241,6 +241,11 @@ class OllamaClient:
         sparql_text = re.sub(r'(?i)the query is:?\s*', '', sparql_text)
         sparql_text = re.sub(r'(?i)this query will:?\s*.*$', '', sparql_text, flags=re.MULTILINE)
 
+        # Remaining nl before PREFIX
+        index = sparql_text.find("PREFIX")
+        if index > -1:
+            sparql_text = sparql_text[index:]
+
         # Clean up whitespace
         lines = [line.strip() for line in sparql_text.strip().split('\n') if line.strip()]
 

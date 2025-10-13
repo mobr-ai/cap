@@ -217,7 +217,9 @@ Before running CAP, ensure you have the following installed on your system:
    virtualenv venv
    source venv/bin/activate
 
-   poetry install
+   #poetry install
+   ollama ollama pull mobr/cap
+
    ```
 
 4. **Run CAP server:**
@@ -301,6 +303,14 @@ pytest --cov=src/cap
    ```bash
    docker compose exec api pytest
    ```
+
+7. **Pull mobr/cap LLM model inside Docker:**
+
+   ```bash
+   docker exec ollama ollama pull mobr/cap
+   ```
+
+
 
 ## Development
 
