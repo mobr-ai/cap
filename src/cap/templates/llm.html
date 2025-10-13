@@ -438,6 +438,18 @@
             text-align: center;
         }
 
+        .empty-state-left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            gap: 1rem;
+            padding: 0px;
+            text-align: left;
+        }
+
         .empty-state-icon {
             width: 80px;
             height: 80px;
@@ -553,20 +565,17 @@
                 </div>
             </div>
             <div class="input-container">
+                <div class="empty-state-left">Most frequent queries</div>
                 <div class="examples" id="examples">
                     <div class="example-chip" data-query="Show me the latest 5 blocks">Latest blocks</div>
                     <div class="example-chip" data-query="What is the total ADA in circulation?">ADA circulation</div>
-                    <div class="example-chip" data-query="List the top 10 stake pools by stake amount">Top stake pools</div>
-                    <div class="example-chip" data-query="Show me recent governance proposals">Governance proposals</div>
+                    <!-- <div class="example-chip" data-query="List the top 10 stake pools by stake amount">Top stake pools</div>
+                    <div class="example-chip" data-query="Show me recent governance proposals">Governance proposals</div> -->
                 </div>
                 <div class="empty-state"></div>
                 <div class="input-wrapper">
                     <div class="input-field">
-                        <textarea
-                            id="queryInput"
-                            placeholder="Ask a question about Cardano..."
-                            rows="2"
-                            maxlength="1000"></textarea>
+                        <textarea id="queryInput" placeholder="Ask a question about Cardano..." rows="2" maxlength="1000"></textarea>
                         <div class="char-count">
                             <span id="charCount">0</span>/1000
                         </div>
