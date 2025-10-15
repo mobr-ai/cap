@@ -702,12 +702,6 @@ cardano:hasReferenceInput a owl:ObjectProperty ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:ReferenceInput .
 
-cardano:hasCBOREncoding a owl:DatatypeProperty ;
-    rdfs:label "has CBOR encoding" ;
-    rdfs:comment "The CBOR binary encoding of a transaction." ;
-    rdfs:domain blockchain:Transaction ;
-    rdfs:range xsd:base64Binary .
-
 cardano:referencesTransactionID a owl:DatatypeProperty ;
     rdfs:label "references transaction id" ;
     rdfs:comment "Relates a transaction input with the UTXO being spent." ;
@@ -918,15 +912,15 @@ cardano:hasRedeemer a owl:ObjectProperty ;
     rdfs:domain cardano:Script ;
     rdfs:range cardano:Redeemer .
 
-cardano:hasDatumContent a owl:DatatypeProperty ;
-    rdfs:label "has datum content" ;
+cardano:hasDatum a owl:DatatypeProperty ;
+    rdfs:label "has datum" ;
     rdfs:comment "Relates a datum to its content." ;
     rdfs:domain cardano:Datum ;
     rdfs:range xsd:string .
 
-cardano:hasDatumBytes a owl:DatatypeProperty ;
+cardano:hasDatumHash a owl:DatatypeProperty ;
     rdfs:label "has datum bytes" ;
-    rdfs:comment "Relates a datum to its bytes." ;
+    rdfs:comment "Relates a datum to its hash." ;
     rdfs:domain cardano:Datum ;
     rdfs:range xsd:string .
 
@@ -940,6 +934,18 @@ cardano:hasScriptAddress a owl:DatatypeProperty ;
     rdfs:label "has script address" ;
     rdfs:comment "Relates a script with its address." ;
     rdfs:domain cardano:Script ;
+    rdfs:range xsd:string .
+
+cardano:hasScriptLnguage a owl:DatatypeProperty ;
+    rdfs:label "has script language" ;
+    rdfs:comment "Language use to write the script." ;
+    rdfs:domain cardano:Script ;
+    rdfs:range xsd:string .
+
+cardano:hasScriptCBOR a owl:DatatypeProperty ;
+    rdfs:label "has Script CBOR" ;
+    rdfs:comment "The CBOR in the script." ;
+    rdfs:domain blockchain:Script ;
     rdfs:range xsd:string .
 
 cardano:hasExecutionUnits a owl:ObjectProperty ;
