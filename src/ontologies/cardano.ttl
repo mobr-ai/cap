@@ -576,7 +576,7 @@ blockchain:hasCurrency a owl:ObjectProperty ;
 
 blockchain:hasTokenOperationValue a owl:DatatypeProperty ;
     rdfs:label "has token amount value" ;
-    rdfs:comment "The amount of a token in an account." ;
+    rdfs:comment "The amount of tokens in an operation." ;
     rdfs:domain blockchain:TokenOperation ;
     rdfs:range xsd:decimal .
 
@@ -712,6 +712,18 @@ cardano:referencesOutput a owl:ObjectProperty ;
     rdfs:comment "Links an input to the specific output it references" ;
     rdfs:domain cardano:TransactionInput ;
     rdfs:range cardano:TransactionOutput .
+
+cardano:hasOutputSpend a owl:DatatypeProperty ;
+    rdfs:label "references output" ;
+    rdfs:comment "Links an input to the specific output it references" ;
+    rdfs:domain cardano:TransactionOutput ;
+    rdfs:range xsd:boolean .
+
+cardano:hasOutputSpendTimestamp a owl:DatatypeProperty ;
+    rdfs:label "references output" ;
+    rdfs:comment "Links an input to the specific output it references" ;
+    rdfs:domain cardano:TransactionOutput ;
+    rdfs:range xsd:dateTime .
 
 cardano:hasSpends a owl:DatatypeProperty ;
     rdfs:label "has spends" ;
