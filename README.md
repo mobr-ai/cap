@@ -236,8 +236,8 @@ Before running CAP, ensure you have the following installed on your system:
    uvicorn src.cap.main:app --host 0.0.0.0 --port 8000
    ```
 
-   Now, you can access CAP's API at: [http://localhost:8000/docs](http://localhost:8000/docs)
-
+Now, you can access CAP's API at: [http://localhost:8000/docs](http://localhost:8000/docs)
+You can also access CAP's chat UI via `http://localhost:8000/llm`.
 
 #### Testing
 With CAP and its dependencies running (i.e., cardano-node, cardano-db-sync, postgresql, virtuos, jaeger, and cap with uvicorn), you can now run its tests
@@ -314,7 +314,7 @@ pytest --cov=src/cap
    ```
 
 Now, you can access CAP's API at: [http://localhost:8000/docs](http://localhost:8000/docs)
-
+You can also access CAP's chat UI via `http://localhost:8000/llm`.
 
 ## Development
 
