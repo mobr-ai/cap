@@ -110,7 +110,7 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 ```
 
 ### 5.2 Using JavaScript
-The provided `llm.html` demonstrates a full chat UI. Host it statically (e.g., via `python -m http.server`) and serve alongside the API.
+The provided `llm.html` demonstrates a chat UI. You can access it via `http://localhost:8000/llm`.
 
 **Key Implementation**:
 - **Health/Sync Polling**: Fetches `/api/v1/nl/health` and SPARQL for block heights every 30-60s; updates UI indicators (green pulse for "Online/Synced").
@@ -127,7 +127,7 @@ The provided `llm.html` demonstrates a full chat UI. Host it statically (e.g., v
 
 To integrate:
 1. Save `llm.html` to your static dir (e.g., `/static/`).
-2. Access via `http://localhost:8000/static/llm.html`.
+2. Access via `http://localhost:8000/llm`.
 3. Customize queries in `<div class="example-chip" data-query="...">`.
 
 **Sample Snippet for Custom JS Client**:
