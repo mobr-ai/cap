@@ -64,6 +64,8 @@ Before running CAP, ensure you have the following installed on your system:
 
 ### Running locally
 
+
+
 #### CAP Setup
 
 1. **Config and environment files:**
@@ -211,6 +213,11 @@ Before running CAP, ensure you have the following installed on your system:
    docker exec -it postgres psql -U postgres -d cap -c "SELECT * FROM block LIMIT 10;"
    ```
 
+   ollama:
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ```
+
 3. **Set up Python environment:**
 
    ```bash
@@ -218,6 +225,7 @@ Before running CAP, ensure you have the following installed on your system:
    source venv/bin/activate
 
    #poetry install
+   #strongly recommended NVIDIA GeForce RTX 5080 at least to run the model locally
    ollama ollama pull mobr/cap
 
    ```
@@ -298,18 +306,14 @@ pytest --cov=src/cap
    docker compose down -v
    ```
 
-6. **Run tests inside Docker:**
+6. **Pull mobr/cap LLM model inside Docker:**
 
    ```bash
-   docker compose exec api pytest
-   ```
-
-7. **Pull mobr/cap LLM model inside Docker:**
-
-   ```bash
+   #strongly recommended NVIDIA GeForce RTX 5080 at least to run the model locally
    docker exec ollama ollama pull mobr/cap
    ```
 
+Now, you can access CAP's API at: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 
 ## Development
