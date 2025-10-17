@@ -1,4 +1,4 @@
-# Technical Report: CAP's Natural Language Query Engine
+# CAP's Natural Language Query Engine
 
 ## Executive Summary
 
