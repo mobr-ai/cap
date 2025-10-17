@@ -1,4 +1,4 @@
-# CAP's Natural Language Query Engine
+# Querying the system via natural language
 
 ## Executive Summary
 
