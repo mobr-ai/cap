@@ -441,12 +441,11 @@
         .empty-state-left {
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            height: 100%;
             color: var(--text-secondary);
-            gap: 1rem;
-            padding: 0px;
+            gap: 0.5rem;
+            padding: 0;
             text-align: left;
         }
 
@@ -482,7 +481,6 @@
             margin: 0.5rem 0;
         }
 
-        /* Scrollbar styling */
         .messages::-webkit-scrollbar {
             width: 8px;
         }
@@ -519,10 +517,6 @@
 
             .message-content {
                 max-width: 85%;
-            }
-
-            .examples {
-                padding: 0 1rem;
             }
         }
     </style>
@@ -565,13 +559,8 @@
                 </div>
             </div>
             <div class="input-container">
-                <div class="empty-state-left">Most frequent queries</div>
-                <div class="examples" id="examples">
-                    <div class="example-chip" data-query="Show me the latest 5 blocks">Latest blocks</div>
-                    <div class="example-chip" data-query="What is the total ADA in circulation?">ADA circulation</div>
-                    <!-- <div class="example-chip" data-query="List the top 10 stake pools by stake amount">Top stake pools</div>
-                    <div class="example-chip" data-query="Show me recent governance proposals">Governance proposals</div> -->
-                </div>
+                <div class="empty-state-left">Top 5 frequent queries</div>
+                <div class="examples" id="examplesContainer"></div>
                 <div class="empty-state"></div>
                 <div class="input-wrapper">
                     <div class="input-field">
@@ -600,7 +589,7 @@
         const statusText = document.getElementById('statusText');
         const syncStatusIndicator = document.getElementById('syncStatusIndicator');
         const syncStatusText = document.getElementById('syncStatusText');
-        const examples = document.getElementById('examples');
+        const examplesContainer = document.getElementById('examplesContainer');
         const capBlock = document.getElementById('capBlock');
         const cardanoBlock = document.getElementById('cardanoBlock');
 
@@ -623,6 +612,7 @@
                     statusText.textContent = 'Offline';
                 }
             } catch (error) {
+                console.error('Health check failed:', error);
                 statusIndicator.classList.remove('online');
                 statusText.textContent = 'Offline';
             }
@@ -632,13 +622,14 @@
         async function fetchSyncInfo() {
             try {
                 const sparqlQuery = `PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
-SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum)
-WHERE {
-  cardano:Cardano blockchain:hasCurrentBlockHeight ?currentCardanoHeight .
-  ?block a blockchain:Block .
-  ?block cardano:hasBlockNumber ?blockNum .
-}`;
+                                    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+                                    SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum)
+                                    FROM <http://cardano>
+                                    WHERE {
+                                    cardano:Cardano blockchain:hasCurrentBlockHeight ?currentCardanoHeight .
+                                    ?block a blockchain:Block .
+                                    ?block cardano:hasBlockNumber ?blockNum .
+                }`;
 
                 const response = await fetch('/api/v1/query', {
                     method: 'POST',
@@ -651,28 +642,35 @@ WHERE {
                     })
                 });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    const bindings = data.results?.results?.bindings;
-
-                    if (bindings && bindings.length > 0) {
-                        const result = bindings[0];
-                        const capBlockNum = result.capBlockNum?.value;
-                        const cardanoHeight = result.currentCardanoHeight?.value;
-
-                        if (capBlockNum) {
-                            lastCapBlock = parseInt(capBlockNum);
-                            capBlock.textContent = lastCapBlock.toLocaleString();
-                        }
-                        if (cardanoHeight) {
-                            lastCardanoBlock = parseInt(cardanoHeight);
-                            cardanoBlock.textContent = lastCardanoBlock.toLocaleString();
-                        }
-
-                        // Update sync status
-                        updateSyncStatus();
-                    }
+                if (!response.ok) {
+                    console.warn(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
+
+                const data = await response.json();
+                const bindings = data.results?.results?.bindings || [];
+
+                if (bindings.length > 0) {
+                    const result = bindings[0];
+                    const capBlockNum = result.capBlockNum?.value;
+                    const cardanoHeight = result.currentCardanoHeight?.value;
+
+                    if (capBlockNum) {
+                        lastCapBlock = parseInt(capBlockNum);
+                        capBlock.textContent = lastCapBlock.toLocaleString();
+                    }
+                    if (cardanoHeight) {
+                        lastCardanoBlock = parseInt(cardanoHeight);
+                        cardanoBlock.textContent = lastCardanoBlock.toLocaleString();
+                    }
+
+                    // Update sync status
+                    updateSyncStatus();
+                } else {
+                    console.warn('No data returned from SPARQL query.');
+                    throw new Error('No data returned from SPARQL query.');
+                }
+
             } catch (error) {
                 console.error('Failed to fetch sync info:', error);
                 syncStatusIndicator.classList.remove('synced', 'syncing');
@@ -691,12 +689,10 @@ WHERE {
             const blockDiff = lastCardanoBlock - lastCapBlock;
 
             if (blockDiff <= 5) {
-                // Consider synced if within 5 blocks (allows for minor network delays)
                 syncStatusIndicator.classList.remove('syncing');
                 syncStatusIndicator.classList.add('synced');
                 syncStatusText.textContent = 'Synced';
             } else {
-                // Syncing
                 syncStatusIndicator.classList.remove('synced');
                 syncStatusIndicator.classList.add('syncing');
                 const percentage = Math.round((lastCapBlock / lastCardanoBlock) * 100);
@@ -704,11 +700,72 @@ WHERE {
             }
         }
 
-        // Initialize
-        checkHealth();
-        fetchSyncInfo();
-        setInterval(checkHealth, 30000); // Check every 30 seconds
-        setInterval(fetchSyncInfo, 60000); // Update sync info every minute
+        // Function to load top queries
+        async function loadTopQueries() {
+            try {
+                if (cardanoBlock.textContent == "-") {
+                    fetchSyncInfo();
+                }
+                const response = await fetch('/api/v1/nl/queries/top?limit=5');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+
+                // Clear existing examples
+                examplesContainer.innerHTML = '';
+
+                // Add top queries as chips
+                if (data.top_queries && data.top_queries.length > 0) {
+                    data.top_queries.forEach(item => {
+                        const chip = document.createElement('div');
+                        chip.className = 'example-chip';
+                        chip.dataset.query = item.query;
+                        chip.textContent = item.query;
+                        chip.title = `Asked ${item.frequency} times`;
+                        examplesContainer.appendChild(chip);
+                    });
+                } else {
+                    // Fallback if no top queries available
+                    const fallbackQueries = [
+                        "Show me the latest 5 blocks",
+                        "What is the total ADA in circulation?"
+                    ];
+                    fallbackQueries.forEach(query => {
+                        const chip = document.createElement('div');
+                        chip.className = 'example-chip';
+                        chip.dataset.query = query;
+                        chip.textContent = query;
+                        examplesContainer.appendChild(chip);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load top queries:', error);
+                // Fallback to static queries on error
+                examplesContainer.innerHTML = '';
+                const fallbackQueries = [
+                    "Show me the latest 5 blocks",
+                    "What is the total ADA in circulation?"
+                ];
+                fallbackQueries.forEach(query => {
+                    const chip = document.createElement('div');
+                    chip.className = 'example-chip';
+                    chip.dataset.query = query;
+                    chip.textContent = query;
+                    examplesContainer.appendChild(chip);
+                });
+            }
+        }
+
+        setInterval(checkHealth, 30000);
+        setInterval(fetchSyncInfo, 60000);
+        setInterval(loadTopQueries, 5 * 60 * 1000);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkHealth();
+            fetchSyncInfo();
+            loadTopQueries();
+        });
 
         // Character count
         queryInput.addEventListener('input', () => {
@@ -721,8 +778,8 @@ WHERE {
             this.style.height = Math.min(this.scrollHeight, 200) + 'px';
         });
 
-        // Example chips
-        examples.addEventListener('click', (e) => {
+        // Example chips click handler
+        examplesContainer.addEventListener('click', (e) => {
             const chip = e.target.closest('.example-chip');
             if (chip && !isProcessing && !chip.classList.contains('disabled')) {
                 queryInput.value = chip.dataset.query;
@@ -753,7 +810,6 @@ WHERE {
             queryInput.disabled = processing;
             sendButton.disabled = processing;
 
-            // Update button appearance
             if (processing) {
                 sendButton.classList.add('processing');
                 buttonIcon.innerHTML = '<div class="button-spinner"></div>';
@@ -764,13 +820,8 @@ WHERE {
                 buttonText.textContent = 'Send';
             }
 
-            // Update example chips
             document.querySelectorAll('.example-chip').forEach(chip => {
-                if (processing) {
-                    chip.classList.add('disabled');
-                } else {
-                    chip.classList.remove('disabled');
-                }
+                chip.classList.toggle('disabled', processing);
             });
         }
 
@@ -810,7 +861,6 @@ WHERE {
         function addStatusMessage(content) {
             clearEmptyState();
 
-            // Remove previous status message if exists
             if (currentStatusMessage) {
                 currentStatusMessage.remove();
             }
@@ -849,13 +899,13 @@ WHERE {
         }
 
         async function sendQuery(query) {
+            if (cardanoBlock.textContent == "-") {
+                fetchSyncInfo();
+            }
             setProcessing(true);
 
-            // Add user message
             addMessage('user', query);
 
-            // Clear input
-            const originalQuery = query;
             queryInput.value = '';
             charCount.textContent = '0';
             queryInput.style.height = 'auto';
@@ -869,7 +919,7 @@ WHERE {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        query: originalQuery
+                        query: query
                     })
                 });
 
@@ -899,18 +949,16 @@ WHERE {
                             continue;
                         }
 
-                        // Remove 'data: ' prefix if present
                         let content = line.startsWith('data: ') ? line.slice(6) : line;
 
                         if (content.trim() === '[DONE]') {
                             removeStatusMessage();
                             continue;
                         }
-                        // A line is a status message if it exactly matches or starts with these patterns
-                        const isStatus = content.startsWith('status: ') ? true : false;
+
+                        const isStatus = content.startsWith('status: ');
                         if (isStatus) content = content.slice(8);
 
-                        // Handle errors
                         if (content.startsWith('Error:')) {
                             removeStatusMessage();
                             isStatusPhase = false;
@@ -923,12 +971,9 @@ WHERE {
                         }
 
                         if (isStatus) {
-                            // Show as status message
                             addStatusMessage(content);
                         } else {
-                            // This is the actual answer - any content that's not a status message
                             if (isStatusPhase) {
-                                // First non-status content chunk - create assistant message
                                 removeStatusMessage();
                                 isStatusPhase = false;
 
@@ -952,7 +997,6 @@ WHERE {
                                 messagesContainer.appendChild(messageDiv);
                             }
 
-                            // Append content to assistant message
                             if (assistantBubble) {
                                 assistantBubble.textContent += content;
                                 scrollToBottom();

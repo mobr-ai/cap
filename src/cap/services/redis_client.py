@@ -8,6 +8,7 @@ import redis.asyncio as redis
 from opentelemetry import trace
 import os
 import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -57,6 +58,92 @@ class RedisClient:
             await self._client.aclose()
             self._client = None
 
+    def _normalize_query(self, query: str) -> str:
+        """
+        Normalize natural language query for better cache hits.
+
+        Normalization steps:
+        1. Convert to lowercase
+        2. Remove punctuation (except essential chars)
+        3. Normalize whitespace
+        4. Remove common filler words
+        5. Normalize unicode characters
+        6. Sort words (for queries where order doesn't matter)
+        """
+        # Convert to lowercase
+        normalized = query.lower()
+
+        # Normalize unicode (e.g., accented characters)
+        normalized = unicodedata.normalize('NFKD', normalized)
+        normalized = normalized.encode('ascii', 'ignore').decode('ascii')
+
+        # Protect commas and dots inside numbers (replace temporarily with placeholders)
+        normalized = re.sub(r'(?<=\d)[,.](?=\d)', lambda m: '\uE000' if m.group() == ',' else '\uE001', normalized)
+
+        # Remove all unwanted punctuation
+        normalized = re.sub(r'[^\w\s=\-\+\*/]', '', normalized)
+
+        # Restore commas and dots inside numbers if we find placeholders
+        normalized = normalized.replace('\uE000', ',').replace('\uE001', '.')
+
+        # Normalize whitespace (multiple spaces to single)
+        normalized = re.sub(r'\s+', ' ', normalized)
+
+        # Remove common filler words that don't affect meaning
+        filler_words = {
+            'please', 'could', 'can', 'you', 'show', 'me', 'the', "plot", "have",
+            'what', 'is', 'are', 'was', 'were', 'how many', 'how much', 'tell', 'define', "your",
+            'give', 'find', 'get', 'a', 'an', 'of', 'in', 'on', "draw", "yours"
+        }
+
+        words = normalized.split()
+        filtered_words = [w for w in words if w not in filler_words]
+
+        # Handle question words specially (keep at start)
+        question_words = {'who', 'what', 'when', 'where', 'why', 'how many', 'how much', 'which', 'define'}
+        question_start = []
+        remaining_words = []
+
+        for word in filtered_words:
+            if word in question_words and not question_start:
+                question_start.append(word)
+            else:
+                remaining_words.append(word)
+
+        # Sort remaining words for queries where order doesn't matter
+        # This helps "balance of address X" == "address X balance"
+        remaining_words.sort()
+
+        # Reconstruct query
+        normalized = ' '.join(question_start + remaining_words)
+
+        return normalized.strip()
+
+    def _make_cache_key(self, nl_query: str) -> str:
+        """Create cache key from natural language query."""
+        normalized = self._normalize_query(nl_query)
+        return f"nlq:cache:{normalized}"
+
+    def _make_count_key(self, nl_query: str) -> str:
+        """Create count key from natural language query."""
+        normalized = self._normalize_query(nl_query)
+        return f"nlq:count:{normalized}"
+
+    async def get_query_variations(self, nl_query: str) -> list[str]:
+        """
+        Get cached variations of a query.
+
+        Useful for debugging cache hits.
+        """
+        normalized = self._normalize_query(nl_query)
+        client = await self._get_client()
+
+        variations = []
+        async for key in client.scan_iter(match=f"nlq:cache:*{normalized}*"):
+            variations.append(key.replace("nlq:cache:", ""))
+
+        return variations
+
     async def cache_query(
         self,
         nl_query: str,
@@ -81,13 +168,17 @@ class RedisClient:
 
             try:
                 client = await self._get_client()
+                normalized = self._normalize_query(nl_query)
                 cache_key = self._make_cache_key(nl_query)
                 count_key = self._make_count_key(nl_query)
 
-                # Store query data
+                # Store query data with original query
                 cache_data = {
+                    "original_query": nl_query,
+                    "normalized_query": normalized,
                     "sparql_query": sparql_query,
-                    "results": results
+                    "results": results,
+                    "precached": False
                 }
 
                 ttl_value = ttl or self.ttl
@@ -169,7 +260,7 @@ class RedisClient:
             logger.error(f"Failed to get query count: {e}")
             return 0
 
-    async def get_popular_queries(self, limit: int = 10) -> list[tuple[str, int]]:
+    async def get_popular_queries(self, limit: int = 5) -> list[tuple[str, int]]:
         """
         Get most popular queries.
 
@@ -192,15 +283,24 @@ class RedisClient:
 
                 # Get counts for all keys
                 queries_with_counts = []
-                for key in count_keys:
-                    count = await client.get(key)
+                for count_key in count_keys:
+                    count = await client.get(count_key)
                     if count:
-                        # Extract original query from key
-                        nl_query = key.replace("nlq:count:", "")
-                        queries_with_counts.append((nl_query, int(count)))
+                        # Get corresponding cache key to retrieve original query
+                        normalized = count_key.replace("nlq:count:", "")
+                        cache_key = f"nlq:cache:{normalized}"
+
+                        cache_data = await client.get(cache_key)
+                        if cache_data:
+                            data = json.loads(cache_data)
+                            queries_with_counts.append({
+                                "original_query": data.get("original_query", normalized),
+                                "normalized_query": normalized,
+                                "count": int(count)
+                            })
 
                 # Sort by count and return top N
-                queries_with_counts.sort(key=lambda x: x[1], reverse=True)
+                queries_with_counts.sort(key=lambda x: x["count"], reverse=True)
                 return queries_with_counts[:limit]
 
             except Exception as e:
@@ -222,17 +322,6 @@ class RedisClient:
         except Exception as e:
             logger.warning(f"Redis health check failed: {e}")
             return False
-
-    def _make_cache_key(self, nl_query: str) -> str:
-        """Create cache key from natural language query."""
-        # Normalize the query for consistent caching
-        normalized = nl_query.lower().strip()
-        return f"nlq:cache:{normalized}"
-
-    def _make_count_key(self, nl_query: str) -> str:
-        """Create count key from natural language query."""
-        normalized = nl_query.lower().strip()
-        return f"nlq:count:{normalized}"
 
     async def precache_from_file(
         self,
@@ -290,9 +379,12 @@ class RedisClient:
                             logger.debug(f"Skipping duplicate: {nl_query[:50]}...")
                             continue
 
+                        normalized = self._normalize_query(nl_query)
                         # Create cache data structure
                         # Note: We're caching without actual results since we don't execute the query
                         cache_data = {
+                            "original_query": nl_query,
+                            "normalized_query": normalized,
                             "sparql_query": sparql_query,
                             "results": None,  # No results for pre-cached queries
                             "precached": True
@@ -305,8 +397,8 @@ class RedisClient:
                             json.dumps(cache_data)
                         )
 
-                        # Initialize count to 0 for pre-cached queries
-                        await client.set(count_key, 0)
+                        # Initialize count to 1 for pre-cached queries (so they appear in popular queries)
+                        await client.set(count_key, 1)
                         await client.expire(count_key, ttl_value)
 
                         stats["cached_successfully"] += 1

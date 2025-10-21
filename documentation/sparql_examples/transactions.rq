@@ -1,6 +1,6 @@
 # How many transactions in the last 24h?
 PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 SELECT (COUNT(?tx) AS ?count)
 WHERE {
     ?block a blockchain:Block ;

@@ -29,6 +29,7 @@ class VirtuosoConfig:
     port: int = settings.VIRTUOSO_PORT
     username: str = settings.VIRTUOSO_USER
     password: str = settings.VIRTUOSO_PASSWORD
+    query_timeout: int = settings.VIRTUOSO_TIMEOUT
 
     @property
     def base_url(self) -> str:
@@ -79,7 +80,7 @@ class VirtuosoClient:
             self._sparql_wrapper = SPARQLWrapper(self.config.sparql_endpoint)
             self._sparql_wrapper.setCredentials(self.config.username, self.config.password)
             self._sparql_wrapper.setReturnFormat(JSON)
-            self._sparql_wrapper.setTimeout(30)  # 30 second timeout
+            self._sparql_wrapper.setTimeout(self.config.query_timeout)
         except Exception as e:
             logger.error(f"Failed to initialize SPARQL wrapper: {e}")
             raise RuntimeError(f"SPARQL wrapper initialization failed: {e}")
