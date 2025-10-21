@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     VIRTUOSO_PORT: int
     VIRTUOSO_USER: str
     VIRTUOSO_PASSWORD: str
+    VIRTUOSO_TIMEOUT: str
     CARDANO_GRAPH: str
 
     # PostgreSQL settings for cardano-db-sync

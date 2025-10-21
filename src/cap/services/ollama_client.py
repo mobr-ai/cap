@@ -5,7 +5,7 @@ import os
 import logging
 import json
 import re
-from typing import AsyncIterator, Optional, Any
+from typing import AsyncIterator, Optional, Any, Union
 import httpx
 from opentelemetry import trace
 
@@ -35,6 +35,26 @@ class OllamaClient:
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
+    def _load_prompt(self, env_key: str, default: str = "") -> str:
+        """Load prompt from environment, refreshed on each call."""
+        return os.getenv(env_key, default)
+
+    @property
+    def nl_to_sparql_prompt(self) -> str:
+        """Get NL to SPARQL prompt (refreshed from env)."""
+        return self._load_prompt(
+            "NL_TO_SPARQL_PROMPT",
+            "Convert the following natural language query to SPARQL for Cardano blockchain data."
+        )
+
+    @property
+    def contextualize_prompt(self) -> str:
+        """Get contextualization prompt (refreshed from env)."""
+        return self._load_prompt(
+            "CONTEXTUALIZE_PROMPT",
+            "Based on the query results, provide a clear and helpful answer."
+        )
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
@@ -49,6 +69,79 @@ class OllamaClient:
         if self._client:
             await self._client.aclose()
             self._client = None
+
+    async def nl_to_sequential_sparql(
+        self,
+        natural_query: str
+    ) -> list[dict[str, Any]]:
+        """
+        Convert natural language query to sequential SPARQL queries.
+
+        Returns:
+            List of query dictionaries with 'query' and 'inject_params' keys
+        """
+        with tracer.start_as_current_span("nl_to_sequential_sparql") as span:
+            span.set_attribute("query", natural_query)
+
+            sparql_response = await self.generate_complete(
+                prompt=natural_query,
+                model=self.llm_model,
+                temperature=0.0
+            )
+
+            # Parse sequential queries
+            queries = self._parse_sequential_sparql(sparql_response)
+            span.set_attribute("query_count", len(queries))
+
+            return queries
+
+    def _parse_sequential_sparql(self, sparql_text: str) -> list[dict[str, Any]]:
+        """
+        Parse sequential SPARQL queries from LLM response.
+
+        Expected format:
+        ---query sequence 1: description---
+        SPARQL query 1
+        ---query sequence 2: description---
+        SPARQL query 2 with INJECT_FROM_PREVIOUS(expression)
+        """
+        queries = []
+
+        # Split by query sequence markers
+        parts = re.split(r'---query sequence \d+:.*?---', sparql_text)
+
+        for part in parts[1:]:  # Skip first empty part
+            cleaned = self._clean_sparql(part)
+            if not cleaned:
+                continue
+            cleaned = self._ensure_prefixes(cleaned)
+
+            # Check for injection parameters
+            inject_pattern = r'INJECT_FROM_PREVIOUS\((.*?)\)'
+            inject_matches = re.findall(inject_pattern, cleaned)
+
+            queries.append({
+                'query': cleaned,
+                'inject_params': inject_matches
+            })
+
+        return queries
+
+    def detect_and_parse_sparql(self, sparql_text: str) -> tuple[bool, Union[str, list[dict[str, Any]]]]:
+        """
+        Detect if the SPARQL text contains sequential queries and parse accordingly.
+
+        Returns:
+            Tuple of (is_sequential: bool, content: str or list[dict])
+        """
+        # Check for sequential markers
+        if re.search(r'---query sequence \d+:.*?---', sparql_text, re.IGNORECASE | re.DOTALL):
+            queries = self._parse_sequential_sparql(sparql_text)
+            return len(queries) > 0, queries  # True if parsed successfully
+        else:
+            cleaned = self._clean_sparql(sparql_text)
+            cleaned = self._ensure_prefixes(cleaned)  # Assuming _ensure_prefixes exists from previous fix
+            return False, cleaned
 
     async def generate_stream(
         self,
@@ -187,29 +280,28 @@ class OllamaClient:
         self,
         natural_query: str
     ) -> str:
-        """
-        Convert natural language query to SPARQL.
-
-        Args:
-            natural_query: Natural language query
-            system_prompt: System prompt for SPARQL generation
-
-        Returns:
-            Generated SPARQL query
-        """
+        """Convert natural language query to SPARQL."""
         with tracer.start_as_current_span("nl_to_sparql") as span:
             span.set_attribute("query", natural_query)
+
+            # Use fresh prompt from environment
+            system_prompt = self.nl_to_sparql_prompt
+
             sparql_response = await self.generate_complete(
                 prompt=natural_query,
                 model=self.llm_model,
+                system_prompt=system_prompt,
                 temperature=0.0
             )
 
-            # Clean the SPARQL query
-            cleaned_sparql = self._clean_sparql(sparql_response)
-            span.set_attribute("sparql_length", len(cleaned_sparql))
-
-            return cleaned_sparql
+            is_sequential, content = self.detect_and_parse_sparql(sparql_response)
+            if is_sequential:
+                # For backward compatibility, return first query if sequential (or raise/log)
+                logger.warning("Sequential SPARQL detected in single nl_to_sparql call; using first query")
+                return content[0]['query'] if content else ""
+            else:
+                span.set_attribute("sparql_length", len(content))
+                return content
 
     def _clean_sparql(self, sparql_text: str) -> str:
         """
@@ -265,12 +357,48 @@ class OllamaClient:
         logger.debug(f"Cleaned SPARQL query: {cleaned}")
         return cleaned
 
+    def _ensure_prefixes(self, query: str) -> str:
+        """
+        Ensure the four required PREFIX declarations are present in the SPARQL query.
+        Prepends missing ones at the top if not found.
+        """
+        required_prefixes = {
+            "rdf": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>",
+            "blockchain": "PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>",
+            "cardano": "PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>",
+            "xsd": "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>",
+        }
+
+        stripped = query.strip()
+        query_upper = query.upper()
+
+        # Check which prefixes are already present
+        missing_prefixes = []
+        for prefix_name, prefix_declaration in required_prefixes.items():
+            # Look for the prefix declaration pattern (case-insensitive)
+            # Check for both "PREFIX rdf:" and "PREFIX rdf :" patterns
+            pattern1 = f"PREFIX {prefix_name}:".upper()
+            pattern2 = f"PREFIX {prefix_name} :".upper()
+
+            if pattern1 not in query_upper and pattern2 not in query_upper:
+                missing_prefixes.append(prefix_declaration)
+
+        if missing_prefixes:
+            # Prepend missing prefixes with newline separation
+            prepend = "\n".join(missing_prefixes) + "\n\n"
+            query = prepend + stripped
+            logger.debug(f"Added {len(missing_prefixes)} missing prefixes to SPARQL query")
+        else:
+            logger.debug("All required prefixes already present in SPARQL query")
+
+        return query
+
     async def contextualize_answer(
         self,
         user_query: str,
         sparql_query: str,
         sparql_results: dict[str, Any],
-        system_prompt: str
+        system_prompt: str = None
     ) -> AsyncIterator[str]:
         """
         Generate contextualized answer based on SPARQL results.
@@ -299,7 +427,7 @@ class OllamaClient:
                 Query Results:
                 {context_res}
 
-                Based on the above information, provide a clear and helpful answer to the user's question.
+                {self.contextualize_prompt}
             """
 
             span.set_attribute("prompt_length", len(prompt))
