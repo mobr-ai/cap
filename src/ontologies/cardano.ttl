@@ -70,9 +70,9 @@ blockchain:Account a owl:Class ;
     rdfs:label "Account" ;
     rdfs:comment "Entity holding tokens and interacting with blockchain" .
 
-blockchain:TokenOperation a owl:Class ;
-    rdfs:label "Token Operation" ;
-    rdfs:comment "Describes an operation of a specific token in an account. E.g., account, amount and currency" .
+blockchain:TokenState a owl:Class ;
+    rdfs:label "Token State" ;
+    rdfs:comment "Describes the state of a specific token in an entity. E.g., account, amount, timestamp and currency" .
 
 blockchain:SmartContract a owl:Class ;
     rdfs:label "Smart Contract" ;
@@ -174,13 +174,12 @@ cardano:Certificate a owl:Class ;
     rdfs:label "Certificate" ;
     rdfs:comment "A certificate representing various blockchain operations like delegation, registration, and retirement" .
 
-cardano:GenesisDelegation a owl:Class ;
-    rdfs:subClassOf cardano:Certificate ;
-    rdfs:label "Genesis Delegation" ;
-    rdfs:comment "Certificate for genesis key delegation" .
+cardano:Delegation a owl:Class ;
+    rdfs:label "Delegation" ;
+    rdfs:comment "Delegation of power to an entity (e.g. StakePool, DRep, etc.)" .
 
 cardano:ConstitutionalCommitteeDelegation a owl:Class ;
-    rdfs:subClassOf cardano:Certificate ;
+    rdfs:subClassOf cardano:Delegation ;
     rdfs:label "Constitutional Committee Delegation" ;
     rdfs:comment "Certificate for delegating constitutional committee authority" .
 
@@ -205,13 +204,9 @@ cardano:DelegateRepresentativeRetirement a owl:Class ;
     rdfs:comment "Certificate for retiring as a delegate representative" .
 
 # Staking and Pool Classes
-cardano:StakeAccount a owl:Class ;
-    rdfs:subClassOf blockchain:Account ;
-    rdfs:label "Stake Account" ;
-    rdfs:comment "A Cardano blockchain account staking ADA." .
-
 cardano:StakePool a owl:Class ;
     rdfs:label "Stake Pool" ;
+    rdfs:subClassOf blockchain:Account ;
     rdfs:comment "An entity that participates in Cardano block production and network consensus." .
 
 cardano:StakePoolMetadata a owl:Class ;
@@ -442,6 +437,12 @@ blockchain:hasAccountAddress a owl:DatatypeProperty ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:string .
 
+blockchain:hasAccountUTXO a owl:ObjectProperty ;
+    rdfs:label "has account UTXO" ;
+    rdfs:comment "Relates an account with its utxos." ;
+    rdfs:domain blockchain:Account ;
+    rdfs:range blockchain:Transaction .
+
 blockchain:hasAccountStatus a owl:DatatypeProperty ;
     rdfs:label "has account status" ;
     rdfs:comment "Relates an account with its current status." ;
@@ -562,28 +563,28 @@ blockchain:hasConversionRate a owl:DatatypeProperty ;
     rdfs:domain blockchain:FungibleToken ;
     rdfs:range xsd:decimal .
 
-blockchain:hasTokenOperation a owl:ObjectProperty ;
-    rdfs:label "has token amount description" ;
-    rdfs:comment "Associates an account with a token amount description" ;
+blockchain:hasTokenSatate a owl:ObjectProperty ;
+    rdfs:label "has token state" ;
+    rdfs:comment "Associates an account or a transaction with a token state description" ;
     rdfs:domain blockchain:Account, cardano:Transaction ;
-    rdfs:range blockchain:TokenOperation .
+    rdfs:range blockchain:TokenState .
 
 blockchain:hasCurrency a owl:ObjectProperty ;
     rdfs:label "has currency" ;
-    rdfs:comment "Qualifies the asset that the token amount is describing" ;
-    rdfs:domain blockchain:TokenOperation ;
+    rdfs:comment "Qualifies the asset that the token state is describing" ;
+    rdfs:domain blockchain:TokenState ;
     rdfs:range blockchain:Token .
 
-blockchain:hasTokenOperationValue a owl:DatatypeProperty ;
-    rdfs:label "has token amount value" ;
-    rdfs:comment "The amount of tokens in an operation." ;
-    rdfs:domain blockchain:TokenOperation ;
+blockchain:hasTokenStateValue a owl:DatatypeProperty ;
+    rdfs:label "has token state value" ;
+    rdfs:comment "The amount of tokens in a token state." ;
+    rdfs:domain blockchain:TokenState ;
     rdfs:range xsd:decimal .
 
-blockchain:hasTokenOperationTimestamp a owl:DatatypeProperty ;
-    rdfs:label "has token amount timestamp" ;
-    rdfs:comment "The timestamp in wich the amount of a token is in an account." ;
-    rdfs:domain blockchain:TokenOperation ;
+blockchain:hasTokenStateTimestamp a owl:DatatypeProperty ;
+    rdfs:label "has token state timestamp" ;
+    rdfs:comment "The timestamp of a token state." ;
+    rdfs:domain blockchain:TokenState ;
     rdfs:range xsd:dateTime .
 
 blockchain:hasHash a owl:DatatypeProperty ;
@@ -859,29 +860,21 @@ cardano:hasNonceOutput a owl:DatatypeProperty ;
     rdfs:range xsd:string .
 
 # Properties - Stake accounts and Stake Pool Related
-cardano:delegatesTo a owl:ObjectProperty ;
-    rdfs:label "delegates to" ;
-    rdfs:comment "Relates an account to its delegation target." ;
-    rdfs:domain blockchain:Account ;
-    rdfs:range [
-        owl:unionOf (cardano:StakePool cardano:DRep)
-    ] .
-
-cardano:hasAccountStakeAmount a owl:DatatypeProperty ;
-    rdfs:label "has account stake amount" ;
-    rdfs:comment "Relate an account to its stake amount" ;
-    rdfs:domain blockchain:Account ;
-    rdfs:range xsd:decimal .
-
-cardano:hasStakePoolAmount a owl:DatatypeProperty ;
-    rdfs:label "has stake pool amount" ;
-    rdfs:comment "Relate a stake pool to its stake amount" ;
+cardano:hasStakePoolTokenState a owl:ObjectProperty ;
+    rdfs:label "has stake pool token state" ;
+    rdfs:comment "Relate a stake pool to a token state" ;
     rdfs:domain cardano:StakePool ;
-    rdfs:range xsd:decimal .
+    rdfs:range blockchain:TokenState .
 
 cardano:hasStakePoolAccount a owl:ObjectProperty ;
     rdfs:label "has stake pool account" ;
     rdfs:comment "Relate a stake pool to the accounts" ;
+    rdfs:domain cardano:StakePool ;
+    rdfs:range blockchain:Account .
+
+cardano:hasStakePoolRewardAccount a owl:ObjectProperty ;
+    rdfs:label "has stake pool reward account" ;
+    rdfs:comment "Relate a stake pool to the account that the stake pool will receive rewards" ;
     rdfs:domain cardano:StakePool ;
     rdfs:range blockchain:Account .
 
@@ -1102,7 +1095,7 @@ cardano:hasVotingPower a owl:DatatypeProperty ;
 cardano:castsVote a owl:ObjectProperty ;
     rdfs:label "casts vote" ;
     rdfs:comment "Relates an account ti the vote it casts." ;
-    rdfs:domain cardano:Account ;
+    rdfs:domain blockchain:Account ;
     rdfs:range cardano:Vote .
 
 cardano:hasVote a owl:ObjectProperty ;
@@ -1352,7 +1345,7 @@ cardano:hasCredential a owl:DatatypeProperty ;
     rdfs:domain [
         owl:unionOf (
             cardano:Certificate
-            cardano:StakeAccount
+            cardano:StakePool
         )
     ] ;
     rdfs:range xsd:string .
@@ -1383,26 +1376,56 @@ cardano:hasRetirementEpoch a owl:DatatypeProperty ;
 
 cardano:hasIssuerId a owl:DatatypeProperty ;
     rdfs:label "has issuer id" ;
-    rdfs:comment "The ID of the genesis key issuer" ;
-    rdfs:domain cardano:GenesisDelegation ;
+    rdfs:comment "The ID of the delegation key issuer" ;
+    rdfs:domain cardano:Delegation ;
     rdfs:range xsd:string .
 
 cardano:hasDelegateId a owl:DatatypeProperty ;
     rdfs:label "has delegate id" ;
     rdfs:comment "The ID of the delegate" ;
-    rdfs:domain [
-        owl:unionOf (
-            cardano:GenesisDelegation
-            cardano:ConstitutionalCommitteeDelegation
-        )
-    ] ;
+    rdfs:domain cardano:Delegation ;
     rdfs:range xsd:string .
 
 cardano:hasDelegateVrfHash a owl:DatatypeProperty ;
     rdfs:label "has delegate VRF hash" ;
     rdfs:comment "The VRF verification key hash of a delegate" ;
-    rdfs:domain cardano:GenesisDelegation ;
+    rdfs:domain cardano:Delegation ;
     rdfs:range xsd:string .
+
+cardano:hasDelegationTokenState a owl:DatatypeProperty ;
+    rdfs:label "has delegation token state" ;
+    rdfs:comment "The token state of a delegation" ;
+    rdfs:domain cardano:Delegation ;
+    rdfs:range xsd:string .
+
+cardano:hasDelegationTimestamp a owl:DatatypeProperty ;
+    rdfs:label "has delegation active state" ;
+    rdfs:comment "The current state of a delegation" ;
+    rdfs:domain cardano:Delegation ;
+    rdfs:range xsd:dateTime .
+
+cardano:hasAccountDelegation a owl:ObjectProperty ;
+    rdfs:label "has delegator" ;
+    rdfs:comment "The delegator of a delegation" ;
+    rdfs:domain blockchain:Account ;
+    rdfs:range cardano:Delegation .
+
+cardano:hasDelegator a owl:ObjectProperty ;
+    rdfs:label "has delegator" ;
+    rdfs:comment "The delegator of a delegation" ;
+    rdfs:domain cardano:Delegation ;
+    rdfs:range blockchain:Account .
+
+cardano:hasDelegatee a owl:ObjectProperty ;
+    rdfs:label "has delegator" ;
+    rdfs:comment "The entity receiving and acting on the delegated duty" ;
+    rdfs:domain cardano:Delegation ;
+    rdfs:range [
+        owl:unionOf (
+            cardano:StakePool
+            cardano:DRep
+        )
+    ] .
 
 cardano:hasMemberId a owl:DatatypeProperty ;
     rdfs:label "has member id" ;
@@ -1523,6 +1546,18 @@ cardano:hasUrl a owl:DatatypeProperty ;
     rdfs:range xsd:string .
 
 # Properties - Asset Related
+cardano:hasCreationTimestamp a owl:DatatypeProperty ;
+    rdfs:label "has creation timestamp" ;
+    rdfs:comment "Relates an entity to its creation timestamp." ;
+    rdfs:domain [
+        owl:unionOf (
+            cardano:Script
+            cardano:Asset
+            blockchain:Account
+        )
+    ] ;
+    rdfs:range xsd:dateTime .
+
 cardano:hasPolicyId a owl:DatatypeProperty ;
     rdfs:label "has policy ID" ;
     rdfs:comment "The unique identifier of a native token policy." ;
@@ -1585,11 +1620,11 @@ cardano:hasReward a owl:ObjectProperty ;
     rdfs:domain blockchain:Account ;
     rdfs:range cardano:Reward .
 
-cardano:hasRewardTokenOperation a owl:ObjectProperty ;
-    rdfs:label "has reward amount" ;
-    rdfs:comment "The amount of a reward." ;
+cardano:hasRewardTokenState a owl:ObjectProperty ;
+    rdfs:label "has reward token state" ;
+    rdfs:comment "The token state of a reward." ;
     rdfs:domain cardano:Reward ;
-    rdfs:range blockchain:TokenOperation .
+    rdfs:range blockchain:TokenState .
 
 cardano:hasRewardType a owl:DatatypeProperty ;
     rdfs:label "has reward type" ;
