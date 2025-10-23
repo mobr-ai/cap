@@ -621,15 +621,18 @@
         // Fetch sync information
         async function fetchSyncInfo() {
             try {
-                const sparqlQuery = `PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-                                    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
-                                    SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum)
-                                    FROM <http://cardano>
-                                    WHERE {
-                                    cardano:Cardano blockchain:hasCurrentBlockHeight ?currentCardanoHeight .
-                                    ?block a blockchain:Block .
-                                    ?block cardano:hasBlockNumber ?blockNum .
-                }`;
+                const sparqlQuery = `
+                    PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+                    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+
+                    SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+                    WHERE {
+                    cardano:Cardano blockchain:hasCurrentBlockHeight ?currentCardanoHeight .
+                    ?block a blockchain:Block .
+                    ?block cardano:hasBlockNumber ?blockNum .
+                    }
+                    GROUP BY (?currentCardanoHeight)
+                `;
 
                 const response = await fetch('/api/v1/query', {
                     method: 'POST',

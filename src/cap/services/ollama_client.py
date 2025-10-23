@@ -140,7 +140,7 @@ class OllamaClient:
             return len(queries) > 0, queries  # True if parsed successfully
         else:
             cleaned = self._clean_sparql(sparql_text)
-            cleaned = self._ensure_prefixes(cleaned)  # Assuming _ensure_prefixes exists from previous fix
+            cleaned = self._ensure_prefixes(cleaned)
             return False, cleaned
 
     async def generate_stream(
@@ -163,9 +163,6 @@ class OllamaClient:
             Chunks of generated text
         """
         with tracer.start_as_current_span("ollama_generate_stream") as span:
-            span.set_attribute("model", model)
-            span.set_attribute("prompt_length", len(prompt))
-
             client = await self._get_client()
 
             request_data = {
@@ -184,7 +181,8 @@ class OllamaClient:
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/api/generate",
-                    json=request_data
+                    json=request_data,
+                    timeout=None
                 ) as response:
                     response.raise_for_status()
 
@@ -199,7 +197,6 @@ class OllamaClient:
                                 yield chunk["response"]
 
                             if chunk.get("done", False):
-                                span.set_attribute("completed", True)
                                 break
 
                         except json.JSONDecodeError:
@@ -207,13 +204,13 @@ class OllamaClient:
                             continue
 
             except httpx.HTTPStatusError as e:
-                span.set_attribute("error", str(e))
                 logger.error(f"Ollama HTTP error: {e}")
+                span.set_attribute("error", str(e))
                 raise
 
             except Exception as e:
-                span.set_attribute("error", str(e))
                 logger.error(f"Ollama streaming error: {e}")
+                span.set_attribute("error", str(e))
                 raise
 
     async def generate_complete(
@@ -285,10 +282,14 @@ class OllamaClient:
             span.set_attribute("query", natural_query)
 
             # Use fresh prompt from environment
-            system_prompt = self.nl_to_sparql_prompt
+            system_prompt = ""
+            nl_prompt = f"""
+                {self.nl_to_sparql_prompt}
+                User Question: {natural_query}
+            """
 
             sparql_response = await self.generate_complete(
-                prompt=natural_query,
+                prompt=nl_prompt,
                 model=self.llm_model,
                 system_prompt=system_prompt,
                 temperature=0.0
@@ -414,8 +415,13 @@ class OllamaClient:
         """
         with tracer.start_as_current_span("contextualize_answer") as span:
             context_res = ""
-            if sparql_results:
-                context_res = json.dumps(sparql_results, indent=2)
+            try:
+                if sparql_results:
+                    context_res = json.dumps(sparql_results, indent=2)
+
+            except Exception as e:
+                logger.warning(f"json.dumps failed: {e}")
+                context_res = sparql_results
 
             # Format the prompt with query and results
             prompt = f"""
@@ -430,13 +436,12 @@ class OllamaClient:
                 {self.contextualize_prompt}
             """
 
-            span.set_attribute("prompt_length", len(prompt))
-
+            logger.info(f"calling ollama model\n    prompt: {prompt}\n")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
                 system_prompt=system_prompt,
-                temperature=0.3  # Slightly higher for more natural language
+                temperature=0.3
             ):
                 yield chunk
 
@@ -450,7 +455,10 @@ class OllamaClient:
         try:
             client = await self._get_client()
             response = await client.get(f"{self.base_url}/api/tags")
-            return response.status_code == 200
+            healthy = response.status_code == 200
+            if not healthy:
+                logger.warning(f"Ollama health check with invalid status code {response}")
+            return healthy
         except Exception as e:
             logger.warning(f"Ollama health check failed: {e}")
             return False

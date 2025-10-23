@@ -251,8 +251,10 @@ async def natural_language_query(request: NLQueryRequest):
 
                 sparql_query = ""
                 sparql_results = None
+
+                # Stage 1: Convert NL to SPARQL
                 if cached_data:
-                    span.set_attribute("cache_hit", True)
+                    logger.info(f"Cache hit has cached_data: {cached_data}")
 
                     # Parse cached sparql_query to detect type
                     cached_sparql = cached_data["sparql_query"]
@@ -260,69 +262,22 @@ async def natural_language_query(request: NLQueryRequest):
                         # Try to parse as JSON (sequential queries)
                         sparql_queries = json.loads(cached_sparql)
                         if isinstance(sparql_queries, list):
-                            is_sequential_cached = True
-                            sparql_content_cached = sparql_queries
+                            is_sequential = True
                         else:
-                            raise ValueError("Not a list")
-                    except (json.JSONDecodeError, ValueError):
-                        # Single query
-                        is_sequential_cached, sparql_content_cached = ollama.detect_and_parse_sparql(cached_sparql)
+                            is_sequential = False
+                            sparql_query = cached_sparql
 
-                    if is_sequential_cached:
-                        sparql_queries = sparql_content_cached
-                        sparql_query = sparql_queries[-1]['query']  # For contextualize
-                    else:
-                        sparql_query = sparql_content_cached
-
-                    # Pre-cached query needs execution
-                    span.set_attribute("precached_query", True)
-                    logger.info(f"Executing pre-cached query: {low_query[:50]}...")
-
-                    yield f"{StatusMessage.executing_query()}"
-                    try:
-                        if is_sequential_cached:
-                            sparql_results = await _execute_sequential_queries(virtuoso, sparql_queries)
-                        else:
-                            sparql_results = await virtuoso.execute_query(sparql_query)
-                        sparql_results = process_sparql_results(sparql_results)
-
-                        # Check if we got results
-                        result_count = 0
-                        if sparql_results.get('results', {}).get('bindings'):
-                            result_count = len(sparql_results['results']['bindings'])
-                        elif sparql_results.get('boolean') is not None:
-                            result_count = 1
-
-                        if result_count == 0:
-                            yield f"{StatusMessage.no_results()}"
-                        else:
-                            # Update cache with results
-                            await redis_client.cache_query(
-                                nl_query=low_query,
-                                sparql_query=sparql_query if not is_sequential_cached else json.dumps(sparql_queries),
-                                results=sparql_results
-                            )
+                    except (json.JSONDecodeError, TypeError):
+                        # Not JSON - it's a plain string (single query)
+                        is_sequential = False
+                        sparql_query = cached_sparql
 
                     except Exception as e:
-                        logger.error(f"Pre-cached query execution error: {e}", exc_info=True)
-                        error_msg = StatusMessage.error(f"Failed to execute query: {str(e)}")
-                        yield f"{error_msg}\n"
-                        yield f"{StatusMessage.data_done()}"
-                        return
+                        logger.error(f"Cached SPARQL parsing error: {e}")
+                        is_sequential = False
+                        sparql_query = cached_sparql
 
                 else:
-                    span.set_attribute("cache_hit", False)
-
-                    # Check if Ollama service is available
-                    is_healthy = await ollama.health_check()
-                    if not is_healthy:
-                        error_msg = StatusMessage.error("Ollama service is not available")
-                        yield f"{error_msg}\n"
-                        yield f"{StatusMessage.data_done()}"
-                        return
-
-                    # Stage 1: Convert NL to SPARQL
-                    span.set_attribute("stage", "nl_to_sparql")
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
@@ -335,19 +290,18 @@ async def natural_language_query(request: NLQueryRequest):
                         )
                         logger.info(f"Generated raw SPARQL response: {raw_sparql_response[:200]}...")
 
-                        # Detect and parse
-                        is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
+                        is_sequential = False
+                        sparql_query = ""
+                        if "SELECT" in raw_sparql_response:
+                            # Detect and parse
+                            is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
 
-                        if is_sequential:
-                            sparql_queries = sparql_content  # list[dict]
-                            logger.info(f"Detected sequential SPARQL with {len(sparql_queries)} queries")
-                            span.set_attribute("sparql_type", "sequential")
-                            span.set_attribute("query_count", len(sparql_queries))
-                        else:
-                            sparql_query = sparql_content  # str
-                            logger.info(f"Generated single SPARQL: {sparql_query}")
-                            span.set_attribute("sparql_type", "single")
-                            span.set_attribute("sparql_query", sparql_query)
+                            if is_sequential:
+                                sparql_queries = sparql_content  # list[dict]
+                                logger.info(f"Detected sequential SPARQL with {len(sparql_queries)} queries")
+                            else:
+                                sparql_query = sparql_content  # str
+                                logger.info(f"Generated single SPARQL: {sparql_query}")
 
                     except Exception as e:
                         logger.error(f"SPARQL generation error: {e}", exc_info=True)
@@ -355,15 +309,49 @@ async def natural_language_query(request: NLQueryRequest):
                         is_sequential = False
                         sparql_queries = []  # Initialize empty list for sequential case
 
-                    # Stage 2: Execute SPARQL query
-                    if is_sequential:
-                        span.set_attribute("stage", "execute_sequential_sparql")
+                # Stage 2: Execute SPARQL query
+                logger.info(f"Initiating stage 2 for {user_query}")
+                if is_sequential:
+                    logger.info("stage2: executing sparql list")
+                    yield f"{StatusMessage.executing_query()}"
+                    try:
+                        sparql_results = await _execute_sequential_queries(virtuoso, sparql_queries)
+                        sparql_results = process_sparql_results(sparql_results)
+
+                        # Check result count from final results
+                        result_count = 0
+                        if sparql_results.get('results', {}).get('bindings'):
+                            result_count = len(sparql_results['results']['bindings'])
+                        elif sparql_results.get('boolean') is not None:
+                            result_count = 1
+
+                        span.set_attribute("result_count", result_count)
+                        logger.info(f"Sequential SPARQL returned {result_count} final results")
+
+                        if result_count == 0:
+                            yield f"{StatusMessage.no_results()}"
+                        else:
+                            # Cache the entire sequence (serialize queries list)
+                            await redis_client.cache_query(
+                                nl_query=user_query,
+                                sparql_query=json.dumps(sparql_queries)  # Store as JSON
+                            )
+
+                    except Exception as e:
+                        logger.error(f"Sequential SPARQL execution error: {e}", exc_info=True)
+                        is_sequential = False  # Fallback to no results
+                        sparql_results = None
+
+                else:  # Single query
+                    if sparql_query != "":
+                        logger.info("stage2: executing single sparql")
                         yield f"{StatusMessage.executing_query()}"
+
                         try:
-                            sparql_results = await _execute_sequential_queries(virtuoso, sparql_queries)
+                            sparql_results = await virtuoso.execute_query(sparql_query)
                             sparql_results = process_sparql_results(sparql_results)
 
-                            # Check result count from final results
+                            # Check if we got results
                             result_count = 0
                             if sparql_results.get('results', {}).get('bindings'):
                                 result_count = len(sparql_results['results']['bindings'])
@@ -371,71 +359,39 @@ async def natural_language_query(request: NLQueryRequest):
                                 result_count = 1
 
                             span.set_attribute("result_count", result_count)
-                            logger.info(f"Sequential SPARQL returned {result_count} final results")
+                            logger.info(f"SPARQL query returned {result_count} results")
 
                             if result_count == 0:
                                 yield f"{StatusMessage.no_results()}"
                             else:
-                                # Cache the entire sequence (serialize queries list)
+                                # Cache successful query
                                 await redis_client.cache_query(
                                     nl_query=user_query,
-                                    sparql_query=json.dumps(sparql_queries),  # Store as JSON
-                                    results=sparql_results
+                                    sparql_query=sparql_query
                                 )
 
                         except Exception as e:
-                            logger.error(f"Sequential SPARQL execution error: {e}", exc_info=True)
-                            is_sequential = False  # Fallback to no results
-                            sparql_results = None
+                            logger.error(f"SPARQL execution error: {e}", exc_info=True)
 
-                    else:  # Single query
-                        if sparql_query != "":
-                            span.set_attribute("stage", "execute_sparql")
-                            yield f"{StatusMessage.executing_query()}"
+                    else:
+                        logger.warning("stage2: executing single sparql with an empty sparql")
 
-                            try:
-                                sparql_results = await virtuoso.execute_query(sparql_query)
-                                sparql_results = process_sparql_results(sparql_results)
-
-                                # Check if we got results
-                                result_count = 0
-                                if sparql_results.get('results', {}).get('bindings'):
-                                    result_count = len(sparql_results['results']['bindings'])
-                                elif sparql_results.get('boolean') is not None:
-                                    result_count = 1
-
-                                span.set_attribute("result_count", result_count)
-                                logger.info(f"SPARQL query returned {result_count} results")
-
-                                if result_count == 0:
-                                    yield f"{StatusMessage.no_results()}"
-                                else:
-                                    # Cache successful query
-                                    await redis_client.cache_query(
-                                        nl_query=user_query,
-                                        sparql_query=sparql_query,
-                                        results=sparql_results
-                                    )
-
-                            except Exception as e:
-                                logger.error(f"SPARQL execution error: {e}", exc_info=True)
-                                sparql_query = ""
-
-                    # Ensure sparql_query is str for contextualize (use last query if sequential)
-                    if is_sequential:
-                        sparql_query = sparql_queries[-1]['query'] if sparql_queries else ""
+                # Ensure sparql_query is str for contextualize (use last query if sequential)
+                if is_sequential:
+                    sparql_query = sparql_queries[-1]['query'] if sparql_queries else ""
+                    logger.error("Could not find a list of sparql queries in a sequential query")
 
                 if not sparql_query:
                     sparql_query = ""  # Ensure always defined
 
                 # Stage 3: Contextualize results with LLM
-                span.set_attribute("stage", "contextualize")
+                logger.info(f"Initiating stage 3 with results {sparql_results}")
                 yield f"{StatusMessage.processing_results()}"
 
                 try:
                     # Get the context stream from Ollama
                     context_stream = ollama.contextualize_answer(
-                        user_query=request.query,
+                        user_query=user_query,
                         sparql_query=sparql_query,
                         sparql_results=sparql_results,
                         system_prompt=""
@@ -445,14 +401,13 @@ async def natural_language_query(request: NLQueryRequest):
                     async for chunk in _stream_with_timeout_messages(context_stream, timeout_seconds=5.0):
                         yield f"{chunk}\n"
 
-                    span.set_attribute("stage", "completed")
-
                 except Exception as e:
                     logger.error(f"Contextualization error: {e}", exc_info=True)
                     error_msg = StatusMessage.error(f"Error generating answer: {str(e)}")
                     yield f"{error_msg}\n"
 
                 # Completion signal
+                logger.info(f"Pipeline was completed")
                 yield f"{StatusMessage.data_done()}"
 
             except Exception as e:
