@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from typing import Optional
-import asyncio
-
 from SPARQLWrapper import SPARQLWrapper, JSON
-import httpx
 from opentelemetry import trace
 from fastapi import HTTPException
+
+import httpx
+import asyncio
 import logging
+import urllib
 
 from cap.config import settings
 
@@ -29,6 +30,7 @@ class VirtuosoConfig:
     port: int = settings.VIRTUOSO_PORT
     username: str = settings.VIRTUOSO_USER
     password: str = settings.VIRTUOSO_PASSWORD
+    sparql_str_endpoint: str = settings.VIRTUOSO_ENDPOINT
     query_timeout: int = settings.VIRTUOSO_TIMEOUT
 
     @property
@@ -39,7 +41,7 @@ class VirtuosoConfig:
     @property
     def sparql_endpoint(self) -> str:
         """Get the SPARQL endpoint URL."""
-        return f"{self.base_url}/sparql"
+        return f"{self.base_url}{self.sparql_str_endpoint}"
 
     @property
     def crud_endpoint(self) -> str:
@@ -101,6 +103,29 @@ class VirtuosoClient:
 
     async def _execute_sparql_query_async(self, query: str) -> dict:
         """Execute SPARQL query asynchronously."""
+
+        # If endpoint use plain HTTP GET
+        if not self.config.sparql_endpoint.endswith("/sparql"):
+            client = await self._get_http_client()
+            try:
+                # URL-encode the query as curl --data-urlencode does
+                encoded_query = urllib.parse.urlencode({"query": query})
+                url = f"{self.config.sparql_endpoint}?{encoded_query}"
+
+                response = await client.get(
+                    url,
+                    headers={"Accept": "application/sparql-results+json"}
+                )
+                response.raise_for_status()
+                ret_ = response.json()
+                logger.info(f"query response: {response} \n    response.json(): {ret_}")
+                return ret_
+
+            except Exception as e:
+                logger.error(f"SPARQL query failed: {e}")
+                logger.error(f"Query: {query}")
+                raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
+
         def _execute_sync():
             try:
                 if not self._sparql_wrapper:

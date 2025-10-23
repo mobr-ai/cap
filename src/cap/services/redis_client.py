@@ -148,7 +148,6 @@ class RedisClient:
         self,
         nl_query: str,
         sparql_query: str,
-        results: dict[str, Any],
         ttl: Optional[int] = None
     ) -> bool:
         """
@@ -177,7 +176,6 @@ class RedisClient:
                     "original_query": nl_query,
                     "normalized_query": normalized,
                     "sparql_query": sparql_query,
-                    "results": results,
                     "precached": False
                 }
 
@@ -386,7 +384,6 @@ class RedisClient:
                             "original_query": nl_query,
                             "normalized_query": normalized,
                             "sparql_query": sparql_query,
-                            "results": None,  # No results for pre-cached queries
                             "precached": True
                         }
 
