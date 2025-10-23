@@ -205,12 +205,10 @@ class OllamaClient:
 
             except httpx.HTTPStatusError as e:
                 logger.error(f"Ollama HTTP error: {e}")
-                span.set_attribute("error", str(e))
                 raise
 
             except Exception as e:
                 logger.error(f"Ollama streaming error: {e}")
-                span.set_attribute("error", str(e))
                 raise
 
     async def generate_complete(
