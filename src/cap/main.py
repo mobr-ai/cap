@@ -5,6 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from starlette.responses import FileResponse
 from opentelemetry import trace
@@ -28,6 +29,17 @@ from cap.api.etl_admin import router as etl_router
 
 from dotenv import load_dotenv
 load_dotenv()
+
+# Allowed frontend origins (comma-separated env optional)
+DEFAULT_CORS = [
+    "http://localhost:5173",   # Vite dev
+    "http://localhost:4173",   # Vite preview
+    "http://0.0.0.0:8000",     # your current UI origin (from the screenshot)
+    "http://localhost:8000",
+    "https://cap.mobr.ai",     # production
+]
+ENV_CORS = os.getenv("CORS_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in ENV_CORS.split(",") if o.strip()] or DEFAULT_CORS
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -182,6 +194,16 @@ def create_application() -> FastAPI:
     )
 
     instrument_app(app)
+
+    # CORS (handles preflight + normal responses)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,            # no "*" when using credentials/Authorization
+        allow_credentials=True,                   # you send Authorization / may send cookies
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+        expose_headers=["Content-Disposition"],   # add more if client needs to read them
+    )
 
     # Place all backend routes under /api
     app.include_router(api_router)
