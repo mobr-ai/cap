@@ -1,0 +1,47 @@
+{# src/cap/mailing/templates/wallet_login.html #} {% extends "base_email.html"
+%} {% block content %}
+<h2 style="margin: 0 0 12px 0">
+  {{ translations.title or "New wallet sign-in" }}
+</h2>
+
+<p style="margin: 0 0 12px 0">
+  {{ translations.lead or "A sign-in was made using your Cardano wallet:" }}
+</p>
+
+{% if wallet_address %}
+<p
+  style="
+    margin: 0 0 16px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  "
+>
+  {{ wallet_address }}
+</p>
+{% endif %}
+
+<p style="margin: 0 0 16px 0">
+  {{ translations.tip or "If you don’t recognize this, review your sessions and
+  secure your account." }}
+</p>
+
+<p style="margin: 0 0 24px 0">
+  <a
+    href="{{ public_base_url }}/account/security"
+    style="
+      display: inline-block;
+      padding: 10px 16px;
+      text-decoration: none;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 6px;
+    "
+  >
+    {{ translations.manage_sessions or "Review sessions" }}
+  </a>
+</p>
+
+<p style="color: #6b7280; font-size: 12px; margin: 0">
+  {{ translations.footer or "Security notice from the Cardano Analytics Platform
+  (CAP)." }}
+</p>
+{% endblock %}
