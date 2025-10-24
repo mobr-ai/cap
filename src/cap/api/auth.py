@@ -33,7 +33,8 @@ except Exception:
     def on_oauth_login(*args, **kwargs): pass
     def on_wallet_login(*args, **kwargs): pass
 
-router = APIRouter(prefix="/api/v1", tags=["auth"])
+route_prefix = "/api/v1"
+router = APIRouter(prefix=route_prefix, tags=["auth"])
 
 # ---- Pydantic shapes ----
 class RegisterIn(BaseModel):
@@ -83,7 +84,7 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
 
     # Build confirmation link
     base = str(request.base_url).rstrip("/")
-    activation_link = f"{base}/api/confirm/{token}"
+    activation_link = f"{base}/{route_prefix}/confirm/{token}"
 
     # Send confirmation email (d-FCT-style trigger)
     # Uses CAP mailing service (Resend + Jinja templates + i18n). :contentReference[oaicite:2]{index=2}
@@ -127,7 +128,7 @@ def resend_confirmation(data: ResendIn, request: Request, db: Session = Depends(
     db.commit()
 
     base = str(request.base_url).rstrip("/")
-    activation_link = f"{base}/api/confirm/{token}"
+    activation_link = f"{base}/{route_prefix}/confirm/{token}"
 
     # You may choose to send the full "confirm your email" again here:
     # on_user_registered([...]) — or use a lighter "confirmation resent" notice:
@@ -236,7 +237,8 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
     token = make_access_token(str(user.user_id), remember=data.remember_me)
 
     # Optional: fire a wallet login trigger (analytics/notice)
-    on_wallet_login(to=[user.email] if user.email else [], language="en", wallet_address=data.address)
+    if user.email:
+        on_wallet_login(to=[user.email] if user.email else [], language="en", wallet_address=data.address)
 
     return {
         "id": user.user_id,

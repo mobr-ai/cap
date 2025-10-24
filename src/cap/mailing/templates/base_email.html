@@ -1,63 +1,199 @@
+{# src/cap/mailing/templates/base_email.html #}
 <!DOCTYPE html>
-<html lang="{{ language }}">
+<html lang="{{ language|default('en') }}">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta
+      name="format-detection"
+      content="telephone=no,address=no,email=no,date=no,url=no"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>{{ app_name|default('CAP') }}</title>
     <style>
-      body {
-        font-family: monospace;
-        margin: 20px;
+      /* Some clients respect <style>; we still inline critical stuff below */
+      :root {
+        color-scheme: light dark;
+        supported-color-schemes: light dark;
       }
-      .container {
-        width: 100%;
-        max-width: 600px;
-        margin: auto;
-        background: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      .logo {
-        text-align: center;
-        margin-bottom: 20px;
-      }
-      .header {
-        background: #222;
-        color: #fff;
-        text-align: center;
-        padding: 10px;
-        font-size: 24px;
-      }
-      .content {
-        padding: 20px;
-        background: #f9f9f9;
-      }
-      .footer {
-        text-align: center;
-        font-size: 12px;
-        color: #777;
-        margin-top: 20px;
-      }
-      a {
-        color: #0a84ff;
-        text-decoration: none;
+      @media (prefers-color-scheme: dark) {
+        .bg-body {
+          background-color: #0b1220 !important;
+        }
+        .bg-card {
+          background-color: #121a2b !important;
+        }
+        .text-primary {
+          color: #e5e7eb !important;
+        }
+        .text-secondary {
+          color: #9ca3af !important;
+        }
+        .link {
+          color: #60a5fa !important;
+        }
+        .btn {
+          background-color: #2563eb !important;
+          color: #ffffff !important;
+        }
+        .divider {
+          border-color: #233152 !important;
+        }
       }
     </style>
   </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <div class="logo">
-          <img src="{{ cap_logo_url }}" alt="CAP Logo" width="120" />
-        </div>
-        CAP
-      </div>
-      <div class="content">{% block content %}{% endblock %}</div>
-      <div class="footer">
-        {{ translations['footer_note'] }}
-        <br />
-        <a href="{{ unsubscribe_url }}">{{ translations['unsubscribe'] }}</a>
-      </div>
+  <body class="bg-body" style="margin: 0; padding: 0; background: #f3f4f6">
+    <!-- Preheader (hidden) -->
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        mso-hide: all;
+        opacity: 0;
+        line-height: 1px;
+        font-size: 1px;
+      "
+    >
+      {% block preheader %}{{ translations.preheader or "" }}{% endblock %}
     </div>
+
+    <!--[if mso]>
+    <center>
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td>
+    <![endif]-->
+
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background: #f3f4f6"
+    >
+      <tr>
+        <td align="center" style="padding: 24px">
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width: 600px;
+              background: #ffffff;
+              border-radius: 10px;
+              overflow: hidden;
+            "
+            class="bg-card"
+          >
+            <!-- Header -->
+            <tr>
+              <td align="center" style="background: #111827; padding: 20px">
+                {% if cap_logo_url %}
+                <img
+                  src="{{ cap_logo_url }}"
+                  width="120"
+                  height="auto"
+                  alt="{{ app_name|default('CAP') }} logo"
+                  style="
+                    display: block;
+                    max-width: 120px;
+                    width: 120px;
+                    height: auto;
+                    margin: 0 auto;
+                  "
+                />
+                {% endif %}
+                <div
+                  style="
+                    font: 600 20px/1.3 -apple-system, BlinkMacSystemFont,
+                      Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+                    color: #ffffff;
+                    margin-top: 10px;
+                  "
+                >
+                  {% block header_title %}{{ app_name|default('CAP') }}{%
+                  endblock %}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding: 24px; background: #f9fafb" class="bg-card">
+                <div
+                  class="text-primary"
+                  style="
+                    font: 400 16px/1.6 -apple-system, BlinkMacSystemFont,
+                      Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+                    color: #111827;
+                  "
+                >
+                  {% block content %}{% endblock %}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Divider -->
+            <tr>
+              <td style="padding: 0 24px">
+                <hr
+                  class="divider"
+                  style="border: 0; border-top: 1px solid #e5e7eb; margin: 0"
+                />
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td
+                align="center"
+                class="text-secondary"
+                style="
+                  padding: 16px 24px 24px;
+                  font: 400 12px/1.6 -apple-system, BlinkMacSystemFont, Segoe UI,
+                    Roboto, Helvetica, Arial, sans-serif;
+                  color: #6b7280;
+                "
+              >
+                <div>
+                  {{ translations.footer_note or "This notification was sent by
+                  the Cardano Analytics Platform." }}
+                </div>
+                {% if unsubscribe_url %}
+                <div style="margin-top: 8px">
+                  <a
+                    class="link"
+                    href="{{ unsubscribe_url }}"
+                    style="color: #2563eb; text-decoration: none"
+                  >
+                    {{ translations.unsubscribe or "Unsubscribe" }}
+                  </a>
+                </div>
+                {% endif %} {% if public_base_url %}
+                <div style="margin-top: 8px">
+                  <a
+                    class="link"
+                    href="{{ public_base_url }}"
+                    style="color: #2563eb; text-decoration: none"
+                  >
+                    {{ public_base_url }}
+                  </a>
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!--[if mso]>
+    </td></tr></table>
+    </center>
+    <![endif]-->
   </body>
 </html>
