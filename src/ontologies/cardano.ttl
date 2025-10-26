@@ -206,24 +206,7 @@ cardano:DelegateRepresentativeRetirement a owl:Class ;
 # Staking and Pool Classes
 cardano:StakePool a owl:Class ;
     rdfs:label "Stake Pool" ;
-    rdfs:subClassOf blockchain:Account ;
     rdfs:comment "An entity that participates in Cardano block production and network consensus." .
-
-cardano:StakePoolMetadata a owl:Class ;
-    rdfs:label "Stake Pool Metadata" ;
-    rdfs:comment "Off-chain metadata describing a stake pool." .
-
-cardano:StakePoolRelay a owl:Class ;
-    rdfs:label "Stake Pool Relay" ;
-    rdfs:comment "Network information for connecting to a stake pool." .
-
-cardano:StakePoolRegistration a owl:Class ;
-    rdfs:label "Stake Pool Registration" ;
-    rdfs:comment "Record of stake address registration." .
-
-cardano:StakePoolDeregistration a owl:Class ;
-    rdfs:label "Stake Pool Deregistration" ;
-    rdfs:comment "Record of stake address deregistration." .
 
 cardano:StakePoolRetirement a owl:Class ;
     rdfs:label "Stake Pool Retirement" ;
@@ -260,14 +243,6 @@ cardano:CNT a owl:Class ;
     rdfs:subClassOf blockchain:NativeToken ;
     rdfs:label "Cardano Native Token" ;
     rdfs:comment "A native token in the Cardano blockchain." .
-
-cardano:AssetMint a owl:Class ;
-    rdfs:label "Asset Mint" ;
-    rdfs:comment "Record of native asset creation or destruction." .
-
-cardano:AssetPolicy a owl:Class ;
-    rdfs:label "Asset Policy" ;
-    rdfs:comment "Rules governing the minting of cardano native tokens." .
 
 cardano:MultiAssetCNT a owl:Class ;
     rdfs:subClassOf cardano:CNT ;
@@ -392,10 +367,6 @@ cardano:VotingAnchor a owl:Class ;
     rdfs:label "Voting Anchor" ;
     rdfs:comment "Reference to off-chain governance metadata." .
 
-cardano:Reward a owl:Class ;
-    rdfs:label "Reward" ;
-    rdfs:comment "A staking reward distributed to an account" .
-
 cardano:RewardWithdrawal a owl:Class ;
     rdfs:label "Reward Withdrawal" ;
     rdfs:comment "A withdrawal of rewards from a stake address" .
@@ -431,9 +402,21 @@ blockchain:hasTransaction a owl:ObjectProperty ;
     rdfs:domain blockchain:Block ;
     rdfs:range blockchain:Transaction .
 
-blockchain:hasAccountAddress a owl:DatatypeProperty ;
-    rdfs:label "has account address" ;
+cardano:hasAccountBaseAddress a owl:DatatypeProperty ;
+    rdfs:label "has account base address" ;
     rdfs:comment "Relates an account with its addresses." ;
+    rdfs:domain blockchain:Account ;
+    rdfs:range xsd:string .
+
+cardano:hasAccountStakeAddress a owl:DatatypeProperty ;
+    rdfs:label "has account stake address" ;
+    rdfs:comment "Relates an account with its stake address." ;
+    rdfs:domain blockchain:Account ;
+    rdfs:range xsd:string .
+
+cardano:hasAccountEnterpriseAddress a owl:DatatypeProperty ;
+    rdfs:label "has account enterprise address" ;
+    rdfs:comment "Relates an account with its stake address." ;
     rdfs:domain blockchain:Account ;
     rdfs:range xsd:string .
 
@@ -563,7 +546,7 @@ blockchain:hasConversionRate a owl:DatatypeProperty ;
     rdfs:domain blockchain:FungibleToken ;
     rdfs:range xsd:decimal .
 
-blockchain:hasTokenSatate a owl:ObjectProperty ;
+blockchain:hasTokenState a owl:ObjectProperty ;
     rdfs:label "has token state" ;
     rdfs:comment "Associates an account or a transaction with a token state description" ;
     rdfs:domain blockchain:Account, cardano:Transaction ;
@@ -636,16 +619,22 @@ cardano:hasMintedAsset a owl:ObjectProperty ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range blockchain:Token .
 
+cardano:hasBurnedAsset a owl:ObjectProperty ;
+    rdfs:label "has burned asset" ;
+    rdfs:comment "Relates a transaction to the asset it is burining." ;
+    rdfs:domain blockchain:Transaction ;
+    rdfs:range blockchain:Token .
+
 cardano:hasMintedAmount a owl:DatatypeProperty ;
     rdfs:label "has minted amount" ;
     rdfs:comment "Relates a an asset with amount minted." ;
-    rdfs:domain blockchain:Asset ;
+    rdfs:domain blockchain:MultiAssetCNT ;
     rdfs:range xsd:decimal .
 
 cardano:hasBurnedAmount a owl:DatatypeProperty ;
     rdfs:label "has burned amount" ;
     rdfs:comment "Relates a an asset with amount minted." ;
-    rdfs:domain blockchain:Asset ;
+    rdfs:domain blockchain:MultiAssetCNT ;
     rdfs:range xsd:decimal .
 
 cardano:hasTransactionMetadata a owl:ObjectProperty ;
@@ -713,12 +702,6 @@ cardano:referencesOutput a owl:ObjectProperty ;
     rdfs:comment "Links an input to the specific output it references" ;
     rdfs:domain cardano:TransactionInput ;
     rdfs:range cardano:TransactionOutput .
-
-cardano:hasOutputSpend a owl:DatatypeProperty ;
-    rdfs:label "references output" ;
-    rdfs:comment "Links an input to the specific output it references" ;
-    rdfs:domain cardano:TransactionOutput ;
-    rdfs:range xsd:boolean .
 
 cardano:hasOutputSpendTimestamp a owl:DatatypeProperty ;
     rdfs:label "references output" ;
@@ -866,12 +849,6 @@ cardano:hasStakePoolTokenState a owl:ObjectProperty ;
     rdfs:domain cardano:StakePool ;
     rdfs:range blockchain:TokenState .
 
-cardano:hasStakePoolAccount a owl:ObjectProperty ;
-    rdfs:label "has stake pool account" ;
-    rdfs:comment "Relate a stake pool to the accounts" ;
-    rdfs:domain cardano:StakePool ;
-    rdfs:range blockchain:Account .
-
 cardano:hasStakePoolRewardAccount a owl:ObjectProperty ;
     rdfs:label "has stake pool reward account" ;
     rdfs:comment "Relate a stake pool to the account that the stake pool will receive rewards" ;
@@ -926,28 +903,28 @@ cardano:hasStakePoolFixedCost a owl:DatatypeProperty ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
-cardano:hasStakePoolIPv4 a owl:DatatypeProperty ;
+cardano:hasStakePoolRelayIPv4 a owl:DatatypeProperty ;
     rdfs:label "has stake pool ipv4" ;
     rdfs:comment "Relates a stake pool with its ipv4." ;
-    rdfs:domain cardano:StakePoolRelay ;
+    rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
-cardano:hasStakePoolIPv6 a owl:DatatypeProperty ;
+cardano:hasStakePoolRelayIPv6 a owl:DatatypeProperty ;
     rdfs:label "has stake pool ipv6" ;
     rdfs:comment "Relates a stake pool with its ipv6." ;
-    rdfs:domain cardano:StakePoolRelay ;
+    rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
-cardano:hasStakePoolIPPort a owl:DatatypeProperty ;
+cardano:hasStakePoolRelayIPPort a owl:DatatypeProperty ;
     rdfs:label "has stake pool ip port" ;
     rdfs:comment "Relates a stake pool with its ip port." ;
-    rdfs:domain cardano:StakePoolRelay ;
+    rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
-cardano:hasStakePoolHostname a owl:DatatypeProperty ;
+cardano:hasStakePoolRelayHostname a owl:DatatypeProperty ;
     rdfs:label "has stake pool host name" ;
     rdfs:comment "Relates a stake pool with its host name." ;
-    rdfs:domain cardano:StakePoolRelay ;
+    rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
 cardano:hasStakePoolTicker a owl:DatatypeProperty ;
@@ -956,16 +933,10 @@ cardano:hasStakePoolTicker a owl:DatatypeProperty ;
     rdfs:domain cardano:StakePool ;
     rdfs:range xsd:string .
 
-cardano:hasRelay a owl:ObjectProperty ;
-    rdfs:label "has relay" ;
-    rdfs:comment "Links a stake pool to its relay nodes" ;
-    rdfs:domain cardano:StakePool ;
-    rdfs:range cardano:StakePoolRelay .
-
-cardano:hasPort a owl:DatatypeProperty ;
+cardano:hasStakePoolRelayPort a owl:DatatypeProperty ;
     rdfs:label "has port" ;
     rdfs:comment "The network port number for a relay" ;
-    rdfs:domain cardano:StakePoolRelay ;
+    rdfs:domain cardano:StakePool ;
     rdfs:range xsd:decimal .
 
 # Properties - Smart Contract and Script Related
@@ -1392,11 +1363,11 @@ cardano:hasDelegateVrfHash a owl:DatatypeProperty ;
     rdfs:domain cardano:Delegation ;
     rdfs:range xsd:string .
 
-cardano:hasDelegationTokenState a owl:DatatypeProperty ;
+cardano:hasDelegationTokenState a owl:ObjectProperty ;
     rdfs:label "has delegation token state" ;
     rdfs:comment "The token state of a delegation" ;
     rdfs:domain cardano:Delegation ;
-    rdfs:range xsd:string .
+    rdfs:range blockchain:TokenState .
 
 cardano:hasDelegationTimestamp a owl:DatatypeProperty ;
     rdfs:label "has delegation active state" ;
@@ -1468,22 +1439,11 @@ cardano:hasDelegateMetadata a owl:ObjectProperty ;
     rdfs:domain cardano:ConstitutionalCommitteeDelegation ;
     rdfs:range cardano:VotingAnchor .
 
-cardano:hasMetadata a owl:ObjectProperty ;
-    rdfs:label "has metadata" ;
-    rdfs:comment "Generic metadata link for certificates and proposals" ;
-    rdfs:domain [
-        owl:unionOf (
-            cardano:Certificate
-            cardano:GovernanceProposal
-            blockchain:Transaction
-        )
-    ] ;
-    rdfs:range [
-        owl:unionOf (
-            cardano:VotingAnchor
-            cardano:TransactionMetadata
-        )
-    ] .
+cardano:hasCertificateMetadata a owl:ObjectProperty ;
+    rdfs:label "has certificate metadata" ;
+    rdfs:comment "Links tcertificate o metadata" ;
+    rdfs:domain cardano:Certificate ;
+    rdfs:range cardano:Metadata .
 
 cardano:hasDRep a owl:ObjectProperty ;
     rdfs:label "has DRep" ;
@@ -1527,7 +1487,7 @@ cardano:hasRetirement a owl:ObjectProperty ;
     rdfs:domain cardano:StakePoolRetirement ;
     rdfs:range cardano:StakePool .
 
-cardano:belongsToAccount a owl:ObjectProperty ;
+cardano:certToAccount a owl:ObjectProperty ;
     rdfs:label "belongs to account" ;
     rdfs:comment "Links a certificate to an account" ;
     rdfs:domain cardano:Certificate ;
@@ -1552,7 +1512,7 @@ cardano:hasCreationTimestamp a owl:DatatypeProperty ;
     rdfs:domain [
         owl:unionOf (
             cardano:Script
-            cardano:Asset
+            cardano:MultiAssetCNT
             blockchain:Account
         )
     ] ;
@@ -1569,12 +1529,6 @@ cardano:hasNFTStandard a owl:DatatypeProperty ;
     rdfs:comment "Relates a non-fungible token its standard." ;
     rdfs:domain blockchain:NFT ;
     rdfs:range xsd:string .
-
-cardano:hasMintingPolicy a owl:ObjectProperty ;
-    rdfs:label "has minting policy" ;
-    rdfs:comment "Relates a token to its minting policy." ;
-    rdfs:domain cardano:CNT ;
-    rdfs:range cardano:AssetPolicy .
 
 cardano:hasTokenRegistry a owl:ObjectProperty ;
     rdfs:label "has token registry" ;
@@ -1607,32 +1561,18 @@ cardano:hasEndTime a owl:DatatypeProperty ;
     rdfs:domain cardano:Epoch ;
     rdfs:range xsd:dateTime .
 
-# Properties - Reward and Treasury Related
-cardano:hasRewardRecord a owl:ObjectProperty ;
-    rdfs:label "has reward record" ;
-    rdfs:comment "Transaction with a reward record." ;
-    rdfs:domain blockchain:Transaction ;
-    rdfs:range cardano:Reward .
-
-cardano:hasReward a owl:ObjectProperty ;
-    rdfs:label "has reward" ;
-    rdfs:comment "Relates an account with its current reward." ;
-    rdfs:domain blockchain:Account ;
-    rdfs:range cardano:Reward .
-
-cardano:hasRewardTokenState a owl:ObjectProperty ;
-    rdfs:label "has reward token state" ;
-    rdfs:comment "The token state of a reward." ;
-    rdfs:domain cardano:Reward ;
+# Properties - RewardWithdraw and Treasury Related
+cardano:hasRewardWithdrawTokenState a owl:ObjectProperty ;
+    rdfs:label "has reward withdraw token state" ;
+    rdfs:comment "The token state of a reward withdraw." ;
+    rdfs:domain cardano:RewardWithdrawal ;
     rdfs:range blockchain:TokenState .
 
-cardano:hasRewardType a owl:DatatypeProperty ;
-    rdfs:label "has reward type" ;
-    rdfs:comment "The type of reward." ;
-    rdfs:domain cardano:Reward ;
-    rdfs:range [
-        owl:oneOf ("member" "leader" "treasury" "reserves")
-    ] .
+cardano:hasWithdrawalStakeAddress a owl:DatatypeProperty ;
+    rdfs:label "has reward withdraw stake address" ;
+    rdfs:comment "The stake address of the reward withdraw." ;
+    rdfs:domain cardano:RewardWithdrawal ;
+    rdfs:range xsd:string .
 
 cardano:hasRewardWithdrawal a owl:ObjectProperty ;
     rdfs:label "has reward withdrawal" ;
@@ -1640,16 +1580,15 @@ cardano:hasRewardWithdrawal a owl:ObjectProperty ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range cardano:RewardWithdrawal .
 
-cardano:hasRewardWithdrawalAmount a owl:ObjectProperty ;
-    rdfs:label "has withdrawal amount" ;
-    rdfs:comment "The amount withdrawn from rewards." ;
-    rdfs:domain cardano:RewardWithdrawal ;
-    rdfs:range xsd:decimal .
-
-cardano:belongsToAccount a owl:ObjectProperty ;
+cardano:toAccount a owl:ObjectProperty ;
     rdfs:label "belongs to account" ;
     rdfs:comment "Links a movement to an account" ;
-    rdfs:domain cardano:PotTransfer ;
+    rdfs:domain [
+        owl:unionOf (
+            cardano:PotTransfer
+            cardano:RewardWithdraw
+        )
+    ] ;
     rdfs:range blockchain:Account .
 
 cardano:hasTreasuryTransfer a owl:DatatypeProperty ;
@@ -1739,7 +1678,7 @@ cardano:hasProtocolEraName a owl:DatatypeProperty ;
     rdfs:range xsd:string .
 
 # Individuals
-cardano:ADA a cardano:CNT ;
+<http://www.mobr.ai/ontologies/cardano#cnt/ada> a cardano:CNT ;
     rdfs:label "ADA" ;
     rdfs:comment "The native cryptocurrency of the Cardano blockchain, used for transaction fees, staking, governance, and value transfer." ;
     blockchain:hasTokenName "Cardano ADA" ;
@@ -1749,7 +1688,7 @@ cardano:ADA a cardano:CNT ;
     blockchain:hasConversionRate 1000000 ;
     blockchain:hasDenominationName "Lovelace" .
 
-cardano:Ouroboros a blockchain:ProofOfStake ;
+<http://www.mobr.ai/ontologies/cardano#proofofstake/ouroboros> a blockchain:ProofOfStake ;
     rdfs:label "Ouroboros" ;
     rdfs:comment "A proof-of-stake protocol that provides and improves the security guarantees of proof-of-work at a fraction of the energy cost. Ouroboros applies cryptography, combinatorics, and mathematical game theory to guarantee the protocol's integrity, longevity, and performance, and that of the distributed networks that depend upon it." ;
     blockchain:isActiveProtocol true .
