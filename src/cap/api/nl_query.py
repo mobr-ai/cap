@@ -4,6 +4,7 @@ Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging
 import json
+import re
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -123,6 +124,28 @@ async def _stream_with_timeout_messages(
             logger.error(f"Error in stream wrapper: {e}")
             break
 
+def _parse_cached_sequential_sparql(sparql_text: str) -> list[dict[str, Any]]:
+    """Parse sequential SPARQL from cache that uses old separator format."""
+    queries = []
+
+    # Split by query markers (support both old and new formats)
+    parts = re.split(r'---query \d+[^-]*---', sparql_text)
+
+    for part in parts[1:]:  # Skip first empty part
+        part = part.strip()
+        if not part or part.startswith('---'):
+            continue
+
+        # Extract injection parameters
+        inject_pattern = r'INJECT\([^)]+\)'
+        inject_matches = re.findall(inject_pattern, part)
+
+        queries.append({
+            'query': part,
+            'inject_params': inject_matches
+        })
+
+    return queries
 
 async def _execute_sequential_queries(
     virtuoso: VirtuosoClient,
@@ -134,26 +157,55 @@ async def _execute_sequential_queries(
 
     for idx, query_info in enumerate(queries):
         query = query_info['query']
-        inject_params = query_info['inject_params']
+        inject_params = query_info.get('inject_params', [])
 
-        # Inject previous results
+        logger.info(f"Executing query {idx + 1}/{len(queries)}")
+
+        # Inject previous results BEFORE execution
         for param_expr in inject_params:
-            # Evaluate expression using previous results
             injected_value = _evaluate_injection(param_expr, previous_results)
-            # Replace in query
-            query = query.replace(
-                f'INJECT_FROM_PREVIOUS({param_expr})',
-                str(injected_value)
+            # Replace all INJECT variants with consistent pattern
+            query = re.sub(
+                r'INJECT(?:_FROM_PREVIOUS)?\([^)]+\)',
+                str(injected_value),
+                query,
+                count=1
             )
 
         # Execute query
         results = await virtuoso.execute_query(query)
 
-        # Store results for next query
+        # **FIX: Extract ALL variables from bindings, not just from single row**
         if results.get('results', {}).get('bindings'):
-            for binding in results['results']['bindings']:
-                for var, value in binding.items():
-                    previous_results[var] = value['value']
+            bindings = results['results']['bindings']
+            logger.info(f"Query {idx + 1} returned {len(bindings)} rows")
+
+            # For aggregates (like COUNT), extract from first row
+            if bindings:
+                first_row = bindings[0]
+                for var, value_obj in first_row.items():
+                    # Store both raw value and numeric conversion
+                    raw_value = value_obj.get('value')
+                    previous_results[var] = raw_value
+
+                    # Try to convert to number for math operations
+                    try:
+                        numeric_value = float(raw_value)
+                        previous_results[var] = numeric_value
+                        logger.info(f"Stored {var}={numeric_value}")
+                    except (ValueError, TypeError):
+                        previous_results[var] = raw_value
+                        logger.info(f"Stored {var}={raw_value} (non-numeric)")
+
+        # Handle boolean results
+        elif results.get('boolean') is not None:
+            previous_results['boolean'] = results['boolean']
+
+        # **FIX: Warn if no results and injection needed for next query**
+        else:
+            logger.warning(f"Query {idx + 1} returned no results")
+            if idx < len(queries) - 1 and queries[idx + 1].get('inject_params'):
+                logger.error(f"Query {idx + 2} needs injection but query {idx + 1} returned no data")
 
         final_results = results
 
@@ -161,23 +213,59 @@ async def _execute_sequential_queries(
 
 def _evaluate_injection(expression: str, previous_results: dict) -> Any:
     """Evaluate injection expression with previous results."""
-    # Parse expression like "evaluate(holders * 0.01)"
-    if expression.startswith('evaluate('):
-        expr = expression[9:-1]  # Remove "evaluate(" and ")"
+    # Extract the actual expression
+    expr = expression
+    if 'evaluate(' in expr:
+        match = re.search(r'evaluate\(([^)]+)\)', expr)
+        if match:
+            expr = match.group(1)
 
-        # Replace variable names with values
-        for var, value in previous_results.items():
-            expr = expr.replace(var, str(value))
+    # Remove INJECT wrapper if present
+    expr = re.sub(r'^INJECT(?:_FROM_PREVIOUS)?\((.+)\)$', r'\1', expr)
+    expr = re.sub(r'^evaluate\((.+)\)$', r'\1', expr)
 
-        # Safely evaluate
-        try:
-            result = eval(expr, {"__builtins__": {}}, {})
-            return int(result) if isinstance(result, float) else result
-        except Exception as e:
-            logger.error(f"Injection evaluation error: {e}")
-            return 0
+    logger.info(f"Evaluating injection expression: '{expr}'")
+    logger.info(f"Available variables: {previous_results}")
 
-    return previous_results.get(expression, 0)
+    # Replace variable names with their values
+    for var, value in previous_results.items():
+        if var in expr:
+            # Ensure numeric values are properly formatted
+            if isinstance(value, (int, float)):
+                expr = expr.replace(var, str(value))
+                logger.info(f"Replaced {var} with {value}")
+            else:
+                expr = expr.replace(var, f"'{value}'")
+
+    # Safely evaluate with math operations allowed
+    try:
+        # Allow basic math operations
+        safe_dict = {
+            "__builtins__": {},
+            "int": int,
+            "float": float,
+            "round": round,
+            "abs": abs,
+            "min": min,
+            "max": max,
+        }
+        result = eval(expr, safe_dict, {})
+        logger.info(f"Injection evaluated to: {result}")
+
+        # Return as int if it's a whole number
+        if isinstance(result, float) and result.is_integer():
+            return int(result)
+        return result
+
+    except NameError as e:
+        logger.error(f"Variable not found in injection: {e}")
+        logger.error(f"Expression: {expr}")
+        logger.error(f"Available: {list(previous_results.keys())}")
+        return 0  # Safe default
+    except Exception as e:
+        logger.error(f"Injection evaluation error: {e}")
+        logger.error(f"Expression: {expr}")
+        return 0
 
 @router.get("/queries/top")
 async def get_top_queries(limit: int = 5):
@@ -255,25 +343,14 @@ async def natural_language_query(request: NLQueryRequest):
                 # Stage 1: Convert NL to SPARQL
                 if cached_data:
                     logger.info(f"Cache hit has cached_data: {cached_data}")
-
-                    # Parse cached sparql_query to detect type
                     cached_sparql = cached_data["sparql_query"]
-                    try:
-                        # Try to parse as JSON (sequential queries)
-                        sparql_queries = json.loads(cached_sparql)
-                        if isinstance(sparql_queries, list):
-                            is_sequential = True
-                        else:
-                            is_sequential = False
-                            sparql_query = cached_sparql
 
-                    except (json.JSONDecodeError, TypeError):
-                        # Not JSON - it's a plain string (single query)
-                        is_sequential = False
-                        sparql_query = cached_sparql
-
-                    except Exception as e:
-                        logger.error(f"Cached SPARQL parsing error: {e}")
+                    # Detect if it's sequential by checking for the separator
+                    if "---split in two queries---" in cached_sparql or "---query 1" in cached_sparql:
+                        is_sequential = True
+                        # Split the queries manually
+                        sparql_queries = _parse_cached_sequential_sparql(cached_sparql)
+                    else:
                         is_sequential = False
                         sparql_query = cached_sparql
 
