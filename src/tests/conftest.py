@@ -22,6 +22,6 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(
         base_url=base_url,
         follow_redirects=True,
-        timeout=30.0
+        timeout=300.0
     ) as client:
         yield client

@@ -72,6 +72,10 @@ class StatusMessage:
         return cycle(StatusMessage.THINKING_MESSAGES)
 
     @staticmethod
+    def no_data() -> str:
+        return "I do not have this information yet.\n"
+
+    @staticmethod
     def data_done() -> str:
         return "data: [DONE]\n"
 
@@ -82,47 +86,56 @@ class StatusMessage:
 
 async def _stream_with_timeout_messages(
     stream_generator,
-    timeout_seconds: float = 5.0
+    timeout_seconds: float = 300.0
 ):
     """
     Wrap a stream generator with timeout status messages.
-
-    If no output for timeout_seconds, emit rotating status messages.
-    Uses asyncio.wait_for to detect timeouts and inject status messages.
     """
     message_cycle = StatusMessage.get_thinking_message_cycle()
-
-    # Convert generator to async iterator
-    stream_iter = stream_generator.__aiter__()
     last_status_time = asyncio.get_event_loop().time()
 
-    while True:
+    try:
+        # Convert generator to async iterator once
+        stream_iter = stream_generator.__aiter__()
+
+        while True:
+            try:
+                # Wait for next chunk with timeout
+                chunk = await asyncio.wait_for(
+                    stream_iter.__anext__(),
+                    timeout=timeout_seconds
+                )
+                # Got a chunk, yield it and reset timer
+                last_status_time = asyncio.get_event_loop().time()
+                yield chunk
+
+            except asyncio.TimeoutError:
+                # No output for timeout_seconds, emit a thinking message
+                current_time = asyncio.get_event_loop().time()
+                if current_time - last_status_time >= timeout_seconds:
+                    yield next(message_cycle)
+                    last_status_time = current_time
+                # Continue waiting for next chunk
+                continue
+
+            except StopAsyncIteration:
+                # Stream ended normally
+                logger.info("LLM stream completed successfully")
+                break
+
+    except asyncio.CancelledError:
+        # Client disconnected - log it but don't raise
+        logger.warning("Client cancelled the stream connection")
+        raise  # Re-raise to properly cleanup
+
+    except Exception as e:
+        # Log unexpected errors
+        logger.error(f"Error in stream wrapper: {e}", exc_info=True)
+        # Yield error message to client if still connected
         try:
-            # Wait for next chunk with timeout
-            chunk = await asyncio.wait_for(
-                stream_iter.__anext__(),
-                timeout=timeout_seconds
-            )
-            # Got a chunk, yield it and reset timer
-            last_status_time = asyncio.get_event_loop().time()
-            yield chunk
-
-        except asyncio.TimeoutError:
-            # No output for timeout_seconds, emit a thinking message
-            current_time = asyncio.get_event_loop().time()
-            if current_time - last_status_time >= timeout_seconds:
-                yield next(message_cycle)
-                last_status_time = current_time
-            # Continue waiting for next chunk
-            continue
-
-        except StopAsyncIteration:
-            # Stream ended normally
-            break
-        except Exception as e:
-            # Log unexpected errors but don't break the stream
-            logger.error(f"Error in stream wrapper: {e}")
-            break
+            yield f"error: Stream error: {str(e)}\n"
+        except:
+            pass
 
 def _parse_cached_sequential_sparql(sparql_text: str) -> list[dict[str, Any]]:
     """Parse sequential SPARQL from cache that uses old separator format."""
@@ -164,52 +177,68 @@ async def _execute_sequential_queries(
         # Inject previous results BEFORE execution
         for param_expr in inject_params:
             injected_value = _evaluate_injection(param_expr, previous_results)
-            # Replace all INJECT variants with consistent pattern
-            query = re.sub(
-                r'INJECT(?:_FROM_PREVIOUS)?\([^)]+\)',
-                str(injected_value),
-                query,
-                count=1
-            )
 
-        # Execute query
+            # Match INJECT with nested parentheses
+            inject_pattern = r'INJECT(?:_FROM_PREVIOUS)?\((?:[^()]+|\([^()]*\))+\)'
+
+            match = re.search(inject_pattern, query)
+            if match:
+                original = match.group(0)
+                # **FIX: Ensure integer for LIMIT/OFFSET, convert floats properly**
+                if isinstance(injected_value, (int, float)):
+                    # Round and convert to int for LIMIT/OFFSET clauses
+                    injected_int = int(round(injected_value))
+                    # Ensure at least 1 for LIMIT clauses
+                    if injected_int < 1:
+                        logger.warning(f"LIMIT value {injected_int} < 1, setting to 1")
+                        injected_int = 1
+                    replacement = str(injected_int)
+                else:
+                    replacement = str(injected_value)
+
+                logger.info(f"Replacing '{original}' with '{replacement}'")
+                query = query.replace(original, replacement, 1)
+            else:
+                logger.warning(f"Could not find INJECT pattern for: {param_expr}")
+
+        # Execute the clean SPARQL query string directly
+        logger.info(f"Executing query {idx + 1}: {query[:200]}...")
+
+        # Execute as plain SPARQL string
         results = await virtuoso.execute_query(query)
 
-        # **FIX: Extract ALL variables from bindings, not just from single row**
         if results.get('results', {}).get('bindings'):
             bindings = results['results']['bindings']
             logger.info(f"Query {idx + 1} returned {len(bindings)} rows")
 
-            # For aggregates (like COUNT), extract from first row
             if bindings:
+                # Extract ALL variables from first binding
                 first_row = bindings[0]
                 for var, value_obj in first_row.items():
-                    # Store both raw value and numeric conversion
                     raw_value = value_obj.get('value')
-                    previous_results[var] = raw_value
 
-                    # Try to convert to number for math operations
+                    # Try numeric conversion
                     try:
                         numeric_value = float(raw_value)
-                        previous_results[var] = numeric_value
-                        logger.info(f"Stored {var}={numeric_value}")
+                        # Store as int if whole number
+                        if numeric_value.is_integer():
+                            previous_results[var] = int(numeric_value)
+                        else:
+                            previous_results[var] = numeric_value
+                        logger.info(f"Stored {var}={previous_results[var]} (numeric)")
                     except (ValueError, TypeError):
                         previous_results[var] = raw_value
-                        logger.info(f"Stored {var}={raw_value} (non-numeric)")
+                        logger.info(f"Stored {var}={raw_value} (string)")
 
-        # Handle boolean results
         elif results.get('boolean') is not None:
             previous_results['boolean'] = results['boolean']
-
-        # **FIX: Warn if no results and injection needed for next query**
+            logger.info(f"Stored boolean={results['boolean']}")
         else:
             logger.warning(f"Query {idx + 1} returned no results")
-            if idx < len(queries) - 1 and queries[idx + 1].get('inject_params'):
-                logger.error(f"Query {idx + 2} needs injection but query {idx + 1} returned no data")
 
         final_results = results
 
-    return final_results
+    return final_results if final_results else {}
 
 def _evaluate_injection(expression: str, previous_results: dict) -> Any:
     """Evaluate injection expression with previous results."""
@@ -227,10 +256,20 @@ def _evaluate_injection(expression: str, previous_results: dict) -> Any:
     logger.info(f"Evaluating injection expression: '{expr}'")
     logger.info(f"Available variables: {previous_results}")
 
+    # **ENHANCED: Check for missing variables before evaluation**
+    required_vars = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', expr)
+    missing_vars = [v for v in required_vars if v not in previous_results and v not in ['int', 'float', 'round', 'abs', 'min', 'max']]
+
+    if missing_vars:
+        logger.error(f"Missing variables in injection: {missing_vars}")
+        logger.error(f"Expression: {expr}")
+        logger.error(f"Available: {list(previous_results.keys())}")
+        # Return safe default instead of 0
+        return 1  # Prevents LIMIT 0 issues
+
     # Replace variable names with their values
     for var, value in previous_results.items():
         if var in expr:
-            # Ensure numeric values are properly formatted
             if isinstance(value, (int, float)):
                 expr = expr.replace(var, str(value))
                 logger.info(f"Replaced {var} with {value}")
@@ -239,7 +278,7 @@ def _evaluate_injection(expression: str, previous_results: dict) -> Any:
 
     # Safely evaluate with math operations allowed
     try:
-        # Allow basic math operations
+        import math
         safe_dict = {
             "__builtins__": {},
             "int": int,
@@ -248,24 +287,25 @@ def _evaluate_injection(expression: str, previous_results: dict) -> Any:
             "abs": abs,
             "min": min,
             "max": max,
+            "ceil": math.ceil,
+            "floor": math.floor,
         }
         result = eval(expr, safe_dict, {})
         logger.info(f"Injection evaluated to: {result}")
 
-        # Return as int if it's a whole number
-        if isinstance(result, float) and result.is_integer():
-            return int(result)
+        # Always return integer for LIMIT/OFFSET clauses**
+        # Round to nearest integer if it's a float
+        if isinstance(result, float):
+            result = int(round(result))  # e.g., 5440.07 -> 5440
+
         return result
 
     except NameError as e:
         logger.error(f"Variable not found in injection: {e}")
-        logger.error(f"Expression: {expr}")
-        logger.error(f"Available: {list(previous_results.keys())}")
-        return 0  # Safe default
+        return 1  # Safe default prevents LIMIT 0
     except Exception as e:
         logger.error(f"Injection evaluation error: {e}")
-        logger.error(f"Expression: {expr}")
-        return 0
+        return 1  # Safe default prevents LIMIT 0
 
 @router.get("/queries/top")
 async def get_top_queries(limit: int = 5):
@@ -333,7 +373,6 @@ async def natural_language_query(request: NLQueryRequest):
                     user_query = f"{request.context}\n\n{request.query}"
 
                 # Check cache first
-                span.set_attribute("stage", "check_cache")
                 low_query: str = user_query.lower().strip()
                 cached_data = await redis_client.get_cached_query(low_query)
 
@@ -341,23 +380,38 @@ async def natural_language_query(request: NLQueryRequest):
                 sparql_results = None
 
                 # Stage 1: Convert NL to SPARQL
+                logger.info(f"Stage 1: convert NL to sparql")
                 if cached_data:
                     logger.info(f"Cache hit has cached_data: {cached_data}")
                     cached_sparql = cached_data["sparql_query"]
 
-                    # Detect if it's sequential by checking for the separator
-                    if "---split in two queries---" in cached_sparql or "---query 1" in cached_sparql:
-                        is_sequential = True
-                        # Split the queries manually
-                        sparql_queries = _parse_cached_sequential_sparql(cached_sparql)
-                    else:
-                        is_sequential = False
-                        sparql_query = cached_sparql
+                    # Try to parse as JSON first (new format)
+                    try:
+                        parsed = json.loads(cached_sparql)
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            is_sequential = True
+                            sparql_queries = parsed
+                            logger.info(f"cached_data has sequential sparql (JSON format) with {len(parsed)} queries")
+                        else:
+                            is_sequential = False
+                            sparql_query = cached_sparql
+                            logger.info(f"cached_data has single sparql")
+                    except (json.JSONDecodeError, TypeError):
+                        # Fallback to old format with separator
+                        if "---split" in cached_sparql or "---query" in cached_sparql:
+                            is_sequential = True
+                            logger.info(f"cached_data has sequential sparql (old format)")
+                            sparql_queries = _parse_cached_sequential_sparql(cached_sparql)
+                        else:
+                            logger.info(f"cached_data has single sparql")
+                            is_sequential = False
+                            sparql_query = cached_sparql
 
                 else:
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
+                        logger.info(f"Cache miss. Creating sparql using llm...")
                         # Generate raw response
                         raw_sparql_response = await ollama.generate_complete(
                             prompt=user_query,
@@ -393,26 +447,31 @@ async def natural_language_query(request: NLQueryRequest):
                     yield f"{StatusMessage.executing_query()}"
                     try:
                         sparql_results = await _execute_sequential_queries(virtuoso, sparql_queries)
-                        sparql_results = process_sparql_results(sparql_results)
+                        if sparql_results:
+                            sparql_results = process_sparql_results(sparql_results)
 
-                        # Check result count from final results
-                        result_count = 0
-                        if sparql_results.get('results', {}).get('bindings'):
-                            result_count = len(sparql_results['results']['bindings'])
-                        elif sparql_results.get('boolean') is not None:
-                            result_count = 1
+                            # Check result count from final results
+                            result_count = 0
+                            if sparql_results.get('results', {}).get('bindings'):
+                                result_count = len(sparql_results['results']['bindings'])
+                            elif sparql_results.get('boolean') is not None:
+                                result_count = 1
 
-                        span.set_attribute("result_count", result_count)
-                        logger.info(f"Sequential SPARQL returned {result_count} final results")
+                            span.set_attribute("result_count", result_count)
+                            logger.info(f"Sequential SPARQL returned {result_count} final results")
 
-                        if result_count == 0:
-                            yield f"{StatusMessage.no_results()}"
+                            if result_count == 0:
+                                yield f"{StatusMessage.no_results()}"
+                            else:
+                                # Cache the entire sequence (serialize queries list)
+                                await redis_client.cache_query(
+                                    nl_query=user_query,
+                                    sparql_query=json.dumps(sparql_queries)  # Store as JSON
+                                )
                         else:
-                            # Cache the entire sequence (serialize queries list)
-                            await redis_client.cache_query(
-                                nl_query=user_query,
-                                sparql_query=json.dumps(sparql_queries)  # Store as JSON
-                            )
+                            yield f"{StatusMessage.no_data()}"
+                            yield f"{StatusMessage.data_done()}"
+                            return
 
                     except Exception as e:
                         logger.error(f"Sequential SPARQL execution error: {e}", exc_info=True)
@@ -449,14 +508,18 @@ async def natural_language_query(request: NLQueryRequest):
 
                         except Exception as e:
                             logger.error(f"SPARQL execution error: {e}", exc_info=True)
+                            yield f"{StatusMessage.no_data()}"
+                            yield f"{StatusMessage.data_done()}"
+                            return
 
                     else:
                         logger.warning("stage2: executing single sparql with an empty sparql")
+                        yield f"{StatusMessage.no_data()}"
+                        yield f"{StatusMessage.data_done()}"
+                        return
 
-                # Ensure sparql_query is str for contextualize (use last query if sequential)
-                if is_sequential:
-                    sparql_query = sparql_queries[-1]['query'] if sparql_queries else ""
-                    logger.error("Could not find a list of sparql queries in a sequential query")
+                if is_sequential and sparql_queries:
+                    sparql_query = json.dumps(sparql_queries)
 
                 if not sparql_query:
                     sparql_query = ""  # Ensure always defined
@@ -475,7 +538,7 @@ async def natural_language_query(request: NLQueryRequest):
                     )
 
                     # Stream with timeout messages
-                    async for chunk in _stream_with_timeout_messages(context_stream, timeout_seconds=5.0):
+                    async for chunk in _stream_with_timeout_messages(context_stream, timeout_seconds=300.0):
                         yield f"{chunk}\n"
 
                 except Exception as e:
