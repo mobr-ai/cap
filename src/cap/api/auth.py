@@ -11,7 +11,7 @@ from cap.core.security import (
     hash_password, verify_password, make_access_token,
     generate_unique_username, new_confirmation_token
 )
-from cap.core.google_oauth import get_userinfo_from_access_token
+from cap.core.google_oauth import get_userinfo_from_access_token_or_idtoken
 
 # --- Event triggers (mailer) ---
 # d-FCT parity triggers exist; CAP extras are optional and safely no-op if missing.
@@ -53,7 +53,8 @@ class ResendIn(BaseModel):
 
 class GoogleIn(BaseModel):
     token: str
-    remember_me: bool = True
+    token_type: str | None = None
+    remember_me: bool = False
 
 class CardanoIn(BaseModel):
     address: str
@@ -168,7 +169,8 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
     try:
         # Exchange access_token → People API profile. :contentReference[oaicite:3]{index=3}
-        info = get_userinfo_from_access_token(data.token)
+        info = get_userinfo_from_access_token_or_idtoken(data.token, getattr(data, "token_type", None))
+
         google_id = info["sub"]
         email = info["email"]
         display_name = info["name"]
@@ -186,15 +188,15 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
                 is_confirmed=True,
             )
             db.add(user)
+
+            # Fire an OAuth login trigger (analytics/notice) once
+            on_oauth_login(to=[email], language="en", provider="google")
         else:
             # keep avatar reasonably fresh
             user.avatar = avatar
         db.commit()
 
         token = make_access_token(str(user.user_id), remember=data.remember_me)
-
-        # Optional: fire an OAuth login trigger (analytics/notice)
-        on_oauth_login(to=[email], language="en", provider="google")
 
         return {
             "id": user.user_id,
