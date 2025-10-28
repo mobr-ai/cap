@@ -20,7 +20,7 @@ class OllamaClient:
         self,
         base_url: Optional[str] = None,
         llm_model: str = None,
-        timeout: float = 120.0
+        timeout: float = 300.0
     ):
         """
         Initialize Ollama client.
