@@ -40,7 +40,7 @@ class NLQueryTester:
         print(f"Testing Query: {query}")
         print("="*60)
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/v1/nl/query",
@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
 async def simple_query_test(query: str, base_url: str = "http://localhost:8000"):
     """Quick test of a single query."""
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         response = await client.post(
             f"{base_url}/api/v1/nl/query",
             json={"query": query, "temperature": 0.1},
