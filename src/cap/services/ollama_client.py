@@ -396,7 +396,7 @@ class OllamaClient:
         self,
         user_query: str,
         sparql_query: str,
-        sparql_results: dict[str, Any],
+        sparql_results: Union[str, dict[str, Any]],
         system_prompt: str = None
     ) -> AsyncIterator[str]:
         """
@@ -405,7 +405,7 @@ class OllamaClient:
         Args:
             user_query: Original natural language query
             sparql_query: SPARQL query that was executed
-            sparql_results: Results from SPARQL execution
+            sparql_results: Results from SPARQL execution (formatted string or raw dict)
             system_prompt: System prompt for answer generation
 
         Yields:
@@ -414,27 +414,33 @@ class OllamaClient:
         with tracer.start_as_current_span("contextualize_answer") as span:
             context_res = ""
             try:
-                if sparql_results:
+                # If results are already formatted as string, use directly
+                if isinstance(sparql_results, str):
+                    context_res = sparql_results
+                    span.set_attribute("format", "string")
+                # Otherwise, serialize dict to JSON
+                elif sparql_results:
                     context_res = json.dumps(sparql_results, indent=2)
+                    span.set_attribute("format", "dict")
+                else:
+                    context_res = "No results available"
+                    span.set_attribute("format", "empty")
 
             except Exception as e:
-                logger.warning(f"json.dumps failed: {e}")
-                context_res = sparql_results
+                logger.warning(f"Result formatting failed: {e}")
+                context_res = str(sparql_results)
 
             # Format the prompt with query and results
             prompt = f"""
                 User Question: {user_query}
 
-                SPARQL Query Executed:
-                {sparql_query}
-
-                Query Results:
+                Current known information:
                 {context_res}
 
                 {self.contextualize_prompt}
             """
 
-            logger.info(f"calling ollama model\n    prompt: {prompt}\n")
+            logger.info(f"calling ollama model\n    prompt: {prompt[:500]}...\n")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,

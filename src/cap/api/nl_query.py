@@ -12,10 +12,10 @@ from pydantic import BaseModel, Field
 from opentelemetry import trace
 from typing import Optional, Any
 
+from cap.data.sparql_util import convert_sparql_to_kv, format_for_llm
 from cap.services.ollama_client import get_ollama_client
 from cap.services.redis_client import get_redis_client
 from cap.data.virtuoso import VirtuosoClient
-from cap.services.result_processor import process_sparql_results
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -448,8 +448,6 @@ async def natural_language_query(request: NLQueryRequest):
                     try:
                         sparql_results = await _execute_sequential_queries(virtuoso, sparql_queries)
                         if sparql_results:
-                            sparql_results = process_sparql_results(sparql_results)
-
                             # Check result count from final results
                             result_count = 0
                             if sparql_results.get('results', {}).get('bindings'):
@@ -485,7 +483,6 @@ async def natural_language_query(request: NLQueryRequest):
 
                         try:
                             sparql_results = await virtuoso.execute_query(sparql_query)
-                            sparql_results = process_sparql_results(sparql_results)
 
                             # Check if we got results
                             result_count = 0
@@ -529,11 +526,17 @@ async def natural_language_query(request: NLQueryRequest):
                 yield f"{StatusMessage.processing_results()}"
 
                 try:
+                    kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
+                    formatted_results = format_for_llm(kv_results, max_items=10000)
+
+                    logger.info(f"Converted SPARQL to K/V format: {kv_results.get('result_type')}")
+                    logger.debug(f"Formatted results for LLM:\n{formatted_results}")
+
                     # Get the context stream from Ollama
                     context_stream = ollama.contextualize_answer(
                         user_query=user_query,
                         sparql_query=sparql_query,
-                        sparql_results=sparql_results,
+                        sparql_results=formatted_results,
                         system_prompt=""
                     )
 

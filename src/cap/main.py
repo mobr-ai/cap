@@ -240,13 +240,13 @@ if os.path.isdir(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 # 2) LLM interface route (must come before catch-all)
-# @app.get("/llm", include_in_schema=False)
-# async def llm_interface():
-#     """Serve the LLM natural language query interface."""
-#     llm_page = os.path.join(os.path.dirname(__file__), "templates", "llm.html")
-#     if os.path.isfile(llm_page):
-#         return FileResponse(llm_page)
-#     raise HTTPException(status_code=404, detail="LLM interface not found")
+@app.get("/llm", include_in_schema=False)
+async def llm_interface():
+    """Serve the LLM natural language query interface."""
+    llm_page = os.path.join(os.path.dirname(__file__), "templates", "llm.html")
+    if os.path.isfile(llm_page):
+        return FileResponse(llm_page)
+    raise HTTPException(status_code=404, detail="LLM interface not found")
 
 # 3) Root -> index.html
 @app.get("/", include_in_schema=False)
