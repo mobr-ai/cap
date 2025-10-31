@@ -118,7 +118,7 @@ def on_user_confirmed(
 def on_oauth_login(
     to: Iterable[str] | str,
     language: str | None = "en",
-    provider: str = "google",
+    provider: str = "Google",
 ) -> None:
     """
     Optional: OAuth login notification.

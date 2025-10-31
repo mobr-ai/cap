@@ -26,6 +26,7 @@ from cap.api.auth import router as auth_router
 from cap.api.waitlist import router as wait_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
+from cap.api.user_avatar import router as user_router
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -34,8 +35,9 @@ load_dotenv()
 DEFAULT_CORS = [
     "http://localhost:5173",   # Vite dev
     "http://localhost:4173",   # Vite preview
-    "http://0.0.0.0:8000",     # your current UI origin (from the screenshot)
-    "http://localhost:8000",
+    "http://0.0.0.0:8000",     # Local dev server
+    "http://localhost:8000",   # Local dev server
+    "http://127.0.0.1:8000",   # Local dev server
     "https://cap.mobr.ai",     # production
 ]
 ENV_CORS = os.getenv("CORS_ORIGINS", "")
@@ -209,6 +211,7 @@ def create_application() -> FastAPI:
     app.include_router(api_router)
     app.include_router(nl_router)
     app.include_router(auth_router)
+    app.include_router(user_router)
     app.include_router(wait_router)
     app.include_router(cache_router)
     app.include_router(etl_router)

@@ -1,10 +1,13 @@
-# cap/src/cap/core/security.py
+# cap/core/security.py
+import os
+import time
+import jwt  # PyJWT
 import os, re, bcrypt, jwt, secrets, unicodedata
 from datetime import datetime, timedelta, timezone
-
+from typing import Dict, Any
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
-JWT_ALG = "HS256"
+JWT_ALG = os.getenv("JWT_ALG", "HS256")
 
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -76,3 +79,17 @@ def generate_unique_username(db, User, preferred: str | None = None, base_fallba
 
 def new_confirmation_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """
+    Decode & validate JWT; raise jwt exceptions on invalid token.
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        # Optional: basic exp/nbf/iat checks handled by PyJWT if present
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise Exception("tokenExpired")
+    except jwt.InvalidTokenError:
+        raise Exception("invalidToken")

@@ -1,6 +1,6 @@
-# cap/src/cap/database/model.py
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, LargeBinary
+
 Base = declarative_base()
 
 class User(Base):
@@ -12,8 +12,16 @@ class User(Base):
     wallet_address = Column(String(128), index=True, nullable=True)
     username       = Column(String(30), unique=True, index=True, nullable=True)
     display_name   = Column(String(30), nullable=True)
-    avatar         = Column(String, nullable=True)
+
     settings       = Column(String, nullable=True)
     refer_id       = Column(Integer)
     is_confirmed   = Column(Boolean, default=False)
     confirmation_token = Column(String(128), nullable=True)
+
+    # on-prem avatar storage
+    avatar_blob    = Column(LargeBinary, nullable=True)      # BYTEA
+    avatar_mime    = Column(String(64), nullable=True)       # e.g., "image/png"
+    avatar_etag    = Column(String(64), nullable=True)       # md5/sha1 for cache/If-None-Match
+
+    # URL kept for compatibility
+    avatar         = Column(String, nullable=True)

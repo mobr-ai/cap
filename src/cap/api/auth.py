@@ -14,12 +14,10 @@ from cap.core.security import (
 from cap.core.google_oauth import get_userinfo_from_access_token_or_idtoken
 
 # --- Event triggers (mailer) ---
-# d-FCT parity triggers exist; CAP extras are optional and safely no-op if missing.
 try:
     from cap.mailing.event_triggers import (
         on_user_registered,        # existing in CAP (confirm-your-email)
-        on_waiting_list_joined,    # (not used here, but kept for parity)
-        # Optional CAP additions (create in mailing/event_triggers.py if desired):
+        on_waiting_list_joined,    # notify user joined waiting list (not used here)
         on_confirmation_resent,    # notify user that a new confirmation email was sent
         on_user_confirmed,         # notify / log that user confirmed their email
         on_oauth_login,            # notify / log OAuth login
@@ -87,7 +85,7 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     base = str(request.base_url).rstrip("/")
     activation_link = f"{base}/{route_prefix}/confirm/{token}"
 
-    # Send confirmation email (d-FCT-style trigger)
+    # Send confirmation email
     # Uses CAP mailing service (Resend + Jinja templates + i18n). :contentReference[oaicite:2]{index=2}
     on_user_registered(
         to=[data.email],
@@ -190,9 +188,9 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
             db.add(user)
 
             # Fire an OAuth login trigger (analytics/notice) once
-            on_oauth_login(to=[email], language="en", provider="google")
-        else:
-            # keep avatar reasonably fresh
+            on_oauth_login(to=[email], language="en", provider="Google")
+        elif not user.avatar:
+            # keep avatar if already defined
             user.avatar = avatar
         db.commit()
 
