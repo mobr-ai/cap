@@ -26,7 +26,7 @@ from cap.api.auth import router as auth_router
 from cap.api.waitlist import router as wait_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
-from cap.api.user_avatar import router as user_router
+from cap.api.user import router as user_router
 
 from dotenv import load_dotenv
 load_dotenv()
