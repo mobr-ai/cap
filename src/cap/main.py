@@ -204,7 +204,7 @@ def create_application() -> FastAPI:
         allow_credentials=True,                   # you send Authorization / may send cookies
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
-        expose_headers=["Content-Disposition"],   # add more if client needs to read them
+        expose_headers=["Content-Disposition"],
     )
 
     # Place all backend routes under /api

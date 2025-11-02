@@ -444,7 +444,7 @@ class VotingAnchor(Base):
     url = Column(String, nullable=False)
     data_hash = Column(LargeBinary, nullable=False)
 
-# Add indexes for performance
+# indexes for performance
 Index('idx_block_slot_no', Block.slot_no)
 Index('idx_block_epoch_no', Block.epoch_no)
 Index('idx_tx_block_id', Tx.block_id)

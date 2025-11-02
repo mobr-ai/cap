@@ -1,8 +1,6 @@
 """
 SPARQL Results to Key-Value Converter for Blockchain Data
 Handles large integers (ADA amounts in lovelace) and nested structures
-
-Add this to virtuoso.py or create as a separate module (e.g., sparql_converter.py)
 """
 import logging
 from typing import Any
@@ -105,7 +103,7 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
         ada_int = int(ada_num)
         ada_str = str(ada_int)
 
-        # Add human-readable format for large amounts
+        # Human-readable format for large amounts
         str_large = ""
         if ada_int >= 1_000_000_000:
             # Billions
@@ -226,7 +224,6 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None) ->
         # Convert based on datatype
         converted_value = _convert_value(value, datatype, value_type)
 
-        # If this variable represents an ADA amount, add conversion info
         if var_name in ada_variables and isinstance(converted_value, str):
             try:
                 # Check if it's a numeric value
@@ -348,9 +345,9 @@ def _format_value(value: Any) -> str:
         elif 'lovelace' in value and 'ada' in value:
             # Format ADA amount
             if 'approximately' in value:
-                return f"{value['lovelace']} lovelace ({value.get('ada', '')} ADA or approximately {value.get('approximately', '')})"
+                return f"{value.get('ada', '')} ADA (approximately {value.get('approximately', '')})"
 
-            return f"{value['lovelace']} lovelace ({value.get('ada', '')} ADA)"
+            return f"{value.get('ada', '')} ADA"
 
         return str(value)
 
