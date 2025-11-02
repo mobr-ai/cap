@@ -97,13 +97,7 @@ class OllamaClient:
 
     def _parse_sequential_sparql(self, sparql_text: str) -> list[dict[str, Any]]:
         """
-        Parse sequential SPARQL queries from LLM response.
-
-        Expected format:
-        ---query sequence 1: description---
-        SPARQL query 1
-        ---query sequence 2: description---
-        SPARQL query 2 with INJECT_FROM_PREVIOUS(expression)
+        Parse sequential SPARQL queries from LLM response with proper INJECT extraction.
         """
         queries = []
 
@@ -116,13 +110,33 @@ class OllamaClient:
                 continue
             cleaned = self._ensure_prefixes(cleaned)
 
-            # Check for injection parameters
-            inject_pattern = r'INJECT_FROM_PREVIOUS\((.*?)\)'
-            inject_matches = re.findall(inject_pattern, cleaned)
+            # Extract INJECT patterns with nested parentheses
+            inject_params = []
+            pos = 0
+            while True:
+                match = re.search(r'INJECT(?:_FROM_PREVIOUS)?\(', cleaned[pos:])
+                if not match:
+                    break
+
+                start = pos + match.start()
+                paren_count = 1
+                i = start + len(match.group(0))
+                while i < len(cleaned) and paren_count > 0:
+                    if cleaned[i] == '(':
+                        paren_count += 1
+                    elif cleaned[i] == ')':
+                        paren_count -= 1
+                    i += 1
+
+                if paren_count == 0:
+                    inject_params.append(cleaned[start:i])
+                    pos = i
+                else:
+                    break
 
             queries.append({
                 'query': cleaned,
-                'inject_params': inject_matches
+                'inject_params': inject_params
             })
 
         return queries
@@ -423,29 +437,38 @@ class OllamaClient:
                     context_res = json.dumps(sparql_results, indent=2)
                     span.set_attribute("format", "dict")
                 else:
-                    context_res = "No results available"
+                    context_res = ""
                     span.set_attribute("format", "empty")
 
             except Exception as e:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
+            know_info = ""
+            temperature = 0.3
+            if context_res != "":
+                know_info = f"""
+                This is the current value you MUST consider in your answer:
+                {context_res}
+                DO NOT CHANGE THE VALUES WHEN ANSWERING THE USER.
+                """
+                temperature = 0.1
+
             # Format the prompt with query and results
             prompt = f"""
                 User Question: {user_query}
 
-                Current known information:
-                {context_res}
+                {know_info}
 
                 {self.contextualize_prompt}
             """
 
-            logger.info(f"calling ollama model\n    prompt: {prompt[:500]}...\n")
+            logger.info(f"calling ollama model\n    prompt: {prompt}...\n")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
                 system_prompt=system_prompt,
-                temperature=0.3
+                temperature=temperature
             ):
                 yield chunk
 

@@ -28,7 +28,7 @@ if config.config_file_name is not None:
 
 # --- Import model metadata for autogenerate ---
 # Only manage these tables with Alembic
-MANAGED_TABLES = {"user"}  # add more later if needed
+MANAGED_TABLES = {"user"}
 
 def include_object(object, name, type_, reflected, compare_to):
     # Ignore all tables not in MANAGED_TABLES
