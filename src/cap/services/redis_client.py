@@ -76,8 +76,13 @@ class RedisClient:
         # Replace "top N" with placeholder (e.g., "top 5", "top 10" -> "top __N__")
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
 
-        # Replace token names with placeholder (e.g., "ADA", "SNEK" -> "__TOKEN__")
-        normalized = re.sub(r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))', '__TOKEN__', normalized)
+        # Replace token names with placeholder, but exclude common words
+        normalized = re.sub(r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))',
+                        lambda m: '__TOKEN__' if m.group(1) not in ['many', 'much', 'what', 'which', 'have'] else m.group(1),
+                        normalized)
+
+        # Replace formatted numbers first (e.g., 200,000 or 200.000 or 200_000)
+        normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '__N__', normalized)
 
         # Replace other standalone numbers with placeholder
         normalized = re.sub(r'\b\d+(?:\.\d+)?\b(?!\s*%)', '__N__', normalized)
@@ -352,9 +357,10 @@ class RedisClient:
                         idx = int(placeholder.replace('__NUM_', '').replace('__', ''))
                         cycle_idx = idx % len(current_values["numbers"])
                         replacement = current_values["numbers"][cycle_idx]
-                        logger.debug(f"Restoring {placeholder} with NEW value: {replacement}")
+                        logger.debug(f"Restoring {placeholder} at pos {pos} with NEW value: {replacement}")
                     except ValueError:
                         replacement = placeholder_map.get(placeholder, "1")
+                        logger.warning(f"Failed to parse index from {placeholder}, using cached: {replacement}")
                 else:
                     replacement = placeholder_map.get(placeholder, "1")
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
@@ -392,10 +398,18 @@ class RedisClient:
                 if current_values.get("tokens"):
                     try:
                         idx = int(placeholder.replace('__CUR_', '').replace('__', ''))
-                        cycle_idx = idx % len(current_values["tokens"])
-                        token = current_values["tokens"][cycle_idx]
-                        replacement = f'<http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}>'
-                        logger.debug(f"Restoring {placeholder} with NEW currency URI: {replacement}")
+                        # Filter out question words from tokens list before indexing
+                        excluded_words = ['MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'IS']
+                        valid_tokens = [t for t in current_values["tokens"] if t not in excluded_words]
+
+                        if valid_tokens:
+                            cycle_idx = idx % len(valid_tokens)
+                            token = valid_tokens[cycle_idx]
+                            replacement = f'<http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}>'
+                            logger.debug(f"Restoring {placeholder} with NEW currency URI: {replacement}")
+                        else:
+                            replacement = placeholder_map.get(placeholder, "")
+                            logger.warning(f"No valid tokens for {placeholder}, using cached: {replacement}")
                     except ValueError:
                         replacement = placeholder_map.get(placeholder, "")
                 else:
@@ -479,7 +493,9 @@ class RedisClient:
         for match in re.finditer(r'\b([A-Za-z]{2,10})\b\s+(?:holder|token|account|supply|balance)', nl_query, re.IGNORECASE):
             token = match.group(1)
             token_upper = token.upper()
-            if token_upper not in values["tokens"] and token_upper not in ['THE', 'IN', 'OF', 'TO', 'FOR', 'TOP']:
+            # Exclude common question/filler words that might precede keywords
+            excluded_words = ['THE', 'IN', 'OF', 'TO', 'FOR', 'TOP', 'MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'IS']
+            if token_upper not in values["tokens"] and token_upper not in excluded_words:
                 values["tokens"].append(token_upper)
                 logger.debug(f"Extracted token: {token_upper}")
 
@@ -490,9 +506,33 @@ class RedisClient:
                 values["tokens"].append(token)
                 logger.debug(f"Extracted standalone token: {token}")
 
-        # Extract other numbers not in limits or percentages
+        # Extract formatted numbers (e.g., 200,000 or 200.000 or 200_000)
+        # This pattern captures numbers with thousand separators
+        for match in re.finditer(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b', nl_query):
+            num = match.group(0)
+            # Normalize: remove separators to get raw number
+            normalized_num = re.sub(r'[,._]', '', num)
+            if (normalized_num not in values["limits"] and
+                normalized_num not in values["percentages"] and
+                normalized_num not in values["percentages_decimal"]):
+                if normalized_num not in values["numbers"]:
+                    # Convert ADA amounts to lovelace (multiply by 1,000,000)
+                    # Check context to see if this is an ADA amount
+                    context = nl_query[max(0, match.start()-20):min(len(nl_query), match.end()+10)]
+                    if 'ADA' in context.upper() or 'ada' in context.lower():
+                        lovelace_value = str(int(normalized_num) * 1000000)
+                        values["numbers"].append(lovelace_value)
+                        logger.debug(f"Extracted ADA number: {num} -> {normalized_num} -> lovelace: {lovelace_value}")
+                    else:
+                        values["numbers"].append(normalized_num)
+                        logger.debug(f"Extracted number: {num} -> normalized: {normalized_num}")
+
+        # Extract simple numbers (no separators)
         for match in re.finditer(r'\b\d+(?:\.\d+)?\b', nl_query):
             num = match.group(0)
+            # Skip if it's part of a formatted number we already extracted
+            if re.search(r'\b\d{1,3}[,._]\d', nl_query[max(0, match.start()-1):match.end()+2]):
+                continue
             if (num not in values["limits"] and
                 num not in values["percentages"] and
                 num not in values["percentages_decimal"]):
@@ -731,6 +771,34 @@ class RedisClient:
             cur_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
+
+        # 6. Extract remaining formatted numbers that aren't placeholders yet
+        formatted_num_pattern = r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b'
+        for match in re.finditer(formatted_num_pattern, normalized):
+            original = match.group(0)
+            # Skip if already a placeholder or inside another placeholder
+            if original.startswith('__') or '__NUM_' in normalized[max(0, match.start()-10):match.end()+10]:
+                continue
+            # Normalize the number (remove separators)
+            cleaned_num = re.sub(r'[,._]', '', original)
+            placeholder = f"__NUM_{num_counter}__"
+            num_counter += 1
+            placeholder_map[placeholder] = cleaned_num  # Store normalized version
+            normalized = normalized.replace(original, placeholder, 1)
+            logger.debug(f"Extracted formatted number: {original} -> {cleaned_num} as {placeholder}")
+
+        # 7. Extract plain numbers (e.g., in HAVING clauses)
+        plain_num_pattern = r'\b\d{1,}\b'  # Numbers with 1+ digits
+        for match in re.finditer(plain_num_pattern, normalized):
+            original = match.group(0)
+            # Skip if already a placeholder
+            if original.startswith('__') or '__NUM_' in normalized[max(0, match.start()-10):match.end()+10]:
+                continue
+            placeholder = f"__NUM_{num_counter}__"
+            num_counter += 1
+            placeholder_map[placeholder] = original
+            normalized = normalized.replace(original, placeholder, 1)
+            logger.debug(f"Extracted large number: {original} as {placeholder}")
 
         return normalized, placeholder_map
 
