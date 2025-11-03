@@ -137,29 +137,6 @@ async def _stream_with_timeout_messages(
         except:
             pass
 
-def _parse_cached_sequential_sparql(sparql_text: str) -> list[dict[str, Any]]:
-    """Parse sequential SPARQL from cache that uses old separator format."""
-    queries = []
-
-    # Split by query markers (support both old and new formats)
-    parts = re.split(r'---query \d+[^-]*---', sparql_text)
-
-    for part in parts[1:]:  # Skip first empty part
-        part = part.strip()
-        if not part or part.startswith('---'):
-            continue
-
-        # Extract injection parameters
-        inject_pattern = r'INJECT\([^)]+\)'
-        inject_matches = re.findall(inject_pattern, part)
-
-        queries.append({
-            'query': part,
-            'inject_params': inject_matches
-        })
-
-    return queries
-
 async def _execute_sequential_queries(
     virtuoso: VirtuosoClient,
     queries: list[dict[str, Any]]
@@ -170,36 +147,57 @@ async def _execute_sequential_queries(
 
     for idx, query_info in enumerate(queries):
         query = query_info['query']
-        inject_params = query_info.get('inject_params', [])
 
         logger.info(f"Executing query {idx + 1}/{len(queries)}")
 
-        # Inject previous results BEFORE execution
-        for param_expr in inject_params:
+        inject_matches = []
+        pos = 0
+        while True:
+            match = re.search(r'INJECT(?:_FROM_PREVIOUS)?\(', query[pos:], re.IGNORECASE)
+            if not match:
+                break
+
+            start = pos + match.start()
+            paren_count = 1
+            i = start + len(match.group(0))
+
+            while i < len(query) and paren_count > 0:
+                if query[i] == '(':
+                    paren_count += 1
+                elif query[i] == ')':
+                    paren_count -= 1
+                i += 1
+
+            if paren_count == 0:
+                inject_matches.append(query[start:i])
+                pos = i
+            else:
+                break
+
+        # Process each INJECT statement found
+        for param_expr in inject_matches:
+            # Extract the expression to evaluate
+            expr_match = re.search(r'evaluate\(([^)]+(?:\([^)]*\))*[^)]*)\)', param_expr)
+            if expr_match:
+                original_expr = expr_match.group(1)
+            else:
+                original_expr = re.sub(r'^INJECT(?:_FROM_PREVIOUS)?\((.+)\)$', r'\1', param_expr)
+
+            logger.info(f"Extracted expression to evaluate: '{original_expr}'")
             injected_value = _evaluate_injection(param_expr, previous_results)
 
-            # Match INJECT with nested parentheses
-            inject_pattern = r'INJECT(?:_FROM_PREVIOUS)?\((?:[^()]+|\([^()]*\))+\)'
-
-            match = re.search(inject_pattern, query)
-            if match:
-                original = match.group(0)
-                # **FIX: Ensure integer for LIMIT/OFFSET, convert floats properly**
-                if isinstance(injected_value, (int, float)):
-                    # Round and convert to int for LIMIT/OFFSET clauses
-                    injected_int = int(round(injected_value))
-                    # Ensure at least 1 for LIMIT clauses
-                    if injected_int < 1:
-                        logger.warning(f"LIMIT value {injected_int} < 1, setting to 1")
-                        injected_int = 1
-                    replacement = str(injected_int)
-                else:
-                    replacement = str(injected_value)
-
-                logger.info(f"Replacing '{original}' with '{replacement}'")
-                query = query.replace(original, replacement, 1)
+            # Replace the INJECT statement with the computed value
+            if isinstance(injected_value, (int, float)):
+                injected_int = int(round(injected_value))
+                if injected_int < 1:
+                    logger.warning(f"LIMIT value {injected_int} < 1, setting to 1")
+                    injected_int = 1
+                replacement = str(injected_int)
             else:
-                logger.warning(f"Could not find INJECT pattern for: {param_expr}")
+                replacement = str(injected_value)
+
+            logger.info(f"Replacing '{param_expr}' with '{replacement}'")
+            query = query.replace(param_expr, replacement, 1)
 
         # Execute the clean SPARQL query string directly
         logger.info(f"Executing query {idx + 1}: {query[:200]}...")
@@ -374,7 +372,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                 # Check cache first
                 low_query: str = user_query.lower().strip()
-                cached_data = await redis_client.get_cached_query(low_query)
+                cached_data = await redis_client.get_cached_query_with_original(low_query, user_query)
 
                 sparql_query = ""
                 sparql_results = None
@@ -382,63 +380,62 @@ async def natural_language_query(request: NLQueryRequest):
                 # Stage 1: Convert NL to SPARQL
                 logger.info(f"Stage 1: convert NL to sparql")
                 if cached_data:
-                    logger.info(f"Cache hit has cached_data: {cached_data}")
+                    logger.info(f"Cache hit for normalized query: {low_query}")
                     cached_sparql = cached_data["sparql_query"]
 
-                    # Try to parse as JSON first (new format)
+                    # Parse cached SPARQL (unified handling)
                     try:
                         parsed = json.loads(cached_sparql)
-                        if isinstance(parsed, list) and len(parsed) > 0:
+                        if isinstance(parsed, list):
                             is_sequential = True
                             sparql_queries = parsed
-                            logger.info(f"cached_data has sequential sparql (JSON format) with {len(parsed)} queries")
+
+                            for idx, query_info in enumerate(sparql_queries):
+                                query_text = query_info['query']
+                                # Check if placeholders still exist
+                                if re.search(r'__(?:PCT|STR|LIM|CUR|URI)_\d+__', query_text):
+                                    logger.error(f"Query {idx+1} still contains unreplaced placeholders: {query_text[:200]}")
+                                    # Log the issue but continue - the query will fail and we'll know why
+                                else:
+                                    logger.info(f"Query {idx+1} placeholders successfully restored")
+
+                            logger.info(f"Cached sequential SPARQL with {len(parsed)} queries")
                         else:
-                            is_sequential = False
-                            sparql_query = cached_sparql
-                            logger.info(f"cached_data has single sparql")
-                    except (json.JSONDecodeError, TypeError):
-                        # Fallback to old format with separator
-                        if "---split" in cached_sparql or "---query" in cached_sparql:
-                            is_sequential = True
-                            logger.info(f"cached_data has sequential sparql (old format)")
-                            sparql_queries = _parse_cached_sequential_sparql(cached_sparql)
-                        else:
-                            logger.info(f"cached_data has single sparql")
                             is_sequential = False
                             sparql_query = cached_sparql
 
+                            # Check single query for placeholders
+                            if re.search(r'__(?:PCT|STR|LIM|CUR|URI)_\d+__', sparql_query):
+                                logger.error(f"Single query still contains unreplaced placeholders: {sparql_query[:200]}")
+
+                    except (json.JSONDecodeError, TypeError):
+                        is_sequential = False
+                        sparql_query = cached_sparql
                 else:
+                    logger.info(f"Cache miss for query: {low_query[:100]}")
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
-                        logger.info(f"Cache miss. Creating sparql using llm...")
-                        # Generate raw response
                         raw_sparql_response = await ollama.generate_complete(
                             prompt=user_query,
                             model=ollama.llm_model,
                             system_prompt=ollama.nl_to_sparql_prompt,
                             temperature=0.0
                         )
-                        logger.info(f"Generated raw SPARQL response: {raw_sparql_response[:200]}...")
 
-                        is_sequential = False
-                        sparql_query = ""
-                        if "SELECT" in raw_sparql_response:
-                            # Detect and parse
-                            is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
+                        is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
 
-                            if is_sequential:
-                                sparql_queries = sparql_content  # list[dict]
-                                logger.info(f"Detected sequential SPARQL with {len(sparql_queries)} queries")
-                            else:
-                                sparql_query = sparql_content  # str
-                                logger.info(f"Generated single SPARQL: {sparql_query}")
-
+                        if is_sequential:
+                            sparql_queries = sparql_content
+                            logger.info(f"Generated sequential SPARQL with {len(sparql_queries)} queries")
+                        else:
+                            sparql_query = sparql_content
+                            logger.info(f"Generated single SPARQL")
                     except Exception as e:
                         logger.error(f"SPARQL generation error: {e}", exc_info=True)
-                        sparql_query = ""
                         is_sequential = False
-                        sparql_queries = []  # Initialize empty list for sequential case
+                        sparql_query = ""
+                        sparql_queries = []
 
                 # Stage 2: Execute SPARQL query
                 logger.info(f"Initiating stage 2 for {user_query}")
