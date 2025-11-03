@@ -1,6 +1,5 @@
 # cap/src/cap/api/user.py
 import hashlib
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -12,7 +11,7 @@ from cap.database.session import get_db
 from cap.database.model import User
 from cap.api.auth_dependencies import get_current_user
 
-router = APIRouter(prefix="/user", tags=["user"])
+router = APIRouter(prefix="/api/v1/user", tags=["user"])
 
 # -----------------------------
 # User endpoints 
