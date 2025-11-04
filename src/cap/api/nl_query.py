@@ -438,6 +438,7 @@ async def natural_language_query(request: NLQueryRequest):
                         sparql_queries = []
 
                 # Stage 2: Execute SPARQL query
+                has_data = True
                 logger.info(f"Initiating stage 2 for {user_query}")
                 if is_sequential:
                     logger.info("stage2: executing sparql list")
@@ -457,6 +458,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                             if result_count == 0:
                                 yield f"{StatusMessage.no_results()}"
+                                has_data = False
                             else:
                                 # Cache the entire sequence (serialize queries list)
                                 await redis_client.cache_query(
@@ -465,13 +467,13 @@ async def natural_language_query(request: NLQueryRequest):
                                 )
                         else:
                             yield f"{StatusMessage.no_data()}"
-                            yield f"{StatusMessage.data_done()}"
-                            return
+                            has_data = False
 
                     except Exception as e:
                         logger.error(f"Sequential SPARQL execution error: {e}", exc_info=True)
                         is_sequential = False  # Fallback to no results
                         sparql_results = None
+                        has_data = False
 
                 else:  # Single query
                     if sparql_query != "":
@@ -493,6 +495,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                             if result_count == 0:
                                 yield f"{StatusMessage.no_results()}"
+                                has_data = False
                             else:
                                 # Cache successful query
                                 await redis_client.cache_query(
@@ -503,14 +506,12 @@ async def natural_language_query(request: NLQueryRequest):
                         except Exception as e:
                             logger.error(f"SPARQL execution error: {e}", exc_info=True)
                             yield f"{StatusMessage.no_data()}"
-                            yield f"{StatusMessage.data_done()}"
-                            return
+                            has_data = False
 
                     else:
                         logger.warning("stage2: executing single sparql with an empty sparql")
                         yield f"{StatusMessage.no_data()}"
-                        yield f"{StatusMessage.data_done()}"
-                        return
+                        has_data = False
 
                 if is_sequential and sparql_queries:
                     sparql_query = json.dumps(sparql_queries)
@@ -520,14 +521,19 @@ async def natural_language_query(request: NLQueryRequest):
 
                 # Stage 3: Contextualize results with LLM
                 logger.info(f"Initiating stage 3 with results {sparql_results}")
-                yield f"{StatusMessage.processing_results()}"
+                if has_data:
+                    yield f"{StatusMessage.processing_results()}"
 
                 try:
-                    kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
-                    formatted_results = format_for_llm(kv_results, max_items=10000)
+                    kv_results = ""
+                    formatted_results = ""
+                    if has_data:
+                        kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
+                        formatted_results = format_for_llm(kv_results, max_items=10000)
 
-                    logger.info(f"Converted SPARQL to K/V format: {kv_results.get('result_type')}")
-                    logger.debug(f"Formatted results for LLM:\n{formatted_results}")
+                        logger.info(f"Converted SPARQL to K/V format: {kv_results.get('result_type')}")
+
+                    logger.debug(f"Formatted results:\n{formatted_results}")
 
                     # Get the context stream from Ollama
                     context_stream = ollama.contextualize_answer(

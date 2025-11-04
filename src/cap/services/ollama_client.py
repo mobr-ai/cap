@@ -450,17 +450,18 @@ class OllamaClient:
                 know_info = f"""
                 This is the current value you MUST consider in your answer:
                 {context_res}
-                DO NOT CHANGE THE VALUES WHEN ANSWERING THE USER.
+
+                {self.contextualize_prompt}
                 """
                 temperature = 0.1
+            else:
+                know_info = "If you do not know how to answer User's question, say you do not know the answer."
 
             # Format the prompt with query and results
             prompt = f"""
                 User Question: {user_query}
 
                 {know_info}
-
-                {self.contextualize_prompt}
             """
 
             logger.info(f"calling ollama model\n    prompt: {prompt}...\n")

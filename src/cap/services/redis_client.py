@@ -70,15 +70,21 @@ class RedisClient:
         normalized = unicodedata.normalize('NFKD', normalized)
         normalized = normalized.encode('ascii', 'ignore').decode('ascii')
 
-        # Replace percentages with placeholder (e.g., "1%", "2%" -> "__PCT__")
-        #normalized = re.sub(r'\b\d+(?:\.\d+)?\s*%\b', '__PCT__', normalized)
-
         # Replace "top N" with placeholder (e.g., "top 5", "top 10" -> "top __N__")
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
 
+        # Replace text numbers with placeholder - ENTIRE phrase
+        # "2 billion" -> "__N__", "699 millions" -> "__N__"
+        normalized = re.sub(
+            r'\b\d+(?:\.\d+)?\s+(?:billion(?:s)?|million(?:s)?|thousand(?:s)?|hundred(?:s)?)\b',
+            '__N__',
+            normalized,
+            flags=re.IGNORECASE
+        )
+
         # Replace token names with placeholder, but exclude common words
         normalized = re.sub(r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))',
-                        lambda m: '__TOKEN__' if m.group(1) not in ['many', 'much', 'what', 'which', 'have'] else m.group(1),
+                        lambda m: '__TOKEN__' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
                         normalized)
 
         # Replace formatted numbers first (e.g., 200,000 or 200.000 or 200_000)
@@ -225,6 +231,7 @@ class RedisClient:
                                         # Extract index from __CUR_N__
                                         idx = int(placeholder.replace('__CUR_', '').replace('__', ''))
                                         cur_counter = max(cur_counter, idx + 1)
+                                        logger.debug(f"Updated cur_counter to {cur_counter} from {placeholder}")
                                 except (AttributeError, ValueError) as e:
                                     logger.warning(f"Failed to parse index from {placeholder}: {e}")
 
@@ -272,29 +279,24 @@ class RedisClient:
     ) -> str:
         """
         Restore placeholders with current values from the new query.
-        INJECT(...)
         """
-        restored = sparql
 
-        # Build ordered list of all placeholders with their positions
-        placeholder_positions = []
+        # Extract prefixes to avoid replacing placeholders in them
+        prefix_pattern = r'^((?:PREFIX\s+\w+:\s*<[^>]+>\s*)+)'
+        prefix_match = re.match(prefix_pattern, sparql, re.MULTILINE | re.IGNORECASE)
+
+        prefixes = ""
+        query_body = sparql
+
+        if prefix_match:
+            prefixes = prefix_match.group(1).strip()
+            query_body = sparql[prefix_match.end():].strip()
+
+        restored = query_body
+
+        # Process each placeholder type in order
         for placeholder in placeholder_map.keys():
-            pos = 0
-            while True:
-                pos = restored.find(placeholder, pos)
-                if pos == -1:
-                    break
-                placeholder_positions.append((pos, placeholder))
-                pos += len(placeholder)
-
-        # Sort by position to maintain order
-        placeholder_positions.sort(key=lambda x: x[0])
-
-        # Apply replacements from right to left to maintain positions
-        for pos, placeholder in reversed(placeholder_positions):
-            # Find what to replace with
             replacement = None
-
 
             if placeholder.startswith("__INJECT_"):
                 # Get the cached INJECT statement (which may contain nested placeholders)
@@ -321,7 +323,7 @@ class RedisClient:
                         replacement = replacement.replace(nested_ph, nested_replacement)
                         logger.debug(f"Restored nested {nested_ph} in INJECT with: {nested_replacement}")
 
-                logger.debug(f"Restoring {placeholder} at pos {pos} with: {replacement}")
+                logger.debug(f"Restoring {placeholder} with: {replacement}")
 
             elif placeholder.startswith("__PCT_DECIMAL_"):
                 if current_values.get("percentages_decimal"):
@@ -329,7 +331,7 @@ class RedisClient:
                         idx = int(placeholder.replace('__PCT_DECIMAL_', '').replace('__', ''))
                         cycle_idx = idx % len(current_values["percentages_decimal"])
                         replacement = current_values["percentages_decimal"][cycle_idx]
-                        logger.debug(f"Restoring {placeholder} at pos {pos} with NEW decimal: {replacement}")
+                        logger.debug(f"Restoring {placeholder} with NEW decimal: {replacement}")
                     except ValueError:
                         replacement = placeholder_map.get(placeholder, "0.01")
                         logger.warning(f"Failed to parse index from {placeholder}, using cached: {replacement}")
@@ -343,8 +345,7 @@ class RedisClient:
                         idx = int(placeholder.replace('__PCT_', '').replace('__', ''))
                         cycle_idx = idx % len(current_values["percentages"])
                         replacement = current_values["percentages"][cycle_idx]
-                        logger.debug(f"Restoring {placeholder} at pos {pos} with NEW value: {replacement}")
-
+                        logger.debug(f"Restoring {placeholder} with NEW value: {replacement}")
                     except ValueError:
                         replacement = placeholder_map.get(placeholder, "1")
                 else:
@@ -357,7 +358,7 @@ class RedisClient:
                         idx = int(placeholder.replace('__NUM_', '').replace('__', ''))
                         cycle_idx = idx % len(current_values["numbers"])
                         replacement = current_values["numbers"][cycle_idx]
-                        logger.debug(f"Restoring {placeholder} at pos {pos} with NEW value: {replacement}")
+                        logger.debug(f"Restoring {placeholder} with NEW value: {replacement}")
                     except ValueError:
                         replacement = placeholder_map.get(placeholder, "1")
                         logger.warning(f"Failed to parse index from {placeholder}, using cached: {replacement}")
@@ -398,37 +399,36 @@ class RedisClient:
                 if current_values.get("tokens"):
                     try:
                         idx = int(placeholder.replace('__CUR_', '').replace('__', ''))
-                        # Filter out question words from tokens list before indexing
-                        excluded_words = ['MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'IS']
-                        valid_tokens = [t for t in current_values["tokens"] if t not in excluded_words]
+                        valid_tokens = [t for t in current_values["tokens"] if t.strip()]
 
                         if valid_tokens:
                             cycle_idx = idx % len(valid_tokens)
                             token = valid_tokens[cycle_idx]
+                            # Construct URI - ensure token is lowercase
                             replacement = f'<http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}>'
                             logger.debug(f"Restoring {placeholder} with NEW currency URI: {replacement}")
                         else:
                             replacement = placeholder_map.get(placeholder, "")
                             logger.warning(f"No valid tokens for {placeholder}, using cached: {replacement}")
-                    except ValueError:
+                    except (ValueError, IndexError) as e:
                         replacement = placeholder_map.get(placeholder, "")
+                        logger.error(f"Failed to restore {placeholder}: {e}, using cached: {replacement}")
                 else:
                     replacement = placeholder_map.get(placeholder, "")
-                    logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
+                    logger.warning(f"No current tokens for {placeholder}, using cached: {replacement}")
 
             elif placeholder.startswith("__URI_"):
                 replacement = placeholder_map.get(placeholder, "")
 
-            # Replace this ONE occurrence
+            # Use simple string replacement since each placeholder is unique
+            # There is no partial matches for placeholders
             if replacement is not None:
-                restored = restored[:pos] + replacement + restored[pos + len(placeholder):]
+                restored = restored.replace(placeholder, replacement)
+                logger.debug(f"Replaced {placeholder} with {replacement}")
 
-        # Verify no placeholders remain
-        remaining = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI)_\d+__', restored)
-        if remaining:
-            logger.error(f"Placeholders still present after restoration: {remaining}")
-            logger.error(f"Current values: {current_values}")
-            logger.error(f"Placeholder map: {placeholder_map}")
+        # Restore prefixes
+        if prefixes:
+            restored = prefixes + "\n\n" + restored
 
         return restored
 
@@ -490,21 +490,49 @@ class RedisClient:
                 logger.debug(f"Extracted top limit: {limit}")
 
         # Extract token names - preserve original case
-        for match in re.finditer(r'\b([A-Za-z]{2,10})\b\s+(?:holder|token|account|supply|balance)', nl_query, re.IGNORECASE):
+        for match in re.finditer(r'\b([A-Za-z]{3,10})\b\s+(?:(?:(?<!token\s)holder|token(?=\s+state)|account|supply|balance))', nl_query, re.IGNORECASE):
             token = match.group(1)
             token_upper = token.upper()
             # Exclude common question/filler words that might precede keywords
-            excluded_words = ['THE', 'IN', 'OF', 'TO', 'FOR', 'TOP', 'MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'IS']
+            excluded_words = ['THE', 'FOR', 'TOP', 'MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'DEFINE', "SHOW", "LIST"]
             if token_upper not in values["tokens"] and token_upper not in excluded_words:
                 values["tokens"].append(token_upper)
                 logger.debug(f"Extracted token: {token_upper}")
 
-        # Extract standalone uppercase tokens
-        for match in re.finditer(r'\b([A-Z]{2,10})\b', nl_query):
-            token = match.group(1)
-            if token not in values["tokens"] and token not in ['THE', 'IN', 'OF', 'TO', 'FOR']:
-                values["tokens"].append(token)
-                logger.debug(f"Extracted standalone token: {token}")
+        # Extract text-formatted numbers (billion, million, etc.)
+        for match in re.finditer(
+            r'\b(\d+(?:\.\d+)?)\s+(billion(?:s)?|million(?:s)?|thousand(?:s)?|hundred(?:s)?)\b',
+            nl_query,
+            re.IGNORECASE
+        ):
+            num = match.group(1)
+            unit = match.group(2).lower()
+            if unit.endswith("s"):
+                unit = unit[:-1]
+
+            # Convert to actual number
+            multipliers = {
+                'hundred': 100,
+                'thousand': 1000,
+                'million': 1000000,
+                'billion': 1000000000,
+            }
+
+            base_num = float(num)
+            actual_value = str(int(base_num * multipliers.get(unit, 1)))
+
+            # Check if context mentions ADA
+            context = nl_query[max(0, match.start()-20):min(len(nl_query), match.end()+10)]
+            if 'ADA' in context.upper():
+                # Convert to lovelace
+                lovelace_value = str(int(actual_value) * 1000000)
+                if lovelace_value not in values["numbers"]:
+                    values["numbers"].append(lovelace_value)
+                    logger.debug(f"Extracted text number: {num} {unit} ADA -> lovelace: {lovelace_value}")
+            else:
+                if actual_value not in values["numbers"]:
+                    values["numbers"].append(actual_value)
+                    logger.debug(f"Extracted text number: {num} {unit} -> {actual_value}")
 
         # Extract formatted numbers (e.g., 200,000 or 200.000 or 200_000)
         # This pattern captures numbers with thousand separators
@@ -519,7 +547,7 @@ class RedisClient:
                     # Convert ADA amounts to lovelace (multiply by 1,000,000)
                     # Check context to see if this is an ADA amount
                     context = nl_query[max(0, match.start()-20):min(len(nl_query), match.end()+10)]
-                    if 'ADA' in context.upper() or 'ada' in context.lower():
+                    if 'ADA' in context.upper():
                         lovelace_value = str(int(normalized_num) * 1000000)
                         values["numbers"].append(lovelace_value)
                         logger.debug(f"Extracted ADA number: {num} -> {normalized_num} -> lovelace: {lovelace_value}")
@@ -624,11 +652,36 @@ class RedisClient:
         start_inject_counter: int = 0
     ) -> tuple[str, dict[str, str]]:
         """
-        Extract literals, instances, and numbers from SPARQL, replace with typed placeholders.
+        Extract literals and instances from SPARQL, replace with typed placeholders.
         Returns: (normalized_sparql, placeholder_map)
         """
+
+        # ORDER of the extraction steps:
+        # 1. Extract INJECT statements FIRST
+        # 2. Extract currency URIs SECOND
+        # 3. Extract percentages
+        # 4. Extract string literals
+        # 5. Extract LIMIT/OFFSET
+        # 6. Extract other URIs
+        # 7. Extract formatted numbers
+        # 8. Extract plain numbers
+
         placeholder_map = {}
-        normalized = sparql_query
+
+        # Extract and store prefixes FIRST - these should NEVER be normalized
+        prefix_pattern = r'^((?:PREFIX\s+\w+:\s*<[^>]+>\s*)+)'
+        prefix_match = re.match(prefix_pattern, sparql_query, re.MULTILINE | re.IGNORECASE)
+
+        prefixes = ""
+        query_body = sparql_query
+
+        if prefix_match:
+            prefixes = prefix_match.group(1).strip()
+            query_body = sparql_query[prefix_match.end():].strip()
+            logger.debug(f"Extracted {len(prefixes.splitlines())} PREFIX lines - these will be preserved as-is")
+
+        # Now work ONLY on query_body, not the prefixes
+        normalized = query_body
 
         # Use passed-in counters instead of starting at 0
         num_counter = start_num_counter
@@ -703,10 +756,32 @@ class RedisClient:
 
             return result
 
-        # 0. Extract INJECT statements FIRST, before ANY other extraction
+        # 1. Extract INJECT statements FIRST, before ANY other extraction
         normalized = extract_inject_statements(normalized)
 
-        # 1. Extract percentages (e.g., "1%", "0.01") - outside INJECT blocks
+        # 2. Extract currency URIs separately
+        currency_pattern = r'<http://www\.mobr\.ai/ontologies/cardano#cnt/[^>]+>|cardano:cnt/\w+'
+        currency_matches = list(re.finditer(currency_pattern, normalized))
+        for match in reversed(currency_matches):  # Process right to left
+            original = match.group(0)
+            # Normalize to full URI format if short form
+            if not original.startswith('<'):
+                full_uri = f'<http://www.mobr.ai/ontologies/cardano#{original}>'
+            else:
+                full_uri = original
+
+            # Skip if already replaced
+            if normalized[match.start():match.end()].startswith('__CUR_'):
+                continue
+
+            placeholder = f"__CUR_{cur_counter}__"
+            cur_counter += 1
+            placeholder_map[placeholder] = full_uri
+            # Use position-based replacement instead of string replace
+            normalized = normalized[:match.start()] + placeholder + normalized[match.end():]
+            logger.debug(f"Extracted currency: {match.group(0)} -> {full_uri} as {placeholder}")
+
+        # 3. Extract percentages (e.g., "1%", "0.01") - outside INJECT blocks
         pct_pattern = r'(\d+(?:\.\d+)?)\s*%|0\.\d+'
         for match in re.finditer(pct_pattern, normalized):
             original = match.group(0)
@@ -718,7 +793,7 @@ class RedisClient:
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
 
-        # 2. Extract string literals (tokens, policy IDs, etc.) - outside INJECT blocks
+        # 4. Extract string literals (tokens, policy IDs, etc.) - outside INJECT blocks
         string_pattern = r'["\']([^"\']+)["\']'
         for match in re.finditer(string_pattern, normalized):
             original = match.group(0)
@@ -730,7 +805,7 @@ class RedisClient:
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
 
-        # 3. Extract LIMIT/OFFSET numbers - outside INJECT blocks
+        # 5. Extract LIMIT/OFFSET numbers - outside INJECT blocks
         limit_pattern = r'(LIMIT|OFFSET)\s+(\d+)'
         for match in re.finditer(limit_pattern, normalized, re.IGNORECASE):
             original_num = match.group(2)
@@ -748,7 +823,7 @@ class RedisClient:
                 flags=re.IGNORECASE
             )
 
-        # 4. Extract URIs (addresses, assets, etc.) - outside INJECT blocks
+        # 6. Extract URIs (addresses, assets, etc.)
         uri_pattern = r'(cardano:(?:addr|asset|stake|pool|tx)[a-zA-Z0-9]+)'
         for match in re.finditer(uri_pattern, normalized):
             original = match.group(0)
@@ -760,25 +835,25 @@ class RedisClient:
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
 
-        # 5. Extract currency URIs separately - outside INJECT blocks
-        currency_pattern = r'<http://www\.mobr\.ai/ontologies/cardano#cnt/[^>]+>'
-        for match in re.finditer(currency_pattern, normalized):
-            original = match.group(0)
-            # Skip if already a placeholder
-            if '__CUR_' in original:
-                continue
-            placeholder = f"__CUR_{cur_counter}__"
-            cur_counter += 1
-            placeholder_map[placeholder] = original
-            normalized = normalized.replace(original, placeholder, 1)
-
-        # 6. Extract remaining formatted numbers that aren't placeholders yet
+        # 7. Extract remaining formatted numbers that aren't placeholders yet
         formatted_num_pattern = r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b'
         for match in re.finditer(formatted_num_pattern, normalized):
             original = match.group(0)
-            # Skip if already a placeholder or inside another placeholder
-            if original.startswith('__') or '__NUM_' in normalized[max(0, match.start()-10):match.end()+10]:
+            # Get surrounding context
+            context_start = max(0, match.start() - 15)
+            context_end = min(len(normalized), match.end() + 15)
+            context = normalized[context_start:context_end]
+
+            # Skip if already a placeholder, inside URL, or part of namespace
+            if (original.startswith('__') or
+                '__NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
+                '<http' in context or
+                '://' in context or
+                'XMLSchema' in context or
+                '.w3.org' in context):
+                logger.debug(f"Skipping formatted number {original} - inside URL or already placeholder")
                 continue
+
             # Normalize the number (remove separators)
             cleaned_num = re.sub(r'[,._]', '', original)
             placeholder = f"__NUM_{num_counter}__"
@@ -787,18 +862,42 @@ class RedisClient:
             normalized = normalized.replace(original, placeholder, 1)
             logger.debug(f"Extracted formatted number: {original} -> {cleaned_num} as {placeholder}")
 
-        # 7. Extract plain numbers (e.g., in HAVING clauses)
-        plain_num_pattern = r'\b\d{1,}\b'  # Numbers with 1+ digits
+        # 8. Extract plain numbers (e.g., in HAVING clauses)
+        plain_num_pattern = r'\b\d{1,}\b'
         for match in re.finditer(plain_num_pattern, normalized):
             original = match.group(0)
-            # Skip if already a placeholder
-            if original.startswith('__') or '__NUM_' in normalized[max(0, match.start()-10):match.end()+10]:
+
+            # Get context around the match to check if it's part of a URL or prefix
+            context_start = max(0, match.start() - 20)
+            context_end = min(len(normalized), match.end() + 20)
+            context = normalized[context_start:context_end]
+
+            # Skip if:
+            # - Already a placeholder
+            # - Part of another placeholder
+            # - Inside a URL/URI (has :// or common URL patterns)
+            # - Inside XML namespace declarations
+            if (original.startswith('__') or
+                '__NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
+                '://' in context or
+                '<http' in context or
+                'www.' in context or
+                '.org' in context or
+                '.com' in context or
+                'XMLSchema' in context or
+                '/ontologies/' in context):
+                logger.debug(f"Skipping plain number {original} - inside URL/URI or already placeholder")
                 continue
+
             placeholder = f"__NUM_{num_counter}__"
             num_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
-            logger.debug(f"Extracted large number: {original} as {placeholder}")
+            logger.debug(f"Extracted plain number: {original} as {placeholder}")
+
+        if prefixes:
+            normalized = prefixes + "\n\n" + normalized
+            logger.debug("Restored PREFIX declarations to normalized query")
 
         return normalized, placeholder_map
 
@@ -857,7 +956,7 @@ class RedisClient:
                         exists = await client.exists(cache_key)
                         if exists:
                             stats["skipped_duplicates"] += 1
-                            logger.debug(f"Skipping duplicate: {nl_query[:50]}...")
+                            logger.debug(f"Skipping duplicate: {nl_query}...")
                             continue
 
                         # IMPORTANT: _clean_sparql_from_file already returns proper format
@@ -880,16 +979,16 @@ class RedisClient:
                                 await client.setex(cache_key, ttl_value, json.dumps(data))
 
                             stats["cached_successfully"] += 1
-                            logger.debug(f"Pre-cached: {nl_query[:50]}...")
+                            logger.debug(f"Pre-cached: {nl_query}...")
                         else:
                             stats["failed"] += 1
-                            error_msg = f"cache_query returned False for: {nl_query[:50]}..."
+                            error_msg = f"cache_query returned False for: {nl_query}..."
                             stats["errors"].append(error_msg)
                             logger.error(error_msg)
 
                     except Exception as e:
                         stats["failed"] += 1
-                        error_msg = f"Failed to cache '{nl_query[:50]}...': {str(e)}"
+                        error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
                         stats["errors"].append(error_msg)
                         logger.error(error_msg, exc_info=True)
 
@@ -965,10 +1064,23 @@ class RedisClient:
                             query_info['query'] = restored_query_text
 
                             # Verify restoration
-                            remaining = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI)_(?:DECIMAL_)?\d+__', restored_query_text)
+                            remaining = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+__', restored_query_text)
                             if remaining:
-                                logger.error(f"Query {idx+1} still has placeholders after restoration: {remaining}")
-                                logger.error(f"Query text: {restored_query_text[:500]}")
+                                logger.error(f"Query {idx+1} still has placeholders: {remaining}")
+                                # CRITICAL: Try one more restoration pass for missed placeholders
+                                restored_query_text = self._restore_placeholders(
+                                    restored_query_text,
+                                    placeholder_map,
+                                    current_values
+                                )
+                                query_info['query'] = restored_query_text
+
+                                # Check again
+                                remaining_after_retry = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+__', restored_query_text)
+                                if remaining_after_retry:
+                                    logger.error(f"Query {idx+1} STILL has placeholders after retry: {remaining_after_retry}")
+                            else:
+                                logger.info(f"Query {idx+1} fully restored - no placeholders remaining")
 
                         # Serialize back to JSON string
                         data["sparql_query"] = json.dumps(parsed)
