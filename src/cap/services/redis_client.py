@@ -74,24 +74,24 @@ class RedisClient:
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
 
         # Replace text numbers with placeholder - ENTIRE phrase
-        # "2 billion" -> "__N__", "699 millions" -> "__N__"
+        # "2 billion" -> "<<N>>", "699 millions" -> "<<N>>"
         normalized = re.sub(
             r'\b\d+(?:\.\d+)?\s+(?:billion(?:s)?|million(?:s)?|thousand(?:s)?|hundred(?:s)?)\b',
-            '__N__',
+            '<<N>>',
             normalized,
             flags=re.IGNORECASE
         )
 
         # Replace token names with placeholder, but exclude common words
         normalized = re.sub(r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))',
-                        lambda m: '__TOKEN__' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
+                        lambda m: '<<TOKEN>>' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
                         normalized)
 
         # Replace formatted numbers first (e.g., 200,000 or 200.000 or 200_000)
-        normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '__N__', normalized)
+        normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
 
         # Replace other standalone numbers with placeholder
-        normalized = re.sub(r'\b\d+(?:\.\d+)?\b(?!\s*%)', '__N__', normalized)
+        normalized = re.sub(r'\b\d+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
 
         # Remove punctuation
         normalized = re.sub(r'[^\w\s]', '', normalized)
@@ -200,36 +200,36 @@ class RedisClient:
                             for placeholder in placeholders.keys():
                                 try:
                                     # Handle INJECT placeholders**
-                                    if placeholder.startswith("__INJECT_"):
-                                        idx = int(placeholder.replace('__INJECT_', '').replace('__', ''))
+                                    if placeholder.startswith("<<INJECT_"):
+                                        idx = int(placeholder.replace('<<INJECT_', '').replace('>>', ''))
                                         inject_counter = max(inject_counter, idx + 1)
-                                    elif placeholder.startswith("__PCT_DECIMAL_"):
-                                        # Extract index from __PCT_DECIMAL_N__
-                                        idx = int(placeholder.replace('__PCT_DECIMAL_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<PCT_DECIMAL_"):
+                                        # Extract index from <<PCT_DECIMAL_N>>
+                                        idx = int(placeholder.replace('<<PCT_DECIMAL_', '').replace('>>', ''))
                                         pct_counter = max(pct_counter, idx + 1)
-                                    elif placeholder.startswith("__PCT_"):
-                                        # Extract index from __PCT_N__
-                                        idx = int(placeholder.replace('__PCT_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<PCT_"):
+                                        # Extract index from <<PCT_N__
+                                        idx = int(placeholder.replace('<<PCT_', '').replace('>>', ''))
                                         pct_counter = max(pct_counter, idx + 1)
-                                    elif placeholder.startswith("__NUM_"):
-                                        # Extract index from __NUM_N__
-                                        idx = int(placeholder.replace('__NUM_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<NUM_"):
+                                        # Extract index from <<NUM_N__
+                                        idx = int(placeholder.replace('<<NUM_', '').replace('>>', ''))
                                         num_counter = max(num_counter, idx + 1)
-                                    elif placeholder.startswith("__STR_"):
-                                        # Extract index from __STR_N__
-                                        idx = int(placeholder.replace('__STR_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<STR_"):
+                                        # Extract index from <<STR_N__
+                                        idx = int(placeholder.replace('<<STR_', '').replace('>>', ''))
                                         str_counter = max(str_counter, idx + 1)
-                                    elif placeholder.startswith("__LIM_"):
-                                        # Extract index from __LIM_N__
-                                        idx = int(placeholder.replace('__LIM_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<LIM_"):
+                                        # Extract index from <<LIM_N__
+                                        idx = int(placeholder.replace('<<LIM_', '').replace('>>', ''))
                                         lim_counter = max(lim_counter, idx + 1)
-                                    elif placeholder.startswith("__URI_"):
-                                        # Extract index from __URI_N__
-                                        idx = int(placeholder.replace('__URI_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<URI_"):
+                                        # Extract index from <<URI_N__
+                                        idx = int(placeholder.replace('<<URI_', '').replace('>>', ''))
                                         uri_counter = max(uri_counter, idx + 1)
-                                    elif placeholder.startswith("__CUR_"):
-                                        # Extract index from __CUR_N__
-                                        idx = int(placeholder.replace('__CUR_', '').replace('__', ''))
+                                    elif placeholder.startswith("<<CUR_"):
+                                        # Extract index from <<CUR_N__
+                                        idx = int(placeholder.replace('<<CUR_', '').replace('>>', ''))
                                         cur_counter = max(cur_counter, idx + 1)
                                         logger.debug(f"Updated cur_counter to {cur_counter} from {placeholder}")
                                 except (AttributeError, ValueError) as e:
@@ -298,20 +298,20 @@ class RedisClient:
         for placeholder in placeholder_map.keys():
             replacement = None
 
-            if placeholder.startswith("__INJECT_"):
+            if placeholder.startswith("<<INJECT_"):
                 # Get the cached INJECT statement (which may contain nested placeholders)
                 inject_template = placeholder_map.get(placeholder, "")
 
                 # Recursively restore any nested placeholders within the INJECT
                 replacement = inject_template
-                nested_placeholders = re.findall(r'__(?:PCT_DECIMAL|PCT|NUM|STR|LIM|CUR|URI)_\d+__', inject_template)
+                nested_placeholders = re.findall(r'<<(?:PCT_DECIMAL|PCT|NUM|STR|LIM|CUR|URI)_\d+>>', inject_template)
                 for nested_ph in nested_placeholders:
                     nested_replacement = None
 
-                    if nested_ph.startswith("__PCT_DECIMAL_"):
+                    if nested_ph.startswith("<<PCT_DECIMAL_"):
                         if current_values.get("percentages_decimal"):
                             try:
-                                idx = int(nested_ph.replace('__PCT_DECIMAL_', '').replace('__', ''))
+                                idx = int(nested_ph.replace('<<PCT_DECIMAL_', '').replace('>>', ''))
                                 cycle_idx = idx % len(current_values["percentages_decimal"])
                                 nested_replacement = current_values["percentages_decimal"][cycle_idx]
                             except ValueError:
@@ -325,10 +325,10 @@ class RedisClient:
 
                 logger.debug(f"Restoring {placeholder} with: {replacement}")
 
-            elif placeholder.startswith("__PCT_DECIMAL_"):
+            elif placeholder.startswith("<<PCT_DECIMAL_"):
                 if current_values.get("percentages_decimal"):
                     try:
-                        idx = int(placeholder.replace('__PCT_DECIMAL_', '').replace('__', ''))
+                        idx = int(placeholder.replace('<<PCT_DECIMAL_', '').replace('>>', ''))
                         cycle_idx = idx % len(current_values["percentages_decimal"])
                         replacement = current_values["percentages_decimal"][cycle_idx]
                         logger.debug(f"Restoring {placeholder} with NEW decimal: {replacement}")
@@ -339,10 +339,10 @@ class RedisClient:
                     replacement = placeholder_map.get(placeholder, "0.01")
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
 
-            elif placeholder.startswith("__PCT_"):
+            elif placeholder.startswith("<<PCT_"):
                 if current_values.get("percentages"):
                     try:
-                        idx = int(placeholder.replace('__PCT_', '').replace('__', ''))
+                        idx = int(placeholder.replace('<<PCT_', '').replace('>>', ''))
                         cycle_idx = idx % len(current_values["percentages"])
                         replacement = current_values["percentages"][cycle_idx]
                         logger.debug(f"Restoring {placeholder} with NEW value: {replacement}")
@@ -352,10 +352,10 @@ class RedisClient:
                     replacement = placeholder_map.get(placeholder, "1")
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
 
-            elif placeholder.startswith("__NUM_"):
+            elif placeholder.startswith("<<NUM_"):
                 if current_values.get("numbers"):
                     try:
-                        idx = int(placeholder.replace('__NUM_', '').replace('__', ''))
+                        idx = int(placeholder.replace('<<NUM_', '').replace('>>', ''))
                         cycle_idx = idx % len(current_values["numbers"])
                         replacement = current_values["numbers"][cycle_idx]
                         logger.debug(f"Restoring {placeholder} with NEW value: {replacement}")
@@ -366,10 +366,10 @@ class RedisClient:
                     replacement = placeholder_map.get(placeholder, "1")
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
 
-            elif placeholder.startswith("__STR_"):
+            elif placeholder.startswith("<<STR_"):
                 if current_values.get("tokens"):
                     try:
-                        idx = int(placeholder.replace('__STR_', '').replace('__', ''))
+                        idx = int(placeholder.replace('<<STR_', '').replace('>>', ''))
                         cycle_idx = idx % len(current_values["tokens"])
                         token = current_values["tokens"][cycle_idx]
                         original = placeholder_map.get(placeholder, '""')
@@ -382,10 +382,10 @@ class RedisClient:
                     replacement = placeholder_map.get(placeholder, '""')
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
 
-            elif placeholder.startswith("__LIM_"):
+            elif placeholder.startswith("<<LIM_"):
                 if current_values.get("limits"):
                     try:
-                        idx = int(placeholder.replace('__LIM_', '').replace('__', ''))
+                        idx = int(placeholder.replace('<<LIM_', '').replace('>>', ''))
                         cycle_idx = idx % len(current_values["limits"])
                         replacement = current_values["limits"][cycle_idx]
                         logger.debug(f"Restoring {placeholder} with NEW limit: {replacement}")
@@ -395,35 +395,22 @@ class RedisClient:
                     replacement = placeholder_map.get(placeholder, "10")
                     logger.warning(f"No current value for {placeholder}, using cached: {replacement}")
 
-            elif placeholder.startswith("__CUR_"):
-                if current_values.get("tokens"):
-                    try:
-                        idx = int(placeholder.replace('__CUR_', '').replace('__', ''))
-                        valid_tokens = [t for t in current_values["tokens"] if t.strip()]
-
-                        if valid_tokens:
-                            cycle_idx = idx % len(valid_tokens)
-                            token = valid_tokens[cycle_idx]
-                            # Construct URI - ensure token is lowercase
-                            replacement = f'<http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}>'
-                            logger.debug(f"Restoring {placeholder} with NEW currency URI: {replacement}")
-                        else:
-                            replacement = placeholder_map.get(placeholder, "")
-                            logger.warning(f"No valid tokens for {placeholder}, using cached: {replacement}")
-                    except (ValueError, IndexError) as e:
-                        replacement = placeholder_map.get(placeholder, "")
-                        logger.error(f"Failed to restore {placeholder}: {e}, using cached: {replacement}")
+            elif placeholder.startswith("<<CUR_"):
+                # Always use the cached URI - it's already complete and correct
+                replacement = placeholder_map.get(placeholder, "")
+                if replacement:
+                    logger.debug(f"Restoring {placeholder} with cached URI: {replacement}")
                 else:
-                    replacement = placeholder_map.get(placeholder, "")
-                    logger.warning(f"No current tokens for {placeholder}, using cached: {replacement}")
+                    logger.warning(f"No cached URI for {placeholder}")
 
-            elif placeholder.startswith("__URI_"):
+            elif placeholder.startswith("<<URI_"):
                 replacement = placeholder_map.get(placeholder, "")
 
-            # Use simple string replacement since each placeholder is unique
-            # There is no partial matches for placeholders
+            # Use regex word boundary replacement to avoid partial matches
             if replacement is not None:
-                restored = restored.replace(placeholder, replacement)
+                # Escape the placeholder for regex and use word boundaries
+                pattern = re.escape(placeholder)
+                restored = re.sub(pattern, replacement, restored)
                 logger.debug(f"Replaced {placeholder} with {replacement}")
 
         # Restore prefixes
@@ -490,8 +477,9 @@ class RedisClient:
                 logger.debug(f"Extracted top limit: {limit}")
 
         # Extract token names - preserve original case
-        for match in re.finditer(r'\b([A-Za-z]{3,10})\b\s+(?:(?:(?<!token\s)holder|token(?=\s+state)|account|supply|balance))', nl_query, re.IGNORECASE):
-            token = match.group(1)
+        token_pattern = r'\b([A-Z]{3,10})\b(?=\s+(?:holder|token|account|supply|balance))|(?:from\s+the\s+)([A-Z]{3,10})(?:\s+supply)'
+        for match in re.finditer(token_pattern, nl_query):
+            token = match.group(1) or match.group(2)
             token_upper = token.upper()
             # Exclude common question/filler words that might precede keywords
             excluded_words = ['THE', 'FOR', 'TOP', 'MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'DEFINE', "SHOW", "LIST"]
@@ -721,7 +709,7 @@ class RedisClient:
 
                 if paren_count == 0:
                     original = result[start:i]
-                    placeholder = f"__INJECT_{inject_counter}__"
+                    placeholder = f"<<INJECT_{inject_counter}>>"
                     inject_counter += 1
 
                     # Store the INJECT statement but parameterize percentage decimals inside it
@@ -732,7 +720,7 @@ class RedisClient:
                         decimal_val = match.group(1)
                         decimal_float = float(decimal_val)
                         if 0 < decimal_float < 1.0:  # It's a percentage decimal
-                            pct_placeholder = f"__PCT_DECIMAL_{pct_counter}__"
+                            pct_placeholder = f"<<PCT_DECIMAL_{pct_counter}>>"
                             pct_counter += 1
                             start_pos = match.start()
                             end_pos = match.end()
@@ -759,36 +747,34 @@ class RedisClient:
         # 1. Extract INJECT statements FIRST, before ANY other extraction
         normalized = extract_inject_statements(normalized)
 
-        # 2. Extract currency URIs separately
-        currency_pattern = r'<http://www\.mobr\.ai/ontologies/cardano#cnt/[^>]+>|cardano:cnt/\w+'
+        # 2. Extract currency URIs separately - process from right to left to preserve positions
+        currency_pattern = r'<http://www\.mobr\.ai/ontologies/cardano#cnt/[^>]+>'
         currency_matches = list(re.finditer(currency_pattern, normalized))
-        for match in reversed(currency_matches):  # Process right to left
+        for match in reversed(currency_matches):
             original = match.group(0)
-            # Normalize to full URI format if short form
-            if not original.startswith('<'):
-                full_uri = f'<http://www.mobr.ai/ontologies/cardano#{original}>'
-            else:
-                full_uri = original
 
             # Skip if already replaced
-            if normalized[match.start():match.end()].startswith('__CUR_'):
+            if normalized[match.start():match.end()].startswith('<<CUR_'):
                 continue
 
-            placeholder = f"__CUR_{cur_counter}__"
+            placeholder = f"<<CUR_{cur_counter}>>"
             cur_counter += 1
-            placeholder_map[placeholder] = full_uri
-            # Use position-based replacement instead of string replace
+
+            # Store the FULL original URI exactly as it appears
+            placeholder_map[placeholder] = original
+
+            # Use position-based replacement
             normalized = normalized[:match.start()] + placeholder + normalized[match.end():]
-            logger.debug(f"Extracted currency: {match.group(0)} -> {full_uri} as {placeholder}")
+            logger.debug(f"Extracted currency URI: {original} as {placeholder}")
 
         # 3. Extract percentages (e.g., "1%", "0.01") - outside INJECT blocks
         pct_pattern = r'(\d+(?:\.\d+)?)\s*%|0\.\d+'
         for match in re.finditer(pct_pattern, normalized):
             original = match.group(0)
             # Skip if already a placeholder
-            if original.startswith('__'):
+            if original.startswith('<<'):
                 continue
-            placeholder = f"__PCT_{pct_counter}__"
+            placeholder = f"<<PCT_{pct_counter}>>"
             pct_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
@@ -798,9 +784,9 @@ class RedisClient:
         for match in re.finditer(string_pattern, normalized):
             original = match.group(0)
             # Skip if already a placeholder
-            if '__STR_' in original:
+            if '<<STR_' in original:
                 continue
-            placeholder = f"__STR_{str_counter}__"
+            placeholder = f"<<STR_{str_counter}>>"
             str_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
@@ -810,9 +796,9 @@ class RedisClient:
         for match in re.finditer(limit_pattern, normalized, re.IGNORECASE):
             original_num = match.group(2)
             # Skip if already a placeholder
-            if original_num.startswith('__'):
+            if original_num.startswith('>>'):
                 continue
-            placeholder = f"__LIM_{lim_counter}__"
+            placeholder = f"<<LIM_{lim_counter}>>"
             lim_counter += 1
             placeholder_map[placeholder] = original_num
             normalized = re.sub(
@@ -828,9 +814,9 @@ class RedisClient:
         for match in re.finditer(uri_pattern, normalized):
             original = match.group(0)
             # Skip if already a placeholder
-            if original.startswith('__'):
+            if original.startswith('<<'):
                 continue
-            placeholder = f"__URI_{uri_counter}__"
+            placeholder = f"<<URI_{uri_counter}>>"
             uri_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
@@ -840,27 +826,34 @@ class RedisClient:
         for match in re.finditer(formatted_num_pattern, normalized):
             original = match.group(0)
             # Get surrounding context
-            context_start = max(0, match.start() - 15)
-            context_end = min(len(normalized), match.end() + 15)
+            context_start = max(0, match.start() - 30)
+            context_end = min(len(normalized), match.end() + 30)
             context = normalized[context_start:context_end]
 
             # Skip if already a placeholder, inside URL, or part of namespace
-            if (original.startswith('__') or
-                '__NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
-                '<http' in context or
-                '://' in context or
-                'XMLSchema' in context or
-                '.w3.org' in context):
-                logger.debug(f"Skipping formatted number {original} - inside URL or already placeholder")
+            if (original.startswith('<<') or
+                    '<<NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
+                    '<http' in context or
+                    '://' in context or
+                    'XMLSchema' in context or
+                    '.w3.org' in context or
+                    'SUBSTR' in context.upper()):
+
+                logger.debug(f"Skipping formatted number {original} - inside STRUCTURE or already placeholder")
+                continue
+
+            substr_param_pattern = r'SUBSTR\s*\([^,]+,\s*' + re.escape(original) + r'(?:\s*[,)])'
+            if re.search(substr_param_pattern, normalized[max(0, match.start()-50):match.end()+10], re.IGNORECASE):
+                logger.debug(f"Skipping number {original} - it's a SUBSTR position/length parameter")
                 continue
 
             # Normalize the number (remove separators)
             cleaned_num = re.sub(r'[,._]', '', original)
-            placeholder = f"__NUM_{num_counter}__"
+            placeholder = f"<<NUM_{num_counter}>>"
             num_counter += 1
             placeholder_map[placeholder] = cleaned_num  # Store normalized version
             normalized = normalized.replace(original, placeholder, 1)
-            logger.debug(f"Extracted formatted number: {original} -> {cleaned_num} as {placeholder}")
+            logger.debug(f"Extracted formatted number: {original} as {placeholder} in context {context}")
 
         # 8. Extract plain numbers (e.g., in HAVING clauses)
         plain_num_pattern = r'\b\d{1,}\b'
@@ -868,32 +861,41 @@ class RedisClient:
             original = match.group(0)
 
             # Get context around the match to check if it's part of a URL or prefix
-            context_start = max(0, match.start() - 20)
-            context_end = min(len(normalized), match.end() + 20)
+            context_start = max(0, match.start() - 30)
+            context_end = min(len(normalized), match.end() + 30)
             context = normalized[context_start:context_end]
 
             # Skip if:
             # - Already a placeholder
             # - Part of another placeholder
-            # - Inside a URL/URI (has :// or common URL patterns)
+            # - Inside a URL/URI
             # - Inside XML namespace declarations
-            if (original.startswith('__') or
-                '__NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
-                '://' in context or
-                '<http' in context or
-                'www.' in context or
-                '.org' in context or
-                '.com' in context or
-                'XMLSchema' in context or
-                '/ontologies/' in context):
-                logger.debug(f"Skipping plain number {original} - inside URL/URI or already placeholder")
+            # - Inside SUBSTR function parameters  ← THIS CHECK EXISTS BUT ISN'T WORKING
+            # - Is a SUBSTR position parameter (hardcoded positions like 6, 1, etc.)
+            if (original.startswith('<<') or
+                    '<<NUM_' in normalized[max(0, match.start()-10):match.end()+10] or
+                    '://' in context or
+                    '<http' in context or
+                    'www.' in context or
+                    '.org' in context or
+                    '.com' in context or
+                    'XMLSchema' in context or
+                    '/ontologies/' in context or
+                    'SUBSTR' in context.upper()):
+
+                logger.debug(f"Skipping plain number {original} - inside STRUCTURE or already placeholder")
                 continue
 
-            placeholder = f"__NUM_{num_counter}__"
+            substr_param_pattern = r'SUBSTR\s*\([^,]+,\s*' + re.escape(original) + r'(?:\s*[,)])'
+            if re.search(substr_param_pattern, normalized[max(0, match.start()-50):match.end()+10], re.IGNORECASE):
+                logger.debug(f"Skipping number {original} - it's a SUBSTR position/length parameter")
+                continue
+
+            placeholder = f"<<NUM_{num_counter}>>"
             num_counter += 1
             placeholder_map[placeholder] = original
             normalized = normalized.replace(original, placeholder, 1)
-            logger.debug(f"Extracted plain number: {original} as {placeholder}")
+            logger.debug(f"Extracted plain number: {original} as {placeholder} in context {context}")
 
         if prefixes:
             normalized = prefixes + "\n\n" + normalized
@@ -1064,7 +1066,7 @@ class RedisClient:
                             query_info['query'] = restored_query_text
 
                             # Verify restoration
-                            remaining = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+__', restored_query_text)
+                            remaining = re.findall(r'<<(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+>>', restored_query_text)
                             if remaining:
                                 logger.error(f"Query {idx+1} still has placeholders: {remaining}")
                                 # CRITICAL: Try one more restoration pass for missed placeholders
@@ -1076,7 +1078,7 @@ class RedisClient:
                                 query_info['query'] = restored_query_text
 
                                 # Check again
-                                remaining_after_retry = re.findall(r'__(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+__', restored_query_text)
+                                remaining_after_retry = re.findall(r'<<(?:PCT|NUM|STR|LIM|CUR|URI|INJECT)_(?:DECIMAL_)?\d+>>', restored_query_text)
                                 if remaining_after_retry:
                                     logger.error(f"Query {idx+1} STILL has placeholders after retry: {remaining_after_retry}")
                             else:
