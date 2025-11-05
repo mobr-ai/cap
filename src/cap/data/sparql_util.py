@@ -5,11 +5,81 @@ Handles large integers (ADA amounts in lovelace) and nested structures
 import logging
 from typing import Any
 from decimal import Decimal, InvalidOperation
+import re
 
 logger = logging.getLogger(__name__)
 
 ADA_CURRENCY_URI = "http://www.mobr.ai/ontologies/cardano#cnt/ada"
 LOVELACE_TO_ADA = 1_000_000
+
+def _is_hex_string(value: str) -> bool:
+    """
+    Check if a string is a valid hexadecimal string.
+
+    Args:
+        value: String to check
+
+    Returns:
+        True if the string is valid hex, False otherwise
+    """
+    if not value or not isinstance(value, str):
+        return False
+
+    # Remove common hex prefixes
+    clean_value = value.lower().strip()
+    if clean_value.startswith('0x'):
+        clean_value = clean_value[2:]
+
+    # Check if it's all hex digits and has reasonable length
+    if len(clean_value) < 2:
+        return False
+
+    return bool(re.match(r'^[0-9a-f]+$', clean_value))
+
+
+def _hex_to_string(hex_value: str) -> str:
+    """
+    Convert a hexadecimal string to a readable string.
+
+    Args:
+        hex_value: Hexadecimal string (with or without '0x' prefix)
+
+    Returns:
+        Decoded string, or original value if conversion fails
+    """
+    try:
+        # Remove 0x prefix if present
+        clean_hex = hex_value.lower().strip()
+        if clean_hex.startswith('0x'):
+            clean_hex = clean_hex[2:]
+
+        # Convert hex to bytes
+        byte_data = bytes.fromhex(clean_hex)
+
+        # Try UTF-8 decoding first
+        try:
+            decoded = byte_data.decode('utf-8')
+            # Only return if it contains printable characters
+            if decoded.isprintable() or any(c.isalnum() or c.isspace() for c in decoded):
+                return decoded.strip()
+        except UnicodeDecodeError:
+            pass
+
+        # Try ASCII decoding as fallback
+        try:
+            decoded = byte_data.decode('ascii', errors='ignore')
+            if decoded.strip():
+                return decoded.strip()
+        except:
+            pass
+
+        # If all decoding fails, return original
+        return hex_value
+
+    except (ValueError, TypeError) as e:
+        logger.debug(f"Could not decode hex string '{hex_value}': {e}")
+        return hex_value
+
 
 def _detect_ada_variables(sparql_query: str) -> set[str]:
     """
@@ -27,8 +97,6 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
         query_text = " ".join([q.get('query', '') if isinstance(q, dict) else str(q) for q in sparql_query])
     elif isinstance(sparql_query, dict):
         query_text = sparql_query.get('query', str(sparql_query))
-
-    import re
 
     # Step 1: Find base ADA value variables (from hasCurrency)
     lines = query_text.split('\n')
@@ -82,6 +150,64 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
     logger.info(f"Detected ADA variables: {ada_vars}")
     return ada_vars
 
+
+def _detect_token_name_variables(sparql_query: str) -> set[str]:
+    """
+    Detect which variables in a SPARQL query represent token names.
+    These should be converted from hex to string if applicable.
+
+    Args:
+        sparql_query: SPARQL query string or structure
+
+    Returns:
+        Set of variable names that represent token names
+    """
+    if not sparql_query:
+        return set()
+
+    token_name_vars = set()
+
+    # Extract the query text
+    query_text = sparql_query
+    if isinstance(sparql_query, list):
+        query_text = " ".join([q.get('query', '') if isinstance(q, dict) else str(q) for q in sparql_query])
+    elif isinstance(sparql_query, dict):
+        query_text = sparql_query.get('query', str(sparql_query))
+
+    # Look for hasTokenName property patterns
+    # Pattern: ?something blockchain:hasTokenName ?tokenName
+    token_name_patterns = [
+        r'hasTokenName\s+\?(\w+)',
+        r'blockchain:hasTokenName\s+\?(\w+)',
+    ]
+
+    for pattern in token_name_patterns:
+        matches = re.findall(pattern, query_text, re.IGNORECASE)
+        token_name_vars.update(matches)
+
+    # Also propagate through aliases
+    alias_matches = re.findall(r'\(\s*\?(\w+)\s+AS\s+\?(\w+)\s*\)', query_text, re.IGNORECASE)
+    max_iterations = 5
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
+        previous_count = len(token_name_vars)
+
+        for source_var, alias_var in alias_matches:
+            if source_var in token_name_vars and alias_var not in token_name_vars:
+                token_name_vars.add(alias_var)
+                logger.info(f"Added token name alias: {alias_var} (from {source_var})")
+
+        if len(token_name_vars) == previous_count:
+            break
+
+    if token_name_vars:
+        logger.info(f"Detected token name variables: {token_name_vars}")
+
+    return token_name_vars
+
+
 def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
     """
     Convert a lovelace amount to ADA and return formatted information
@@ -134,6 +260,7 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
             'unit': 'lovelace'
         }
 
+
 def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[str, Any]:
     """
     Convert SPARQL results to simplified key-value pairs for LLM consumption.
@@ -144,10 +271,11 @@ def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[s
     - Removes SPARQL metadata noise
     - Groups related data logically
     - Detects and converts ADA amounts from lovelace
+    - Converts hex token names to readable strings
 
     Args:
         sparql_results: Raw SPARQL query results from Virtuoso
-        sparql_query: Original SPARQL query (used to detect ADA variables)
+        sparql_query: Original SPARQL query (used to detect ADA variables and token names)
 
     Returns:
         Simplified dictionary with key-value pairs
@@ -157,6 +285,9 @@ def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[s
 
     # Detect which variables represent ADA amounts
     ada_variables = _detect_ada_variables(sparql_query)
+
+    # Detect which variables represent token names (should be hex-decoded)
+    token_name_variables = _detect_token_name_variables(sparql_query)
 
     # Handle ASK queries (boolean results)
     if 'boolean' in sparql_results:
@@ -182,18 +313,19 @@ def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[s
     if len(bindings) == 1:
         return {
             'result_type': 'single',
-            'data': _flatten_binding(bindings[0], ada_variables)
+            'data': _flatten_binding(bindings[0], ada_variables, token_name_variables)
         }
 
     # Multiple rows - create structured result
     return {
         'result_type': 'multiple',
         'count': len(bindings),
-        'data': [_flatten_binding(binding, ada_variables) for binding in bindings]
+        'data': [_flatten_binding(binding, ada_variables, token_name_variables) for binding in bindings]
     }
 
 
-def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None) -> dict[str, Any]:
+def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
+                     token_name_variables: set[str] = None) -> dict[str, Any]:
     """
     Flatten a single SPARQL binding to simple key-value pairs.
 
@@ -202,13 +334,17 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None) ->
     - Timestamps
     - Hashes and addresses
     - ADA/lovelace conversions
+    - Hex token name conversions
 
     Args:
         binding: SPARQL binding dictionary
         ada_variables: Set of variable names that represent ADA amounts
+        token_name_variables: Set of variable names that represent token names (hex-encoded)
     """
     if ada_variables is None:
         ada_variables = set()
+    if token_name_variables is None:
+        token_name_variables = set()
 
     result = {}
 
@@ -224,6 +360,7 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None) ->
         # Convert based on datatype
         converted_value = _convert_value(value, datatype, value_type)
 
+        # Handle ADA conversion
         if var_name in ada_variables and isinstance(converted_value, str):
             try:
                 # Check if it's a numeric value
@@ -231,6 +368,18 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None) ->
                 converted_value = _convert_lovelace_to_ada(converted_value)
             except (ValueError, TypeError):
                 pass  # Keep original value if not numeric
+
+        # Handle token name hex conversion
+        if var_name in token_name_variables and isinstance(converted_value, str):
+            if _is_hex_string(converted_value):
+                decoded_name = _hex_to_string(converted_value)
+                # Store both hex and decoded versions
+                converted_value = {
+                    'hex': converted_value,
+                    'decoded': decoded_name,
+                    'type': 'token_name'
+                }
+                logger.info(f"Converted token name from hex: {converted_value['hex']} -> {decoded_name}")
 
         result[var_name] = converted_value
 
@@ -342,6 +491,13 @@ def _format_value(value: Any) -> str:
             return value.get('value', '')
         elif value.get('type') == 'duration':
             return value.get('value', '')
+        elif value.get('type') == 'token_name':
+            # Format token name with both hex and decoded
+            decoded = value.get('decoded', '')
+            hex_val = value.get('hex', '')
+            if decoded != hex_val:
+                return f"{decoded} (hex: {hex_val})"
+            return decoded
         elif 'lovelace' in value and 'ada' in value:
             # Format ADA amount
             if 'approximately' in value:
@@ -356,11 +512,15 @@ def _format_value(value: Any) -> str:
 
 # Example usage and tests
 if __name__ == "__main__":
-    # Test with blockchain data
+    # Test with blockchain data including hex token name
     sample_sparql_result = {
         "results": {
             "bindings": [
                 {
+                    "tn": {
+                        "type": "literal",
+                        "value": "48756e74696e67746f6e"  # "Huntington" in hex
+                    },
                     "blockNumber": {
                         "type": "literal",
                         "datatype": "http://www.w3.org/2001/XMLSchema#integer",
@@ -370,23 +530,25 @@ if __name__ == "__main__":
                         "type": "literal",
                         "datatype": "http://www.w3.org/2001/XMLSchema#integer",
                         "value": "1500000000000"  # 1.5 million ADA in lovelace
-                    },
-                    "txHash": {
-                        "type": "literal",
-                        "value": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
-                    },
-                    "fee": {
-                        "type": "literal",
-                        "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
-                        "value": "0.17"
                     }
                 }
             ]
         }
     }
 
+    # Sample SPARQL query with token name
+    sample_query = """
+    PREFIX blockchain: <http://www.mobr.ai/ontologies/cardano#>
+    SELECT ?tokenName ?totalOutput
+    WHERE {
+        ?token blockchain:hasTokenName ?tn .
+        ?token blockchain:hasTokenStateValue ?totalOutput .
+        ?token blockchain:hasCurrency <http://www.mobr.ai/ontologies/cardano#cnt/ada> .
+    }
+    """
+
     # Convert to K/V
-    kv_result = convert_sparql_to_kv(sample_sparql_result)
+    kv_result = convert_sparql_to_kv(sample_sparql_result, sample_query)
     print("K/V Result:")
     print(kv_result)
     print("\n" + "="*50 + "\n")

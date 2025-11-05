@@ -190,6 +190,7 @@ Be conversational and clear. Format dates nicely."""
             user_query=user_query,
             sparql_query=sparql_query,
             sparql_results=sparql_results,
+            kv_results={},
             system_prompt=system_prompt
         ):
             print(chunk, end='', flush=True)
@@ -321,6 +322,7 @@ LIMIT 1
             user_query=user_question,
             sparql_query=mock_sparql,
             sparql_results=mock_results,
+            kv_results={},
             system_prompt=answer_system_prompt
         ):
             print(chunk, end='', flush=True)

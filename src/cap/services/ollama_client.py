@@ -411,6 +411,7 @@ class OllamaClient:
         user_query: str,
         sparql_query: str,
         sparql_results: Union[str, dict[str, Any]],
+        kv_results: dict[str, Any],
         system_prompt: str = None
     ) -> AsyncIterator[str]:
         """
@@ -426,6 +427,17 @@ class OllamaClient:
             Chunks of contextualized answer
         """
         with tracer.start_as_current_span("contextualize_answer") as span:
+            # Stream kv_results first if present
+            if kv_results:
+                try:
+                    kv_formatted = json.dumps(kv_results, indent=2)
+                    yield f"kv_results:{kv_formatted}\n\n"
+                except Exception as e:
+                    logger.warning(f"KV results formatting failed: {e}")
+                    yield f"kv_results: {str(kv_results)}\n\n"
+
+                yield f"_kv_results_end_\n\n"
+
             context_res = ""
             try:
                 # If results are already formatted as string, use directly
@@ -455,7 +467,10 @@ class OllamaClient:
                 """
                 temperature = 0.1
             else:
-                know_info = "If you do not know how to answer User's question, say you do not know the answer."
+                know_info = """
+                If you do not know how to answer User's question, say you do not know the answer.
+                Do not answer with a SPARQL query.
+                """
 
             # Format the prompt with query and results
             prompt = f"""

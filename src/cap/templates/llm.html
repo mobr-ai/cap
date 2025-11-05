@@ -934,6 +934,7 @@
                 const decoder = new TextDecoder();
                 let buffer = '';
                 let isStatusPhase = true;
+                let inKvBlock = false;
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -952,17 +953,39 @@
                             continue;
                         }
 
-                        let content = line.startsWith('data: ') ? line.slice(6) : line;
+                        let content = "";
+                        if (line.startsWith('data:')) {
+                            inKvBlock = false;
+                            content = line.slice(6);
+
+                        } else {
+                            content = line;
+                        }
 
                         if (content.trim() === '[DONE]') {
                             removeStatusMessage();
                             continue;
                         }
 
-                        const isStatus = content.startsWith('status: ');
-                        if (isStatus) content = content.slice(8);
+                        const isStatus = content.startsWith('status:');
+                        if (isStatus) {
+                            inKvBlock = false;
+                            content = content.slice(8);
+                        }
+
+                        if (content.startsWith('_kv_results_end_')) {
+                            inKvBlock = false;
+                            continue;
+                        }
+
+                        if (content.startsWith('kv_results:') || inKvBlock) {
+                            inKvBlock = true;
+                            console.log(content);
+                            continue;
+                        }
 
                         if (content.startsWith('Error:')) {
+                            inKvBlock = false;
                             removeStatusMessage();
                             isStatusPhase = false;
                             const errorDiv = document.createElement('div');

@@ -540,6 +540,7 @@ async def natural_language_query(request: NLQueryRequest):
                         user_query=user_query,
                         sparql_query=sparql_query,
                         sparql_results=formatted_results,
+                        kv_results=kv_results,
                         system_prompt=""
                     )
 
