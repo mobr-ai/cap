@@ -406,6 +406,34 @@ class OllamaClient:
 
         return query
 
+    def _categorize_query(user_query: str, result_type: str) -> str:
+        """
+        Categorizes a natural language query into result types:
+        - "bar_chart"
+        - "pie_chart"
+        - "table"
+        - "single_value"
+        """
+        low_uq = user_query.lower().strip()
+
+        if result_type != "multiple" and result_type != "single":
+            return ""
+
+        # Chart-related queries
+        new_type = ""
+        if result_type == "multiple" and ("bar chart" in low_uq or "bar graph" in low_uq):
+            new_type = "bar_chart"
+        elif result_type == "single" and ("pie chart" in low_uq or "pie graph" in low_uq):
+            new_type = "pie_chart"
+        elif result_type == "multiple" and (any(keyword in low_uq for keyword in ["line chart", "timeseries", "trend over time"])):
+            new_type = "line_chart"
+
+        # Tabular or list queries
+        elif any(keyword in low_uq for keyword in ["list", "table", "display", "show me"]):
+            new_type = "table"
+
+        return new_type
+
     async def contextualize_answer(
         self,
         user_query: str,
@@ -426,12 +454,19 @@ class OllamaClient:
         Yields:
             Chunks of contextualized answer
         """
-        with tracer.start_as_current_span("contextualize_answer") as span:
+        with tracer.start_as_current_span("contextualized answer") as span:
             # Stream kv_results first if present
+            result_type = ""
             if kv_results:
                 try:
+                    result_type = kv_results["result_type"]
+                    result_type = OllamaClient._categorize_query(user_query, result_type)
+                    if result_type != "":
+                        kv_results["result_type"] = result_type
+
                     kv_formatted = json.dumps(kv_results, indent=2)
                     yield f"kv_results:{kv_formatted}\n\n"
+
                 except Exception as e:
                     logger.warning(f"KV results formatting failed: {e}")
                     yield f"kv_results: {str(kv_results)}\n\n"
@@ -458,7 +493,13 @@ class OllamaClient:
 
             know_info = ""
             temperature = 0.3
-            if context_res != "":
+            if "chart" in result_type or "table" in result_type:
+                know_info = f"""
+                The system is showing an artifact to the user using the data below. Write a SHORT insight about it.
+                {kv_results}
+                """
+
+            elif context_res != "":
                 know_info = f"""
                 This is the current value you MUST consider in your answer:
                 {context_res}
@@ -466,6 +507,7 @@ class OllamaClient:
                 {self.contextualize_prompt}
                 """
                 temperature = 0.1
+
             else:
                 know_info = """
                 If you do not know how to answer User's question, say you do not know the answer.

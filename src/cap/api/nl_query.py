@@ -200,7 +200,7 @@ async def _execute_sequential_queries(
             query = query.replace(param_expr, replacement, 1)
 
         # Execute the clean SPARQL query string directly
-        logger.info(f"Executing query {idx + 1}: {query[:200]}...")
+        logger.info(f"Executing query {idx + 1}:\n{query}\n")
 
         # Execute as plain SPARQL string
         results = await virtuoso.execute_query(query)
@@ -393,8 +393,8 @@ async def natural_language_query(request: NLQueryRequest):
                             for idx, query_info in enumerate(sparql_queries):
                                 query_text = query_info['query']
                                 # Check if placeholders still exist
-                                if re.search(r'__(?:PCT|STR|LIM|CUR|URI)_\d+__', query_text):
-                                    logger.error(f"Query {idx+1} still contains unreplaced placeholders: {query_text[:200]}")
+                                if re.search(r'<<(?:PCT|STR|LIM|CUR|URI)_\d+>>', query_text):
+                                    logger.error(f"Query {idx+1} still contains unreplaced placeholders: {query_text}")
                                     # Log the issue but continue - the query will fail and we'll know why
                                 else:
                                     logger.info(f"Query {idx+1} placeholders successfully restored")
@@ -405,14 +405,14 @@ async def natural_language_query(request: NLQueryRequest):
                             sparql_query = cached_sparql
 
                             # Check single query for placeholders
-                            if re.search(r'__(?:PCT|STR|LIM|CUR|URI)_\d+__', sparql_query):
-                                logger.error(f"Single query still contains unreplaced placeholders: {sparql_query[:200]}")
+                            if re.search(r'<<(?:PCT|STR|LIM|CUR|URI)_\d+>>', sparql_query):
+                                logger.error(f"Single query still contains unreplaced placeholders: {sparql_query}")
 
                     except (json.JSONDecodeError, TypeError):
                         is_sequential = False
                         sparql_query = cached_sparql
                 else:
-                    logger.info(f"Cache miss for query: {low_query[:100]}")
+                    logger.info(f"Cache miss for query: {low_query}")
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
