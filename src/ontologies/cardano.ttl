@@ -154,7 +154,7 @@ cardano:KeyWitness a owl:Class ;
     rdfs:comment "Signature-based proof of authorization." .
 
 cardano:ScriptWitness a owl:Class ;
-    rdfs:subClassOf cardano:TransactionWitness ;
+    rdfs:subClassOf cardano:Script ;
     rdfs:label "Script Witness" ;
     rdfs:comment "Script-based proof of authorization." .
 
@@ -733,6 +733,12 @@ cardano:hasNetwork a owl:DatatypeProperty ;
     rdfs:domain blockchain:Transaction ;
     rdfs:range xsd:string .
 
+cardano:hasTransactionScriptWitness a owl:ObjectProperty ;
+    rdfs:label "has transaction script witness" ;
+    rdfs:comment "Relates a transaction with a script witness" ;
+    rdfs:domain blockchain:Transaction ;
+    rdfs:range cardano:ScriptWitness .
+
 cardano:hasScriptIntegrityHash a owl:DatatypeProperty ;
     rdfs:label "has script integrity hash" ;
     rdfs:comment "Hash ensuring script execution integrity" ;
@@ -940,10 +946,10 @@ cardano:hasStakePoolRelayPort a owl:DatatypeProperty ;
     rdfs:range xsd:decimal .
 
 # Properties - Smart Contract and Script Related
-cardano:embeddedIn a owl:ObjectProperty ;
-    rdfs:label "embedded in" ;
-    rdfs:comment "Relates a smart contract with the transaction that it is embedded." ;
-    rdfs:domain blockchain:SmartContract ;
+cardano:usedInTransaction a owl:ObjectProperty ;
+    rdfs:label "used in transaction" ;
+    rdfs:comment "Relates a script with the transaction that is using it." ;
+    rdfs:domain blockchain:Script ;
     rdfs:range blockchain:Transaction .
 
 cardano:hasScript a owl:ObjectProperty ;
