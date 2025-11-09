@@ -19,6 +19,7 @@ class PlaceholderCounters:
     inject: int = 0
     year: int = 0
     month: int = 0
+    day: int = 0
     period: int = 0
     order: int = 0
 
