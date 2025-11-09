@@ -4,6 +4,7 @@ Redis client for caching SPARQL queries and natural language mappings.
 import json
 import logging
 import os
+import re
 from typing import Optional, Any, Tuple
 
 import redis.asyncio as redis
@@ -15,6 +16,7 @@ from cap.data.cache.query_normalizer import QueryNormalizer
 from cap.data.cache.query_file_parser import QueryFileParser
 from cap.data.cache.sparql_normalizer import SPARQLNormalizer
 from cap.data.cache.value_extractor import ValueExtractor
+from cap.data.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -64,6 +66,59 @@ class RedisClient:
         """Create count key from natural language query."""
         normalized = QueryNormalizer.normalize(nl_query)
         return f"nlq:count:{normalized}"
+
+    async def get_cached_query_with_variants(
+        self,
+        original_query: str
+    ) -> Optional[dict[str, Any]]:
+        """Try multiple normalization strategies to find cache hit."""
+        client = await self._get_client()
+
+        # Try exact normalized match first
+        cache_key = self._make_cache_key(original_query)
+        cached = await client.get(cache_key)
+        if cached:
+            return await self.get_cached_query_with_original(original_query, original_query)
+
+        # Try semantic variant
+        normalized = QueryNormalizer.normalize(original_query)
+        semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
+        variant_key = f"nlq:cache:{semantic_variant}"
+        cached = await client.get(variant_key)
+        if cached:
+            return await self.get_cached_query_with_original(semantic_variant, original_query)
+
+        # Try fuzzy matching on similar keys
+        similar_keys = []
+        async for key in client.scan_iter(match=f"nlq:cache:*"):
+            key_query = key.replace("nlq:cache:", "")
+            if self._calculate_similarity(normalized, key_query) > 0.85:
+                similar_keys.append(key)
+
+        if similar_keys:
+            cached = await client.get(similar_keys[0])
+            if cached:
+                data = json.loads(cached)
+                return await self.get_cached_query_with_original(
+                    data["normalized_query"],
+                    original_query
+                )
+
+        return None
+
+    @staticmethod
+    def _calculate_similarity(query1: str, query2: str) -> float:
+        """Calculate similarity between two normalized queries."""
+        words1 = set(query1.split())
+        words2 = set(query2.split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+
+        return len(intersection) / len(union)
 
     async def cache_query(
         self,
@@ -125,13 +180,13 @@ class RedisClient:
         counters = PlaceholderCounters()
 
         for query_info in queries:
+            # Pass counters to continue numbering across queries
             normalizer = SPARQLNormalizer()
-            norm_q, placeholders = normalizer.normalize(query_info['query'], counters)
-
-            # Update global counters
-            for placeholder in placeholders.keys():
-                counters.update_from_placeholder(placeholder)
-
+            normalizer.counters = counters  # Share counter state
+            norm_q, placeholders = normalizer.normalize_with_shared_counters(
+                query_info['query'],
+                counters
+            )
             all_placeholders.update(placeholders)
             query_info['query'] = norm_q
             normalized_queries.append(query_info)
@@ -189,11 +244,23 @@ class RedisClient:
             parsed = json.loads(sparql)
             if isinstance(parsed, list):
                 for query_info in parsed:
-                    query_info['query'] = PlaceholderRestorer.restore(
+                    original_query = query_info['query']
+                    restored_query = PlaceholderRestorer.restore(
                         query_info['query'],
                         placeholder_map,
                         current_values
                     )
+
+                    # Check if any placeholders remain unreplaced
+                    remaining_placeholders = re.findall(r'<<[A-Z_]+_\d+>>', restored_query)
+                    if remaining_placeholders:
+                        logger.error(f"Query still contains unreplaced placeholders: {remaining_placeholders}")
+                        logger.error(f"Original: {original_query}")
+                        logger.error(f"Placeholder map: {placeholder_map}")
+                        logger.error(f"Current values: {current_values}")
+                        logger.error(f"After restoration: {restored_query}")
+
+                    query_info['query'] = restored_query
                 return json.dumps(parsed)
         except (json.JSONDecodeError, TypeError):
             pass

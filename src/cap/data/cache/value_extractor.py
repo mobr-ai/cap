@@ -33,12 +33,27 @@ class ValueExtractor:
             "percentages": [],
             "percentages_decimal": [],
             "limits": [],
+            "currencies": [],
             "tokens": [],
             "numbers": [],
             "temporal_periods": [],
             "years": [],
-            "orderings": []
+            "months": [],
+            "orderings": [],
+            "chart_types": []
         }
+
+        # Extract chart types
+        chart_pattern = r'\b(bar|line|pie|scatter)\s+(chart|graph)\b'
+        for match in re.finditer(chart_pattern, nl_query, re.IGNORECASE):
+            chart_type = match.group(1).lower()
+            if chart_type not in values["chart_types"]:
+                values["chart_types"].append(chart_type)
+
+        # Extract currency/token URIs (add this new section)
+        # Look for ADA references
+        if re.search(r'\bADA\b', nl_query, re.IGNORECASE):
+            values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
 
         # Extract temporal periods
         for pattern, period in ValueExtractor.TEMPORAL_PATTERNS.items():
@@ -50,6 +65,19 @@ class ValueExtractor:
             year = match.group(2)
             if 1900 <= int(year) <= 2100 and year not in values["years"]:
                 values["years"].append(year)
+
+        # Extract months
+        values["months"] = []
+        month_pattern = r'\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*(\d{4})?\b'
+        for match in re.finditer(month_pattern, nl_query, re.IGNORECASE):
+            month = match.group(1).lower()
+            year = match.group(2)
+            if year:
+                month_str = f"{month}-{year}"
+            else:
+                month_str = month
+            if month_str not in values["months"]:
+                values["months"].append(month_str)
 
         # Extract ordering
         for pattern, ordering in ValueExtractor.ORDERING_PATTERNS.items():

@@ -18,19 +18,26 @@ class PlaceholderRestorer:
         prefixes, query_body = PlaceholderRestorer._extract_prefixes(sparql)
         restored = query_body
 
-        # Process placeholders by type
-        for placeholder, cached_value in placeholder_map.items():
+        # Restore temporal and ordering placeholders FIRST (they may contain other placeholders)
+        restored = PlaceholderRestorer._restore_temporal_placeholders(restored, placeholder_map, current_values)
+        restored = PlaceholderRestorer._restore_ordering_placeholders(restored, placeholder_map, current_values)
+
+        # Sort placeholders by length (longest first) to avoid partial matches
+        remaining_placeholders = [
+            (ph, val) for ph, val in placeholder_map.items()
+            if ph in restored and not ph.startswith(("<<YEAR_", "<<MONTH_", "<<PERIOD_", "<<ORDER_"))
+        ]
+        remaining_placeholders.sort(key=lambda x: len(x[0]), reverse=True)
+
+        # Process remaining placeholders by type
+        for placeholder, cached_value in remaining_placeholders:
             replacement = PlaceholderRestorer._get_replacement(
                 placeholder, cached_value, placeholder_map, current_values
             )
 
             if replacement is not None:
-                pattern = re.escape(placeholder)
-                restored = re.sub(pattern, replacement, restored)
-
-        # Restore temporal and ordering placeholders
-        restored = PlaceholderRestorer._restore_temporal_placeholders(restored, placeholder_map, current_values)
-        restored = PlaceholderRestorer._restore_ordering_placeholders(restored, placeholder_map, current_values)
+                # Use word boundary to avoid partial matches
+                restored = restored.replace(placeholder, replacement)
 
         if prefixes:
             restored = prefixes + "\n\n" + restored
@@ -68,11 +75,42 @@ class PlaceholderRestorer:
         elif placeholder.startswith("<<LIM_"):
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("limits"), cached_value, "10")
         elif placeholder.startswith("<<CUR_"):
-            return cached_value
+            return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<URI_"):
             return cached_value
 
         return None
+
+    @staticmethod
+    def _restore_currency(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore INJECT statement with nested placeholders."""
+
+        currencies = current_values.get("currencies", [])
+        if currencies:
+            try:
+                idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
+                if idx < len(currencies):
+                    currency_uri = currencies[idx]
+                    # Remove angle brackets if present, then add them back
+                    currency_uri = currency_uri.strip('<>')
+                    return f"<{currency_uri}>"
+
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.error(f"Error parsing CUR placeholder {placeholder}: {e}")
+
+        # Fallback to cached value
+        if cached_value:
+            logger.warning(f"Using cached value for {placeholder}: {cached_value}")
+            # Ensure cached value has angle brackets
+            cached_value = cached_value.strip('<>')
+            return f"<{cached_value}>"
+
+        logger.error(f"Cannot restore {placeholder}: no currencies and no cached value")
+        return placeholder  # Return placeholder unchanged if can't restore
 
     @staticmethod
     def _restore_inject(
@@ -82,8 +120,20 @@ class PlaceholderRestorer:
         current_values: dict[str, list[str]]
     ) -> str:
         """Restore INJECT statement with nested placeholders."""
+
         replacement = inject_template
-        nested_placeholders = re.findall(r'<<(?:PCT_DECIMAL|PCT|NUM|STR|LIM|CUR|URI)_\d+>>', inject_template)
+        # Sort nested placeholders by index to ensure correct order
+        nested_placeholders = re.findall(
+            r'<<(?:PCT_DECIMAL|PCT|NUM|STR|LIM|CUR|URI)_\d+>>',
+            inject_template
+        )
+
+        # Sort by type and index to maintain extraction order
+        def sort_key(ph):
+            match = re.search(r'<<(\w+)_(\d+)>>', ph)
+            return (match.group(1), int(match.group(2))) if match else ('', 0)
+
+        nested_placeholders.sort(key=sort_key)
 
         for nested_ph in nested_placeholders:
             nested_replacement = PlaceholderRestorer._get_replacement(
@@ -104,14 +154,25 @@ class PlaceholderRestorer:
         cached_value: str,
         default: str
     ) -> str:
-        """Get value from list using cyclic indexing."""
-        if value_list:
-            try:
-                idx = int(re.search(r'\d+', placeholder).group())
-                cycle_idx = idx % len(value_list)
-                return value_list[cycle_idx]
-            except (ValueError, AttributeError):
-                pass
+        """Get value from list using occurrence-based matching."""
+        if not value_list:
+            return cached_value or default
+
+        try:
+            match = re.search(r'_(\d+)>>', placeholder)
+            if not match:
+                return value_list[0] if value_list else (cached_value or default)
+
+            idx = int(match.group(1))
+
+            if idx >= len(value_list):
+                return value_list[idx % len(value_list)] if value_list else (cached_value or default)
+
+            return value_list[idx]
+
+        except (ValueError, AttributeError, IndexError):
+            pass
+
         return cached_value or default
 
     @staticmethod
@@ -120,17 +181,25 @@ class PlaceholderRestorer:
         current_values: dict[str, list[str]],
         cached_value: str
     ) -> str:
-        """Restore string literal with proper quotes."""
+        """Restore string literal preserving quote style from cache."""
+        # Preserve the quote style from cached value
+        quote_char = '"'
+        if cached_value:
+            if cached_value.startswith("'"):
+                quote_char = "'"
+            elif cached_value.startswith('"'):
+                quote_char = '"'
+
         tokens = current_values.get("tokens")
         if tokens:
             try:
-                idx = int(re.search(r'\d+', placeholder).group())
-                cycle_idx = idx % len(tokens)
-                token = tokens[cycle_idx]
-                quote_char = cached_value[0] if cached_value and cached_value[0] in ['"', "'"] else '"'
-                return f'{quote_char}{token}{quote_char}'
-            except (ValueError, AttributeError):
+                idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
+                if idx < len(tokens):
+                    token = tokens[idx]
+                    return f'{quote_char}{token}{quote_char}'
+            except (ValueError, AttributeError, IndexError):
                 pass
+
         return cached_value or '""'
 
     @staticmethod
@@ -140,8 +209,46 @@ class PlaceholderRestorer:
         current_values: dict[str, list[str]]
     ) -> str:
         """Restore year and period placeholders."""
-        # Restore year placeholders
-        for placeholder in [k for k in placeholder_map.keys() if k.startswith("<<YEAR_")]:
+
+        # Restore period placeholders FIRST (they may contain year placeholders)
+        for placeholder in sorted([k for k in placeholder_map.keys() if k.startswith("<<PERIOD_")]):
+            if placeholder not in sparql:
+                continue
+
+            replacement = placeholder_map[placeholder]
+
+            if current_values.get("temporal_periods"):
+                period = current_values["temporal_periods"][0]
+
+                # Only adjust if the cached pattern supports it
+                cached_period_type = None
+                if 'SUBSTR' in replacement:
+                    if ', 1, 4)' in replacement:
+                        cached_period_type = 'year'
+                    elif ', 1, 7)' in replacement:
+                        cached_period_type = 'month'
+                    elif ', 9, 10)' in replacement:
+                        cached_period_type = 'day'
+
+                # Only modify if switching within compatible types
+                if cached_period_type and period != cached_period_type:
+                    period_map = {'year': (1, 4), 'month': (1, 7), 'day': (9, 10)}
+                    if period in period_map and cached_period_type in period_map:
+                        start, length = period_map[period]
+                        replacement = re.sub(
+                            r'SUBSTR\s*\([^,]+,\s*\d+\s*,\s*\d+\s*\)',
+                            f'SUBSTR(STR(?timestamp), {start}, {length})',
+                            replacement,
+                            flags=re.IGNORECASE
+                        )
+
+            sparql = sparql.replace(placeholder, replacement)
+
+        # Restore year placeholders AFTER periods
+        for placeholder in sorted([k for k in placeholder_map.keys() if k.startswith("<<YEAR_")]):
+            if placeholder not in sparql:
+                continue
+
             if current_values.get("years"):
                 idx = int(placeholder.replace('<<YEAR_', '').replace('>>', ''))
                 cycle_idx = idx % len(current_values["years"])
@@ -151,14 +258,28 @@ class PlaceholderRestorer:
             else:
                 replacement = placeholder_map[placeholder]
 
-            pattern = re.escape(placeholder)
-            sparql = re.sub(pattern, replacement, sparql)
+            sparql = sparql.replace(placeholder, replacement)
 
-        # Restore period placeholders
-        for placeholder in [k for k in placeholder_map.keys() if k.startswith("<<PERIOD_")]:
-            replacement = placeholder_map[placeholder]
-            pattern = re.escape(placeholder)
-            sparql = re.sub(pattern, replacement, sparql)
+        # Restore month placeholders
+        for placeholder in sorted([k for k in placeholder_map.keys() if k.startswith("<<MONTH_")]):
+            if placeholder not in sparql:
+                continue
+
+            if current_values.get("months"):
+                idx = int(placeholder.replace('<<MONTH_', '').replace('>>', ''))
+                cycle_idx = idx % len(current_values["months"])
+                month = current_values["months"][cycle_idx]
+                cached_value = placeholder_map[placeholder]
+                replacement = re.sub(
+                    r'\d{4}-\d{2}|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
+                    month,
+                    cached_value,
+                    flags=re.IGNORECASE
+                )
+            else:
+                replacement = placeholder_map[placeholder]
+
+            sparql = sparql.replace(placeholder, replacement)
 
         return sparql
 
