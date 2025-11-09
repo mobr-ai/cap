@@ -4,13 +4,57 @@ Redis client for caching SPARQL queries and natural language mappings.
 import logging
 import re
 import unicodedata
+from pathlib import Path
 from opentelemetry import trace
+
+from cap.data.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
+ontology_path: str = "src/ontologies/cardano.ttl"
+
+# Static global for preserved expressions
+_PRESERVED_EXPRESSIONS = []
+
+def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> list:
+    """Load rdfs:label values from the Turtle ontology file."""
+    labels = []
+    try:
+        path = Path(onto_path)
+        if not path.exists():
+            logger.warning(f"Ontology file not found at {onto_path}")
+            return labels
+
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Match rdfs:label patterns in Turtle format
+        # Handles both single-line and multi-line string literals
+        label_pattern = r'rdfs:label\s+"([^"]+)"'
+        matches = re.findall(label_pattern, content)
+
+        for match in matches:
+            label_lower = match.lower().strip()
+            if label_lower and len(label_lower) > 1:  # Skip empty or single-char labels
+                labels.append(label_lower)
+
+        logger.info(f"Loaded {len(labels)} labels from ontology: {onto_path}")
+
+    except Exception as e:
+        logger.error(f"Error loading ontology labels from {onto_path}: {e}")
+
+    return labels
+
 class QueryNormalizer:
     """Handle natural language query normalization."""
+
+    PRESERVED_EXPRESSIONS = [
+        'asset policy', 'proof of work', 'proof of stake', 'stake pool',
+        'native token', 'smart contract', 'ada pots', 'pot transfer',
+        'collateral input', 'collateral output', 'reference input', 'fungible token'
+        'chain selection rule'
+    ]
 
     TEMPORAL_TERMS = {
         r'\b(yearly|annually|per year|each year|every year)\b': 'per <<PERIOD>>',
@@ -21,12 +65,12 @@ class QueryNormalizer:
     }
 
     ORDERING_TERMS = {
-        r'\b(first|earliest|oldest|initial)\s+(\d+)?\b': '<<ORDER_START>>',
-        r'\b(last|latest|newest|most recent|recent)\s+(\d+)?\b': '<<ORDER_END>>',
-        r'\b(top)\s+(\d+)?\b': '<<ORDER_TOP>>',
-        r'\b(bottom|worst)\s+(\d+)?\b': '<<ORDER_BOTTOM>>',
-        r'\b(largest|biggest|highest|maximum|max|greatest)\b': '<<ORDER_MAX>>',
-        r'\b(smallest|lowest|minimum|min|least)\b': '<<ORDER_MIN>>'
+        r'\b(first|earliest|oldest|initial)\s+\d+\b': '<<ORDER_START>> <<N>>',
+        r'\b(last|latest|newest|most recent|recent)\s+\d+\b': '<<ORDER_END>> <<N>>',
+        r'\b(top)\s+\d+\b': '<<ORDER_TOP>> <<N>>',
+        r'\b(bottom|worst)\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
+        r'\b(largest|biggest|highest|greatest)\b(?=\s+(number|count|amount|value))': '<<ORDER_MAX>>',
+        r'\b(smallest|lowest|least)\b(?=\s+(number|count|amount|value))': '<<ORDER_MIN>>'
     }
 
     CHART_TYPE_PATTERNS = {
@@ -36,12 +80,15 @@ class QueryNormalizer:
     }
 
     ENTITY_MAPPINGS = {
-        r'\b(wallet|account|address)s?\b': 'ENTITY_ACCOUNT',
+        r'\b(native token|multi[- ]?asset)s?\b': 'ENTITY_TOKEN',  # More specific first
+        r'\b(stake pool)s?\b': 'ENTITY_POOL',
+        r'\b(cnt)s?\b': 'ENTITY_TOKEN',
+        r'\b(wallet)s?\b': 'ENTITY_ACCOUNT',
         r'\b(transaction|tx)s?\b': 'ENTITY_TX',
         r'\b(block)s?\b': 'ENTITY_BLOCK',
         r'\b(epoch)s?\b': 'ENTITY_EPOCH',
-        r'\b(native token|cnt|multi[- ]?asset)s?\b': 'ENTITY_TOKEN',
-        r'\b(stake pool|pool)s?\b': 'ENTITY_POOL',
+        r'\b(pool)s?\b(?!\s+owner)': 'ENTITY_POOL',  # Only if not "pool owner"
+        r'\b(account)s?\b': 'ENTITY_ACCOUNT',  # Most general last
     }
 
     COMPARISON_PATTERNS = {
@@ -51,11 +98,10 @@ class QueryNormalizer:
     }
 
     FILLER_WORDS = {
-        'please', 'could', 'can', 'you', 'show', 'me', 'the', 'plot', 'have',
-        'is', 'are', 'was', 'were', 'tell', 'define', 'your', 'my',
-        'give', 'find', 'get', 'a', 'an', 'of', 'in', 'on', 'draw', 'yours',
-        'do', 'does', 'showing', 'table', 'display',
-        'bar', 'line', 'chart', 'graph', 'pie', 'list', 'create', 'delete'
+        'please', 'could', 'can', 'you', 'me', 'the',
+        'is', 'are', 'was', 'were', 'your', 'my',
+        'a', 'an', 'of', 'in', 'on', 'yours',
+        'do', 'does', 'ever'
     }
 
     QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
@@ -80,20 +126,90 @@ class QueryNormalizer:
         return text
 
     @staticmethod
+    def ensure_expressions() -> None:
+        global _PRESERVED_EXPRESSIONS
+
+        if not _PRESERVED_EXPRESSIONS:
+            # Load labels from ontology
+            ontology_labels = _load_ontology_labels(ontology_path)
+
+            # Add default expressions if ontology loading failed or returned nothing
+            if not ontology_labels:
+                logger.warning("No ontology labels loaded, using default preserved expressions")
+                ontology_labels = [
+                    'asset policy', 'proof of work', 'proof of stake', 'stake pool',
+                    'native token', 'smart contract', 'ada pots', 'pot transfer',
+                    'collateral input', 'collateral output', 'reference input', 'fungible token',
+                    'chain selection rule'
+                ]
+
+            _PRESERVED_EXPRESSIONS = ontology_labels
+            logger.info(f"Initialized PRESERVED_EXPRESSIONS with {len(_PRESERVED_EXPRESSIONS)} terms")
+
+    @staticmethod
     def normalize(query: str) -> str:
         """Normalize natural language query for better cache hits."""
+        QueryNormalizer.ensure_expressions()
         normalized = query.lower()
         normalized = unicodedata.normalize('NFKD', normalized)
         normalized = normalized.encode('ascii', 'ignore').decode('ascii')
 
+        # Replace punctuation with spaces and normalize whitespace FIRST
+        normalized = re.sub(r'[?.!,;:\-\(\)\[\]{}\'\"]+', ' ', normalized)
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+
+        # Remove possessive 's
+        normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
+
+        # Replace multi-word expressions with single tokens temporarily
+        expression_map = {}
+        for i, expr in enumerate(QueryNormalizer.PRESERVED_EXPRESSIONS):
+            if expr in normalized:
+                placeholder = f'__EXPR{i}__'
+                expression_map[placeholder] = expr.replace(' ', '_')
+                normalized = normalized.replace(expr, placeholder)
+
+        # Normalize definition requests to a standard form
+        normalized = re.sub(
+            r'\b(define|explain|describe|tell me about|whats?)\s+(an?|the)?\s*',
+            'what ',
+            normalized
+        )
+        # Also handle "what is/are" variations
+        normalized = re.sub(
+            r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
+            'what ',
+            normalized
+        )
+
         normalized = QueryNormalizer._normalize_aggregation_terms(normalized)
 
+        # Handle ordinal dates (1st, 2nd, 3rd, 4th, etc.)
+        normalized = re.sub(
+            r'\b(\d{1,2})(st|nd|rd|th)?\s*,?\s*(\d{4})\b',
+            r'<<DAY>> <<YEAR>>',
+            normalized
+        )
+        normalized = re.sub(
+            r'\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(st|nd|rd|th)?\s*,?\s*(\d{4})\b',
+            r'\1 <<DAY>> <<YEAR>>',
+            normalized,
+            flags=re.IGNORECASE
+        )
+
+        for pattern, replacement in QueryNormalizer.ENTITY_MAPPINGS.items():
+            normalized = re.sub(pattern, replacement, normalized)
+
+        if not re.search(r'\b(max|maximum|min|minimum)\s+(supply|value|amount|limit)', normalized):
+            normalized = re.sub(r'\b(maximum|max)\b(?=\s+(number|count))', '<<ORDER_MAX>>', normalized)
+            normalized = re.sub(r'\b(minimum|min)\b(?=\s+(number|count))', '<<ORDER_MIN>>', normalized)
+
         # temporal patterns
-        normalized = re.sub(r'\b(in|of|for|during)?\s*\d{4}\b', '<<YEAR>>', normalized)
+        normalized = re.sub(r'\b(in|of|for|during)?\s*\d{4}\b', ' <<YEAR>> ', normalized)
         normalized = re.sub(
             r'\b(january|february|march|april|may|june|july|august|september|october|november|december|'
             r'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}\b',
-            '<<MONTH>>', normalized
+            ' <<MONTH>> ', normalized
         )
         normalized = re.sub(
             r'\b(first|last|second|third)\s+(week|day|month)\s+of\s+<<YEAR>>\b',
@@ -108,6 +224,7 @@ class QueryNormalizer:
         normalized = re.sub(r'\b\d{4}-\d{2}\b', '<<MONTH>>', normalized)
         normalized = re.sub(r'\bweek\s+of\s+<<YEAR>>\b', 'week of <<YEAR>>', normalized)
         normalized = re.sub(r'\bweek\s+\d+\b', 'week <<N>>', normalized)
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
 
         # temporal aggregation terms
         for pattern, replacement in QueryNormalizer.TEMPORAL_TERMS.items():
@@ -128,11 +245,14 @@ class QueryNormalizer:
         )
 
         # token names
-        normalized = re.sub(
-            r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))',
-            lambda m: '<<TOKEN>>' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
-            normalized
-        )
+        token_pattern = r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))'
+        # Don't normalize token names that appear in "what is X" or "define X" contexts
+        if not re.search(r'\b(what is|define|explain)\s+(a|an|the)?\s*\w+\s+(token|cnt)', normalized):
+            normalized = re.sub(
+                token_pattern,
+                lambda m: '<<TOKEN>>' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
+                normalized
+            )
 
         # formatted and plain numbers
         normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
@@ -141,24 +261,43 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.CHART_TYPE_PATTERNS.items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        for pattern, replacement in QueryNormalizer.ENTITY_MAPPINGS.items():
-            normalized = re.sub(pattern, replacement, normalized)
-
         # Clean up
         normalized = re.sub(r'[^\w\s]', '', normalized)
         normalized = re.sub(r'\s+', ' ', normalized)
 
         # Remove filler words and sort
         words = normalized.split()
-        filtered_words = [w for w in words if w not in QueryNormalizer.FILLER_WORDS]
 
-        question_start = []
-        remaining_words = []
-        for word in filtered_words:
-            if word in QueryNormalizer.QUESTION_WORDS and not question_start:
-                question_start.append(word)
-            else:
-                remaining_words.append(word)
+        # Remove filler words but preserve question words at start
+        question_words_found = []
+        content_words = []
 
-        remaining_words.sort()
-        return ' '.join(question_start + remaining_words).strip()
+        for word in words:
+            # Preserve placeholder patterns
+            if word.startswith('ENTITY_') or word.startswith('<<'):
+                content_words.append(word)
+            elif word in QueryNormalizer.QUESTION_WORDS and not question_words_found:
+                question_words_found.append(word)
+            elif word not in QueryNormalizer.FILLER_WORDS:
+                content_words.append(word)
+
+        # Sort only the content words, keep question words at start
+        content_words.sort()
+        result = ' '.join(question_words_found + content_words).strip()
+
+        # Apply semantic normalization BEFORE restoring expressions
+        result = SemanticMatcher.normalize_for_matching(result)
+
+        for placeholder, expr in expression_map.items():
+            result = result.replace(placeholder, expr)
+
+        # Validate minimum content - LOOSEN THIS CHECK
+        if not result or len(result) < 3:  # Changed from len(result.split()) < 2
+            logger.warning(f"Normalization produced too short result for: {query}")
+            # Fallback: just lowercase and remove punctuation
+            fallback = query.lower()
+            fallback = re.sub(r'[?.!,;:\-\(\)\[\]{}\'\"]+', '', fallback)
+            return ' '.join(fallback.split())  # normalize whitespace
+
+        logger.debug(f"Normalized '{query}' -> '{result}'")
+        return result
