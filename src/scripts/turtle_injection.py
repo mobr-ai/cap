@@ -2,7 +2,7 @@ import asyncio
 from cap.data.virtuoso import VirtuosoClient, VirtuosoConfig
 
 async def inject_ontology_file():
-    ontology_path = "/home/marcio/src/mobr/cap/src/ontologies/cardano.ttl"
+    ontology_path = "src/ontologies/cardano.ttl"
     graph_uri = "http://cardano"
     if ontology_path != "":
         with open(ontology_path, "r") as f:

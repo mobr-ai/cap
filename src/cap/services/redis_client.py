@@ -67,45 +67,6 @@ class RedisClient:
         normalized = QueryNormalizer.normalize(nl_query)
         return f"nlq:count:{normalized}"
 
-    async def get_cached_query_with_variants(
-        self,
-        original_query: str
-    ) -> Optional[dict[str, Any]]:
-        """Try multiple normalization strategies to find cache hit."""
-        client = await self._get_client()
-
-        # Try exact normalized match first
-        cache_key = self._make_cache_key(original_query)
-        cached = await client.get(cache_key)
-        if cached:
-            return await self.get_cached_query_with_original(original_query, original_query)
-
-        # Try semantic variant
-        normalized = QueryNormalizer.normalize(original_query)
-        semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
-        variant_key = f"nlq:cache:{semantic_variant}"
-        cached = await client.get(variant_key)
-        if cached:
-            return await self.get_cached_query_with_original(semantic_variant, original_query)
-
-        # Try fuzzy matching on similar keys
-        similar_keys = []
-        async for key in client.scan_iter(match=f"nlq:cache:*"):
-            key_query = key.replace("nlq:cache:", "")
-            if self._calculate_similarity(normalized, key_query) > 0.85:
-                similar_keys.append(key)
-
-        if similar_keys:
-            cached = await client.get(similar_keys[0])
-            if cached:
-                data = json.loads(cached)
-                return await self.get_cached_query_with_original(
-                    data["normalized_query"],
-                    original_query
-                )
-
-        return None
-
     @staticmethod
     def _calculate_similarity(query1: str, query2: str) -> float:
         """Calculate similarity between two normalized queries."""
@@ -125,7 +86,7 @@ class RedisClient:
         nl_query: str,
         sparql_query: str,
         ttl: Optional[int] = None
-    ) -> bool:
+    ) -> int:
         """Cache query with placeholder normalization."""
         with tracer.start_as_current_span("cache_sparql_query") as span:
             span.set_attribute("nl_query", nl_query)
@@ -133,11 +94,23 @@ class RedisClient:
             try:
                 client = await self._get_client()
                 normalized = QueryNormalizer.normalize(nl_query)
+                cache_key = self._make_cache_key(nl_query)
+
+                # Checking if query already exists
+                if await client.exists(cache_key):
+                    logger.info(f"Query already cached, skipping: {nl_query}")
+                    return 0  # Indicates duplicate, not cached
+
+                # Check if semantic variant exists
+                semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
+                variant_key = f"nlq:cache:{semantic_variant}"
+                if semantic_variant != normalized and await client.exists(variant_key):
+                    logger.info(f"Query already cached (semantic variant), skipping: {nl_query}")
+                    return 0  # Indicates duplicate, not cached
 
                 # Process SPARQL (single or sequential)
                 normalized_sparql, placeholder_map = self._normalize_sparql(sparql_query)
 
-                cache_key = self._make_cache_key(nl_query)
                 count_key = self._make_count_key(nl_query)
 
                 cache_data = {
@@ -153,12 +126,12 @@ class RedisClient:
                 await client.incr(count_key)
                 await client.expire(count_key, ttl_value)
 
-                return True
+                return 1  # Successfully cached
 
             except Exception as e:
                 span.set_attribute("error", str(e))
                 logger.error(f"Failed to cache query: {e}")
-                return False
+                return -1  # cache error
 
     def _normalize_sparql(self, sparql_query: str) -> Tuple[str, dict[str, str]]:
         """Normalize SPARQL query (handles single and sequential)."""
@@ -202,9 +175,21 @@ class RedisClient:
         with tracer.start_as_current_span("get_cached_query_with_original") as span:
             try:
                 client = await self._get_client()
-                cache_key = self._make_cache_key(normalized_query)
 
+                # Try exact normalized match first
+                cache_key = self._make_cache_key(normalized_query)
                 cached = await client.get(cache_key)
+
+                # If not found, try semantic variant
+                if not cached:
+                    normalized = QueryNormalizer.normalize(normalized_query)
+                    semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
+                    if semantic_variant != normalized:
+                        variant_key = f"nlq:cache:{semantic_variant}"
+                        cached = await client.get(variant_key)
+                        if cached:
+                            logger.info(f"Cache hit via semantic variant: {semantic_variant}")
+
                 if not cached:
                     span.set_attribute("cache_hit", False)
                     return None
@@ -361,28 +346,30 @@ class RedisClient:
 
                 client = await self._get_client()
                 ttl_value = ttl or self.ttl
+                skipped_keys = []
+                cached_keys = []
 
                 for nl_query, sparql_query in queries:
                     try:
                         cache_key = self._make_cache_key(nl_query)
-
-                        if await client.exists(cache_key):
-                            stats["skipped_duplicates"] += 1
-                            continue
-
                         success = await self.cache_query(nl_query, sparql_query, ttl_value)
-
-                        if success:
+                        if success == 1:
                             cached_data = await client.get(cache_key)
                             if cached_data:
                                 data = json.loads(cached_data)
                                 data["precached"] = True
                                 await client.setex(cache_key, ttl_value, json.dumps(data))
+                                cached_keys.append(cache_key)
 
                             stats["cached_successfully"] += 1
+                        elif success == 0:
+                            stats["skipped_duplicates"] += 1
+                            skipped_keys.append(cache_key)
                         else:
                             stats["failed"] += 1
-                            stats["errors"].append(f"cache_query returned False for: {nl_query}...")
+                            error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
+                            stats["errors"].append(error_msg)
+                            logger.error(error_msg, exc_info=True)
 
                     except Exception as e:
                         stats["failed"] += 1
@@ -395,6 +382,12 @@ class RedisClient:
                     f"{stats['failed']} failed, {stats['skipped_duplicates']} skipped"
                 )
 
+                nl_queries = [nl for nl, _ in queries]
+                logger.info(
+                    f"Original queries: \n{nl_queries} \n"
+                    f"Cached keys: \n{cached_keys} \n"
+                    f"Skipped keys: \n{skipped_keys} \n"
+                )
                 return stats
 
             except Exception as e:
