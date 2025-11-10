@@ -140,3 +140,7 @@ _docker.out
 catalog*.xml
 poetry.lock
 Modelfile
+
+# Frontend build output (served by backend)
+src/cap/static/*
+!src/cap/static/.gitkeep
