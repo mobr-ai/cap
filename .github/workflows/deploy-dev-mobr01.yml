@@ -20,6 +20,6 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}         # e.g. mobr01.mobr.ai
           username: ${{ secrets.DEPLOY_USER }}     # cap
           key: ${{ secrets.DEPLOY_KEY }}      # private key for cap on mobr01
-          port: 22
+          port: ${{ secrets.DEPLOY_PORT }}
           script: |
             sudo systemctl start cap-deploy.service
