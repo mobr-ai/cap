@@ -12,8 +12,6 @@ services:
     command: >
       sh -c "sleep 15 && uvicorn src.cap.main:app --host 0.0.0.0 --port 8000"
     depends_on:
-      virtuoso:
-        condition: service_started
       jaeger:
         condition: service_started
       postgres:
@@ -25,12 +23,13 @@ services:
 
   postgres:
     image: postgres:16
+    container_name: cap_postgres
     ports:
       - "5433:5432"   # host access (avoid clashing with any local 5432)
     env_file:
       - .env
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - /home/cap/data/postgres:/var/lib/postgresql/data
       - ./ops/sql/init-cap.sql:/docker-entrypoint-initdb.d/10-init-cap.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-postgres} -h localhost"]
@@ -41,39 +40,42 @@ services:
       - app-network
 
   redis:
-      image: redis:7-alpine
-      container_name: cap_redis
-      ports:
-        - "6379:6379"
-      volumes:
-        - /home/marcio/data/cardano/redis:/data
-      command: redis-server --appendonly yes
-      healthcheck:
-        test: ["CMD", "redis-cli", "ping"]
-        interval: 5s
-        timeout: 3s
-        retries: 20
-      networks:
-        - app-network
-
-  virtuoso:
-    image: openlink/virtuoso-opensource-7:latest
-    platform: linux/amd64
-    container_name: virtuoso
+    image: redis:7-alpine
+    container_name: cap_redis
     ports:
-      - "8890:8890"
-      - "1111:1111"
+      - "6379:6379"
+    volumes:
+      - /home/cap/data/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+
+  qlever:
+    image: adfreiburg/qlever:latest
+    platform: linux/amd64
+    container_name: qlever
+    ports:
+      - "7001:7001"   # QLever UI
+      - "7000:7000"   # SPARQL endpoint
     env_file:
       - .env
-    environment:
-      - DBA_PASSWORD=dba
+    user: "1000:1000"
     volumes:
-      - /home/marcio/data/cardano/virtuoso:/database
+      - /home/cap/data/qlever:/data
+    working_dir: /data
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "ServerMain -i cardano -p 7000 -a ${VIRTUOSO_PASSWORD} --persist-updates --memory-max-size 16g"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8890/sparql >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7000/ >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
+      start_period: 30s
     networks:
       - app-network
 
@@ -96,7 +98,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama-data:/root/.ollama
+      - /home/cap/data/ollama:/root/.ollama
     deploy:
       resources:
         reservations:
@@ -118,8 +120,3 @@ networks:
   app-network:
     driver: bridge
 
-volumes:
-  virtuoso-data:
-  postgres-data:
-  ollama-data:
-  redis-data:
