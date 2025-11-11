@@ -5,7 +5,6 @@ Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 import logging
 import json
 import re
-from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -16,6 +15,8 @@ from cap.data.sparql_util import convert_sparql_to_kv, format_for_llm
 from cap.services.ollama_client import get_ollama_client
 from cap.services.redis_client import get_redis_client
 from cap.data.virtuoso import VirtuosoClient
+
+from cap.data.cache.query_normalizer import QueryNormalizer
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -148,7 +149,7 @@ async def _execute_sequential_queries(
     for idx, query_info in enumerate(queries):
         query = query_info['query']
 
-        logger.info(f"Executing query {idx + 1}/{len(queries)}")
+        logger.info(f"Executing sequential query {idx + 1}/{len(queries)}")
 
         inject_matches = []
         pos = 0
@@ -200,7 +201,7 @@ async def _execute_sequential_queries(
             query = query.replace(param_expr, replacement, 1)
 
         # Execute the clean SPARQL query string directly
-        logger.info(f"Executing query {idx + 1}:\n{query}\n")
+        logger.info(f"Executing clean sparql query {idx + 1}:\n{query}\n")
 
         # Execute as plain SPARQL string
         results = await virtuoso.execute_query(query)
@@ -371,8 +372,8 @@ async def natural_language_query(request: NLQueryRequest):
                     user_query = f"{request.context}\n\n{request.query}"
 
                 # Check cache first
-                low_query: str = user_query.lower().strip()
-                cached_data = await redis_client.get_cached_query_with_original(low_query, user_query)
+                normalized = QueryNormalizer.normalize(user_query)
+                cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
 
                 sparql_query = ""
                 sparql_results = None
@@ -380,14 +381,14 @@ async def natural_language_query(request: NLQueryRequest):
                 # Stage 1: Convert NL to SPARQL
                 logger.info(f"Stage 1: convert NL to sparql")
                 if cached_data:
-                    logger.info(f"Cache hit for normalized query: {low_query}")
+                    logger.info(f"Cache **HIT** for \n   {user_query}\n   normalized query: {normalized}")
                     cached_sparql = cached_data["sparql_query"]
 
                     # Parse cached SPARQL (unified handling)
                     try:
-                        parsed = json.loads(cached_sparql)
-                        if isinstance(parsed, list):
-                            is_sequential = True
+                        is_sequential = cached_data.get("is_sequential")
+                        if is_sequential:
+                            parsed = json.loads(cached_sparql)
                             sparql_queries = parsed
 
                             for idx, query_info in enumerate(sparql_queries):
@@ -400,8 +401,8 @@ async def natural_language_query(request: NLQueryRequest):
                                     logger.info(f"Query {idx+1} placeholders successfully restored")
 
                             logger.info(f"Cached sequential SPARQL with {len(parsed)} queries")
+
                         else:
-                            is_sequential = False
                             sparql_query = cached_sparql
 
                             # Check single query for placeholders
@@ -412,7 +413,7 @@ async def natural_language_query(request: NLQueryRequest):
                         is_sequential = False
                         sparql_query = cached_sparql
                 else:
-                    logger.info(f"Cache miss for query: {low_query}")
+                    logger.info(f"Cache **MISS** for \n   {user_query}\n   normalized query: {normalized}")
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
@@ -492,6 +493,7 @@ async def natural_language_query(request: NLQueryRequest):
 
                             span.set_attribute("result_count", result_count)
                             logger.info(f"SPARQL query returned {result_count} results")
+                            logger.info(f"    SPARQL query: {sparql_query}")
 
                             if result_count == 0:
                                 yield f"{StatusMessage.no_results()}"

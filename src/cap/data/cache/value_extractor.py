@@ -53,7 +53,15 @@ class ValueExtractor:
         # Extract currency/token URIs (add this new section)
         # Look for ADA references
         if re.search(r'\bADA\b', nl_query, re.IGNORECASE):
-            values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
+            if "http://www.mobr.ai/ontologies/cardano#cnt/ada" not in values["currencies"]:
+                values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
+
+        # Extract token names that might be currencies
+        for token in values["tokens"]:
+            # Construct potential currency URI
+            currency_uri = f"http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}"
+            if currency_uri not in values["currencies"]:
+                values["currencies"].append(currency_uri)
 
         # Extract temporal periods
         for pattern, period in ValueExtractor.TEMPORAL_PATTERNS.items():

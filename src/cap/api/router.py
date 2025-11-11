@@ -26,8 +26,15 @@ async def execute_query(request: QueryRequest):
         span.set_attribute("query_type", request.type)
         client = VirtuosoClient()
         try:
-            results = await client.execute_query(request.query)
+            user_query = request.query
+            if user_query:
+                low_uq = user_query.lower()
+                if "update" in low_uq or "delete" in low_uq or "insert" in low_uq:
+                    return QueryResponse(results=[])
+
+            results = await client.execute_query(user_query)
             return QueryResponse(results=results)
+
         except HTTPException as e:
             raise e
         except Exception as e:

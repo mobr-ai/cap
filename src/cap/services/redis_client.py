@@ -57,15 +57,13 @@ class RedisClient:
             await self._client.aclose()
             self._client = None
 
-    def _make_cache_key(self, nl_query: str) -> str:
-        """Create cache key from natural language query."""
-        normalized_nl = QueryNormalizer.normalize(nl_query)
+    def _make_cache_key(self, normalized_nl: str) -> str:
+        """Create cache key from normalized natural language query."""
         return f"nlq:cache:{normalized_nl}"
 
-    def _make_count_key(self, nl_query: str) -> str:
-        """Create count key from natural language query."""
-        normalized = QueryNormalizer.normalize(nl_query)
-        return f"nlq:count:{normalized}"
+    def _make_count_key(self, normalized_nl: str) -> str:
+        """Create count key from normalized natural language query."""
+        return f"nlq:count:{normalized_nl}"
 
     @staticmethod
     def _calculate_similarity(query1: str, query2: str) -> float:
@@ -94,7 +92,7 @@ class RedisClient:
             try:
                 client = await self._get_client()
                 normalized = QueryNormalizer.normalize(nl_query)
-                cache_key = self._make_cache_key(nl_query)
+                cache_key = self._make_cache_key(normalized)
 
                 # Checking if query already exists
                 if await client.exists(cache_key):
@@ -110,14 +108,14 @@ class RedisClient:
 
                 # Process SPARQL (single or sequential)
                 normalized_sparql, placeholder_map = self._normalize_sparql(sparql_query)
-
-                count_key = self._make_count_key(nl_query)
+                count_key = self._make_count_key(normalized)
 
                 cache_data = {
                     "original_query": nl_query,
                     "normalized_query": normalized,
                     "sparql_query": normalized_sparql,
                     "placeholder_map": placeholder_map,
+                    "is_sequential": isinstance(sparql_query, str) and sparql_query.strip().startswith('['),
                     "precached": False
                 }
 
@@ -160,6 +158,11 @@ class RedisClient:
                 query_info['query'],
                 counters
             )
+            # Check for key collisions before merging
+            collision_keys = set(all_placeholders.keys()) & set(placeholders.keys())
+            if collision_keys:
+                logger.warning(f"Placeholder key collision detected: {collision_keys}")
+
             all_placeholders.update(placeholders)
             query_info['query'] = norm_q
             normalized_queries.append(query_info)
@@ -182,9 +185,8 @@ class RedisClient:
 
                 # If not found, try semantic variant
                 if not cached:
-                    normalized = QueryNormalizer.normalize(normalized_query)
-                    semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
-                    if semantic_variant != normalized:
+                    semantic_variant = SemanticMatcher.get_semantic_variant(normalized_query)
+                    if semantic_variant != normalized_query:
                         variant_key = f"nlq:cache:{semantic_variant}"
                         cached = await client.get(variant_key)
                         if cached:
@@ -208,8 +210,16 @@ class RedisClient:
                     placeholder_map,
                     current_values
                 )
-                data["sparql_query"] = restored_sparql
+                # Check if restoration failed (placeholders still present)
+                remaining_placeholders = re.findall(r'<<[A-Z_]+_\d+>>', restored_sparql)
+                if remaining_placeholders:
+                    logger.error(f"Failed to restore placeholders: {remaining_placeholders}")
+                    logger.error(f"Original query: {original_query}")
+                    logger.error(f"Cached normalized: {normalized_query}")
+                    span.set_attribute("cache_hit", False)
+                    return None  # Force cache miss to regenerate query
 
+                data["sparql_query"] = restored_sparql
                 span.set_attribute("cache_hit", True)
                 return data
 
@@ -256,7 +266,8 @@ class RedisClient:
         """Get the number of times a query has been asked."""
         try:
             client = await self._get_client()
-            count_key = self._make_count_key(nl_query)
+            normalized = QueryNormalizer.normalize(nl_query)
+            count_key = self._make_count_key(normalized)
             count = await client.get(count_key)
             return int(count) if count else 0
         except Exception as e:
@@ -292,7 +303,10 @@ class RedisClient:
                             })
 
                 queries_with_counts.sort(key=lambda x: x["count"], reverse=True)
-                return queries_with_counts[:limit]
+                if limit > 0:
+                    return queries_with_counts[:limit]
+
+                return queries_with_counts
 
             except Exception as e:
                 span.set_attribute("error", str(e))
@@ -351,7 +365,8 @@ class RedisClient:
 
                 for nl_query, sparql_query in queries:
                     try:
-                        cache_key = self._make_cache_key(nl_query)
+                        normalized_nl = QueryNormalizer.normalize(nl_query)
+                        cache_key = self._make_cache_key(normalized_nl)
                         success = await self.cache_query(nl_query, sparql_query, ttl_value)
                         if success == 1:
                             cached_data = await client.get(cache_key)

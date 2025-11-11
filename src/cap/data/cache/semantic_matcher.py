@@ -7,7 +7,14 @@ class SemanticMatcher:
         'list_latest': ['latest', 'most recent', 'newest', 'last', 'current'],
         'count': ['how many', 'number of', 'count', 'total'],
         'aggregate_time': ['over time', 'trend', 'historical', 'progression'],
-        'top_ranked': ['top', 'largest', 'biggest', 'highest', 'most'],
+        'top_ranked': ['top', 'largest', 'biggest', 'highest', 'most', 'by'],
+    }
+
+    CHART_GROUPS = {
+        'bar': ['bar'],
+        'pie': ['pie', 'pizza'],
+        'line': ["line", "timeseries", "trend"],
+        'table': ["list", "table", "display", "show", "get"],
     }
 
     # Equivalent comparison terms (normalized forms)
