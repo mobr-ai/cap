@@ -80,16 +80,48 @@ class QueryNormalizer:
     }
 
     ENTITY_MAPPINGS = {
-        r'\b(native token|multi[- ]?asset)s?\b': 'ENTITY_TOKEN',  # More specific first
+        # Governance and Certificates (more specific first)
+        r'\b(drep (registration|update|retirement))s?\b': 'ENTITY_DREP_CERT',
+        r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
+        r'\b(governance (proposal|action))s?\b': 'ENTITY_PROPOSAL',
+        r'\b(voting (anchor|procedure))s?\b': 'ENTITY_VOTING_ANCHOR',
+        r'\b(constitutional committee)s?\b': 'ENTITY_COMMITTEE',
+        r'\b(committee (member|credential))s?\b': 'ENTITY_COMMITTEE_MEMBER',
+        r'\b((cold|hot) credential)s?\b': 'ENTITY_CREDENTIAL',
+        r'\b(delegated representative|drep)s?\b': 'ENTITY_DREP',
+        r'\b(delegation)s?\b': 'ENTITY_DELEGATION',
+        r'\b(vote|casts vote)s?\b': 'ENTITY_VOTE',
+        r'\b(certificate)s?\b': 'ENTITY_CERTIFICATE',
+        r'\b(constitution)s?\b': 'ENTITY_CONSTITUTION',
+
+        # Scripts and Smart Contracts
+        r'\b(plutus script|native script|script|smart contract)s?\b': 'ENTITY_SCRIPT',
+        r'\b((key|transaction) witness)s?\b': 'ENTITY_WITNESS',
+        r'\b(datum)s?\b': 'ENTITY_DATUM',
+        r'\b((cost model|execution units)s?)\b': 'ENTITY_COST_MODEL',
+
+        # Tokens and Assets
+        r'\b((multi[- ]?asset cardano native token|multi asset cnt|cnt|native token|cardano native token|token state|non[- ]?fungible token|nft|fungible token)s?)s?\b': 'ENTITY_TOKEN',
+        r'\b(ada pot)s?\b': 'ENTITY_ADA_POTS',
+
+        r'\b((protocol)s? parameter)s?\b': 'ENTITY_PROTOCOL_PARAMS',
+
+        # System and Status
+        r'\b((etl progress|what is happening|sync status|current (status|tip|height)s?)s?)s?\b': 'ENTITY_STATUS',
+
+        r'\b(reward withdrawal)s?\b': 'ENTITY_REWARD_WITHDRAWAL',
+        r'\b(input)s?\b': 'ENTITY_UTXO_INPUT',
+        r'\b(output)s?\b': 'ENTITY_UTXO_INPUT',
+
         r'\b(stake pool)s?\b': 'ENTITY_POOL',
         r'\b(cnt)s?\b': 'ENTITY_TOKEN',
-        r'\b(wallet)s?\b': 'ENTITY_ACCOUNT',
+        r'\b(account|wallet)s?\b': 'ENTITY_ACCOUNT',
         r'\b(transaction|tx)s?\b': 'ENTITY_TX',
         r'\b(block)s?\b': 'ENTITY_BLOCK',
         r'\b(epoch)s?\b': 'ENTITY_EPOCH',
-        r'\b(pool)s?\b(?!\s+owner)': 'ENTITY_POOL',  # Only if not "pool owner"
-        r'\b(account)s?\b': 'ENTITY_ACCOUNT',  # Most general last
+        r'\b(stake pool|pool)s?\b(?!\s+owner)': 'ENTITY_POOL',  # Only if not "pool owner"
     }
+
 
     COMPARISON_PATTERNS = {
         r'\b(more than|over|above|greater than|exceeding|beyond)\b': 'above',

@@ -582,9 +582,21 @@ blockchain:hasTimestamp a owl:DatatypeProperty ;
     rdfs:domain blockchain:Block ;
     rdfs:range xsd:dateTime .
 
-blockchain:hasMetadataContent a owl:DatatypeProperty ;
-    rdfs:label "has metadata content" ;
-    rdfs:comment "The content of metadata as a string" ;
+blockchain:hasMetadataJSON a owl:DatatypeProperty ;
+    rdfs:label "has metadata json" ;
+    rdfs:comment "The JSON content of metadata as a string" ;
+    rdfs:domain blockchain:Metadata ;
+    rdfs:range xsd:string .
+
+blockchain:hasMetadataCBOR a owl:DatatypeProperty ;
+    rdfs:label "has metadata cbor" ;
+    rdfs:comment "The CBOR content of metadata as a string" ;
+    rdfs:domain blockchain:Metadata ;
+    rdfs:range xsd:string .
+
+blockchain:hasMetadataDecodedCBOR a owl:DatatypeProperty ;
+    rdfs:label "has metadata decoded cbor" ;
+    rdfs:comment "The decoded CBOR content of metadata as a string" ;
     rdfs:domain blockchain:Metadata ;
     rdfs:range xsd:string .
 
@@ -1020,21 +1032,39 @@ cardano:hasScriptLanguage a owl:DatatypeProperty ;
     rdfs:domain cardano:Script ;
     rdfs:range xsd:string .
 
+cardano:hasTransactionCBOR a owl:DatatypeProperty ;
+    rdfs:label "has transaction CBOR" ;
+    rdfs:comment "The CBOR in a transaction." ;
+    rdfs:domain cardano:Transaction ;
+    rdfs:range xsd:string .
+
+cardano:hasTransactionDecodedCBOR a owl:DatatypeProperty ;
+    rdfs:label "has transaction CBOR" ;
+    rdfs:comment "The decoded CBOR in a transaction." ;
+    rdfs:domain cardano:Transaction ;
+    rdfs:range xsd:string .
+
+cardano:hasScriptJSON a owl:DatatypeProperty ;
+    rdfs:label "has script json" ;
+    rdfs:comment "JSON of a script" ;
+    rdfs:domain cardano:Script ;
+    rdfs:range xsd:string .
+
 cardano:hasScriptCBOR a owl:DatatypeProperty ;
-    rdfs:label "has Script CBOR" ;
-    rdfs:comment "The CBOR in the script." ;
+    rdfs:label "has script cbor" ;
+    rdfs:comment "CBOR of a script" ;
     rdfs:domain cardano:Script ;
     rdfs:range xsd:string .
 
-cardano:hasScriptJson a owl:DatatypeProperty ;
-    rdfs:label "has script JSON" ;
-    rdfs:comment "JSON representation of a script" ;
+cardano:hasScriptDecodedCBOR a owl:DatatypeProperty ;
+    rdfs:label "has script decoded cbor" ;
+    rdfs:comment "decoded CBOR of a script" ;
     rdfs:domain cardano:Script ;
     rdfs:range xsd:string .
 
-cardano:hasRedeemerData a owl:DatatypeProperty ;
-    rdfs:label "has redeemer data" ;
-    rdfs:comment "The data provided to a redeemer for script execution" ;
+cardano:hasRedeemerContent a owl:DatatypeProperty ;
+    rdfs:label "has redeemer content" ;
+    rdfs:comment "The content provided to a redeemer for script execution" ;
     rdfs:domain cardano:Redeemer ;
     rdfs:range xsd:string .
 
