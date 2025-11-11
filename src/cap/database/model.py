@@ -1,5 +1,17 @@
+# cap/database/model.py
+
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Boolean, LargeBinary
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    LargeBinary,
+    DateTime,
+    ForeignKey,
+    JSON,
+    text,
+)
 
 Base = declarative_base()
 
@@ -25,3 +37,51 @@ class User(Base):
 
     # URL kept for compatibility
     avatar         = Column(String, nullable=True)
+
+# -----------------------------
+# Dashboards
+# -----------------------------
+
+class Dashboard(Base):
+    __tablename__ = "dashboard"
+
+    id          = Column(Integer, primary_key=True)
+    user_id     = Column(Integer, ForeignKey("user.user_id"), index=True, nullable=False)
+    name        = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    is_default  = Column(Boolean, default=False)
+
+    created_at  = Column(DateTime, server_default=text("NOW()"))
+    updated_at  = Column(
+        DateTime,
+        server_default=text("NOW()"),
+        onupdate=text("NOW()"),
+    )
+
+
+class DashboardItem(Base):
+    __tablename__ = "dashboard_item"
+
+    id            = Column(Integer, primary_key=True)
+    dashboard_id  = Column(
+        Integer,
+        ForeignKey("dashboard.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+
+    # "table", "chart" (extend later e.g. "metric", "text", etc.)
+    artifact_type = Column(String(50), nullable=False)
+
+    # Short label shown to the user
+    title         = Column(String(150), nullable=False)
+
+    # Optional: original NL query that produced it
+    source_query  = Column(String(1000), nullable=True)
+
+    # Arbitrary JSON config/spec (vega spec, kv payload, etc.)
+    config        = Column(JSON, nullable=False)
+
+    position      = Column(Integer, nullable=False, server_default=text("0"))
+
+    created_at    = Column(DateTime, server_default=text("NOW()"))

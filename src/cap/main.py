@@ -27,6 +27,7 @@ from cap.api.waitlist import router as wait_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
+from cap.api.dashboard import router as dashboard_router
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -215,6 +216,7 @@ def create_application() -> FastAPI:
     app.include_router(wait_router)
     app.include_router(cache_router)
     app.include_router(etl_router)
+    app.include_router(dashboard_router)
 
     return app
 

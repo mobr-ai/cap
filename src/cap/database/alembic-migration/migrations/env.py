@@ -1,5 +1,13 @@
 from logging.config import fileConfig
 import os
+import os
+import sys
+
+# Ensure 'src' is on sys.path so "import cap" works when running from this folder
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))
+from cap.database.model import Base
+target_metadata = Base.metadata
+
 from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config, pool
@@ -45,9 +53,6 @@ def include_object(object, name, type_, reflected, compare_to):
             pass
     return True
 
-
-from cap.database.model import Base  # ensure this import loads all models
-target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
