@@ -10,6 +10,7 @@ import httpx
 from opentelemetry import trace
 
 from cap.data.vega_util import VegaUtil
+from cap.data.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -357,13 +358,9 @@ class OllamaClient:
 
         # Filter out lines that are explanatory text
         sparql_lines = []
-        in_query = False
         for line in lines:
             upper_line = line.upper()
             if any(keyword in upper_line for keyword in ['PREFIX', 'SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'WHERE', 'FROM', 'ORDER', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING', 'FILTER']):
-                in_query = True
-
-            if in_query:
                 sparql_lines.append(line)
 
         cleaned = '\n'.join(sparql_lines).strip()
@@ -422,15 +419,15 @@ class OllamaClient:
 
         # Chart-related queries
         new_type = ""
-        if result_type == "multiple" and ("bar chart" in low_uq or "bar graph" in low_uq):
+        if result_type == "multiple" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["bar"])):
             new_type = "bar_chart"
-        elif result_type == "single" and ("pie chart" in low_uq or "pie graph" in low_uq):
+        elif result_type == "single" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["pie"])):
             new_type = "pie_chart"
-        elif result_type == "multiple" and (any(keyword in low_uq for keyword in ["line chart", "timeseries", "trend over time"])):
+        elif result_type == "multiple" and (any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["line"])):
             new_type = "line_chart"
 
         # Tabular or list queries
-        elif any(keyword in low_uq for keyword in ["list", "table", "display", "show me"]):
+        elif any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type

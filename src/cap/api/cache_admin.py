@@ -183,7 +183,7 @@ async def get_cache_info():
     Get information about cached queries.
 
     Returns:
-        Cache statistics
+        Cache info
     """
     with tracer.start_as_current_span("cache_info") as span:
         try:
@@ -204,24 +204,51 @@ async def get_cache_info():
                         precached_count += 1
 
             # Get popular queries
-            popular_queries = await redis_client.get_popular_queries(limit=10)
+            popular_queries = await redis_client.get_popular_queries(limit=0)
 
             span.set_attribute("cache_count", cache_count)
             span.set_attribute("precached_count", precached_count)
-
             return {
                 "total_cached_queries": cache_count,
                 "precached_queries": precached_count,
                 "dynamic_cached_queries": cache_count - precached_count,
                 "popular_queries": [
                     {
-                        "query": query,
-                        "count": count
+                        "rank": idx + 1,
+                        "query": query["original_query"],
+                        "normalized_query": query["normalized_query"],
+                        "frequency": query["count"]
                     }
-                    for query, count in popular_queries
+                    for idx, query in enumerate(popular_queries)
                 ]
             }
 
         except Exception as e:
             logger.error(f"Cache info error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/info/nl")
+async def get_cache_info():
+    """
+    Get all cached natural language queries.
+
+    Returns:
+        Cached queries
+    """
+    with tracer.start_as_current_span("cache_info_nl") as span:
+        try:
+            redis_client = get_redis_client()
+
+            # Get popular queries
+            popular_queries = await redis_client.get_popular_queries(limit=0)
+
+            return {
+                "nl_queries": [query["original_query"]
+                    for _, query in enumerate(popular_queries)
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Cache nl error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))

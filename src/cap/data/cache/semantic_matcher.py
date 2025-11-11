@@ -10,6 +10,13 @@ class SemanticMatcher:
         'top_ranked': ['top', 'largest', 'biggest', 'highest', 'most'],
     }
 
+    CHART_GROUPS = {
+        'bar': ['bar'],
+        'pie': ['pie', 'pizza'],
+        'line': ["line", "timeseries", "trend"],
+        'table': ["list", "table", "display", "show", "get"],
+    }
+
     # Equivalent comparison terms (normalized forms)
     COMPARISON_EQUIVALENTS = {
         'above': ['above', 'over', 'more than', 'greater than', 'exceeding', 'beyond'],

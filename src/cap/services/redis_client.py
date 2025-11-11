@@ -292,7 +292,10 @@ class RedisClient:
                             })
 
                 queries_with_counts.sort(key=lambda x: x["count"], reverse=True)
-                return queries_with_counts[:limit]
+                if limit > 0:
+                    return queries_with_counts[:limit]
+
+                return queries_with_counts
 
             except Exception as e:
                 span.set_attribute("error", str(e))
