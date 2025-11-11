@@ -87,30 +87,27 @@ class PlaceholderRestorer:
         cached_value: str,
         current_values: dict[str, list[str]]
     ) -> str:
-        """Restore INJECT statement with nested placeholders."""
-
+        """Restore CURRENCY placeholder with cyclic fallback."""
         currencies = current_values.get("currencies", [])
+
         if currencies:
             try:
                 idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
-                if idx < len(currencies):
-                    currency_uri = currencies[idx]
-                    # Remove angle brackets if present, then add them back
-                    currency_uri = currency_uri.strip('<>')
-                    return f"<{currency_uri}>"
-
+                # Use modulo for cyclic access - always succeeds if list is non-empty
+                currency_uri = currencies[idx % len(currencies)]
+                currency_uri = currency_uri.strip('<>')
+                return f"<{currency_uri}>"
             except (AttributeError, ValueError, IndexError) as e:
                 logger.error(f"Error parsing CUR placeholder {placeholder}: {e}")
 
         # Fallback to cached value
         if cached_value:
-            logger.warning(f"Using cached value for {placeholder}: {cached_value}")
-            # Ensure cached value has angle brackets
             cached_value = cached_value.strip('<>')
             return f"<{cached_value}>"
 
-        logger.error(f"Cannot restore {placeholder}: no currencies and no cached value")
-        return placeholder  # Return placeholder unchanged if can't restore
+        # Final fallback: use ADA as default currency
+        logger.warning(f"No currency available for {placeholder}, using default ADA")
+        return "<http://www.mobr.ai/ontologies/cardano#cnt/ada>"
 
     @staticmethod
     def _restore_inject(
@@ -154,26 +151,21 @@ class PlaceholderRestorer:
         cached_value: str,
         default: str
     ) -> str:
-        """Get value from list using occurrence-based matching."""
+        """Get value from list using occurrence-based matching with cyclic fallback."""
         if not value_list:
             return cached_value or default
 
         try:
             match = re.search(r'_(\d+)>>', placeholder)
             if not match:
-                return value_list[0] if value_list else (cached_value or default)
+                return value_list[0]
 
             idx = int(match.group(1))
+            # Always use modulo for safe cyclic access
+            return value_list[idx % len(value_list)]
 
-            if idx >= len(value_list):
-                return value_list[idx % len(value_list)] if value_list else (cached_value or default)
-
-            return value_list[idx]
-
-        except (ValueError, AttributeError, IndexError):
-            pass
-
-        return cached_value or default
+        except (ValueError, AttributeError):
+            return cached_value or default
 
     @staticmethod
     def _restore_string(

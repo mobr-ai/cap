@@ -277,12 +277,26 @@ class QueryNormalizer:
         )
 
         # token names
+        # Check for definition contexts more broadly
+        is_definition_query = bool(re.search(
+            r'\b(what|define|explain|describe|tell me about|whats)\s+(is|are|was|were)?\s+(a|an|the)?\s*\w+',
+            normalized
+        ))
+
         token_pattern = r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))'
-        # Don't normalize token names that appear in "what is X" or "define X" contexts
-        if not re.search(r'\b(what is|define|explain)\s+(a|an|the)?\s*\w+\s+(token|cnt)', normalized):
+
+        # Don't normalize if it's a definition query OR if token name is the query subject
+        if not is_definition_query:
+            # Also preserve token if it appears early in query (likely the subject)
+            words = normalized.split()
+            subject_tokens = set(words[:5])  # First 5 words likely contain the subject
+
             normalized = re.sub(
                 token_pattern,
-                lambda m: '<<TOKEN>>' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
+                lambda m: ('<<TOKEN>>'
+                        if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define']
+                        and m.group(1) not in subject_tokens
+                        else m.group(1)),
                 normalized
             )
 
