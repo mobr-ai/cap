@@ -510,10 +510,10 @@ class OllamaClient:
                 context_res = str(sparql_results)
 
             know_info = ""
-            temperature = 0.3
+            temperature = 0.1
             if "chart" in result_type or "table" in result_type:
                 know_info = f"""
-                The system is showing an artifact to the user using the data below. Write a SHORT insight about it.
+                The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
                 """
 
@@ -524,12 +524,11 @@ class OllamaClient:
 
                 {self.contextualize_prompt}
                 """
-                temperature = 0.1
 
             else:
                 know_info = """
                 If you do not know how to answer User's question, say you do not know the answer.
-                Do not answer with a SPARQL query.
+                NEVER answer with a SPARQL query.
                 """
 
             # Format the prompt with query and results
