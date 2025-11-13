@@ -21,7 +21,7 @@ from cap.data.cache.semantic_matcher import SemanticMatcher
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-class RedisClient:
+class RedisNLClient:
     """Client for Redis caching operations."""
 
     def __init__(
@@ -38,7 +38,7 @@ class RedisClient:
         self.ttl = ttl
         self._client: Optional[redis.Redis] = None
 
-    async def _get_client(self) -> redis.Redis:
+    async def _get_nl_client(self) -> redis.Redis:
         """Get or create Redis client."""
         if self._client is None:
             self._client = redis.Redis(
@@ -90,7 +90,7 @@ class RedisClient:
             span.set_attribute("nl_query", nl_query)
 
             try:
-                client = await self._get_client()
+                client = await self._get_nl_client()
                 normalized = QueryNormalizer.normalize(nl_query)
                 cache_key = self._make_cache_key(normalized)
 
@@ -177,7 +177,7 @@ class RedisClient:
         """Retrieve cached query and restore placeholders."""
         with tracer.start_as_current_span("get_cached_query_with_original") as span:
             try:
-                client = await self._get_client()
+                client = await self._get_nl_client()
 
                 # Try exact normalized match first
                 cache_key = self._make_cache_key(normalized_query)
@@ -265,7 +265,7 @@ class RedisClient:
     async def get_query_count(self, nl_query: str) -> int:
         """Get the number of times a query has been asked."""
         try:
-            client = await self._get_client()
+            client = await self._get_nl_client()
             normalized = QueryNormalizer.normalize(nl_query)
             count_key = self._make_count_key(normalized)
             count = await client.get(count_key)
@@ -280,7 +280,7 @@ class RedisClient:
             span.set_attribute("limit", limit)
 
             try:
-                client = await self._get_client()
+                client = await self._get_nl_client()
                 count_keys = []
 
                 async for key in client.scan_iter(match="nlq:count:*"):
@@ -316,7 +316,7 @@ class RedisClient:
     async def get_query_variations(self, nl_query: str) -> list[str]:
         """Get cached variations of a query."""
         normalized = QueryNormalizer.normalize(nl_query)
-        client = await self._get_client()
+        client = await self._get_nl_client()
 
         variations = []
         async for key in client.scan_iter(match=f"nlq:cache:*{normalized}*"):
@@ -327,7 +327,7 @@ class RedisClient:
     async def health_check(self) -> bool:
         """Check if Redis is available."""
         try:
-            client = await self._get_client()
+            client = await self._get_nl_client()
             await client.ping()
             return True
         except Exception as e:
@@ -358,7 +358,7 @@ class RedisClient:
                 queries = QueryFileParser.parse(content)
                 stats["total_queries"] = len(queries)
 
-                client = await self._get_client()
+                client = await self._get_nl_client()
                 ttl_value = ttl or self.ttl
                 skipped_keys = []
                 cached_keys = []
@@ -414,20 +414,20 @@ class RedisClient:
 
 
 # Global client instance
-_redis_client: Optional[RedisClient] = None
+_redis_nl_client: Optional[RedisNLClient] = None
 
 
-def get_redis_client() -> RedisClient:
+def get_redis_nl_client() -> RedisNLClient:
     """Get or create global Redis client instance."""
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = RedisClient()
-    return _redis_client
+    global _redis_nl_client
+    if _redis_nl_client is None:
+        _redis_nl_client = RedisNLClient()
+    return _redis_nl_client
 
 
-async def cleanup_redis_client():
+async def cleanup_redis_nl_client():
     """Cleanup global Redis client."""
-    global _redis_client
-    if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+    global _redis_nl_client
+    if _redis_nl_client:
+        await _redis_nl_client.close()
+        _redis_nl_client = None

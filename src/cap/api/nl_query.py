@@ -13,7 +13,7 @@ from typing import Optional, Any
 
 from cap.data.sparql_util import convert_sparql_to_kv, format_for_llm
 from cap.services.ollama_client import get_ollama_client
-from cap.services.redis_client import get_redis_client
+from cap.services.redis_nl_client import get_redis_nl_client
 from cap.data.virtuoso import VirtuosoClient
 
 from cap.data.cache.query_normalizer import QueryNormalizer
@@ -321,7 +321,7 @@ async def get_top_queries(limit: int = 5):
         span.set_attribute("limit", limit)
 
         try:
-            redis_client = get_redis_client()
+            redis_client = get_redis_nl_client()
             popular_queries = await redis_client.get_popular_queries(limit=limit)
 
             return {
@@ -364,7 +364,7 @@ async def natural_language_query(request: NLQueryRequest):
                 # Get clients
                 ollama = get_ollama_client()
                 virtuoso = VirtuosoClient()
-                redis_client = get_redis_client()
+                redis_client = get_redis_nl_client()
 
                 # Build the user query
                 user_query = request.query
@@ -604,7 +604,7 @@ async def health_check():
 async def get_cache_stats():
     """Get cache statistics."""
     try:
-        redis_client = get_redis_client()
+        redis_client = get_redis_nl_client()
         popular_queries = await redis_client.get_popular_queries(limit=10)
 
         return {

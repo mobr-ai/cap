@@ -57,7 +57,7 @@ class OllamaClient:
             "Based on the query results, provide a clear and helpful answer."
         )
 
-    async def _get_client(self) -> httpx.AsyncClient:
+    async def _get_nl_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -179,7 +179,7 @@ class OllamaClient:
             Chunks of generated text
         """
         with tracer.start_as_current_span("ollama_generate_stream") as span:
-            client = await self._get_client()
+            client = await self._get_nl_client()
 
             request_data = {
                 "model": model,
@@ -250,7 +250,7 @@ class OllamaClient:
             span.set_attribute("model", model)
             span.set_attribute("prompt_length", len(prompt))
 
-            client = await self._get_client()
+            client = await self._get_nl_client()
 
             request_data = {
                 "model": model,
@@ -555,7 +555,7 @@ class OllamaClient:
             True if service is healthy, False otherwise
         """
         try:
-            client = await self._get_client()
+            client = await self._get_nl_client()
             response = await client.get(f"{self.base_url}/api/tags")
             healthy = response.status_code == 200
             if not healthy:

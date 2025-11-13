@@ -11,6 +11,7 @@ from cap.api.models import (
     GraphResponse,
     SuccessResponse
 )
+from cap.services.redis_sparql_client import get_redis_sparql_client
 from cap.data.virtuoso import VirtuosoClient
 
 router = APIRouter(prefix="/api/v1")
@@ -32,7 +33,13 @@ async def execute_query(request: QueryRequest):
                 if "update" in low_uq or "delete" in low_uq or "insert" in low_uq:
                     return QueryResponse(results=[])
 
+            redis_client = get_redis_sparql_client()
+            cached_data = await redis_client.get_cached_query(user_query)
+            if cached_data:
+                return QueryResponse(results=cached_data)
+
             results = await client.execute_query(user_query)
+            redis_client.cache_query(sparql_query=user_query, results=results)
             return QueryResponse(results=results)
 
         except HTTPException as e:
