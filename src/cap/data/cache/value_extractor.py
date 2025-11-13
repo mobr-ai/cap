@@ -133,10 +133,22 @@ class ValueExtractor:
     @staticmethod
     def _extract_limits(nl_query: str, values: dict[str, list[str]]) -> None:
         """Extract limit values."""
+        # Explicit limits (top N)
         for match in re.finditer(r'top\s+(\d+)', nl_query, re.IGNORECASE):
             limit = match.group(1)
             if limit not in values["limits"]:
                 values["limits"].append(limit)
+
+        # Explicit limits (latest N, first N, etc.)
+        for match in re.finditer(r'\b(latest|newest|first|last)\s+(\d+)', nl_query, re.IGNORECASE):
+            limit = match.group(2)
+            if limit not in values["limits"]:
+                values["limits"].append(limit)
+
+        # Implicit limit of 1 for singular nouns without a number
+        if re.search(r'\b(latest|newest|first|last)\s+(transaction|block|pool|epoch)\b(?!s)', nl_query, re.IGNORECASE):
+            if "1" not in values["limits"]:
+                values["limits"].append("1")
 
     @staticmethod
     def _extract_tokens(nl_query: str, values: dict[str, list[str]]) -> None:

@@ -80,6 +80,12 @@ class QueryNormalizer:
     }
 
     ENTITY_MAPPINGS = {
+        # Transaction-related (more specific patterns first)
+        r'\b(transaction|tx)\s+(script|json|metadata|datum|redeemer)s?\b': 'ENTITY_TX_DETAIL',
+        r'\b(with|having)\s+(script|json|metadata|datum)s?\b': 'ENTITY_DETAIL',
+
+        # ... existing patterns ...
+        r'\b(transaction|tx)s?\b': 'ENTITY_TX',
         # Governance and Certificates (more specific first)
         r'\b(drep (registration|update|retirement))s?\b': 'ENTITY_DREP_CERT',
         r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
@@ -133,7 +139,7 @@ class QueryNormalizer:
         'please', 'could', 'can', 'you', 'me', 'the',
         'is', 'are', 'was', 'were', 'your', 'my',
         'a', 'an', 'of', 'in', 'on', 'yours',
-        'do', 'does', 'ever'
+        'do', 'does', 'ever', 'with', 'having'
     }
 
     QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
@@ -192,6 +198,9 @@ class QueryNormalizer:
 
         # Remove possessive 's
         normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
+
+        # Normalize plurals to singular for better matching
+        normalized = re.sub(r'\b(transaction|block|pool|epoch|script|datum|output|input|token|cnt)s\b', r'\1', normalized)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
@@ -257,6 +266,19 @@ class QueryNormalizer:
         normalized = re.sub(r'\bweek\s+of\s+<<YEAR>>\b', 'week of <<YEAR>>', normalized)
         normalized = re.sub(r'\bweek\s+\d+\b', 'week <<N>>', normalized)
         normalized = re.sub(r'\s+', ' ', normalized).strip()
+
+        # Normalize limit patterns - handle both explicit and implicit limits
+        normalized = re.sub(
+            r'\b(latest|newest|most recent|recent|first|last)\s+(\d+)\s+(transaction|block|pool|epoch)',
+            r'\1 <<N>> \3',
+            normalized
+        )
+        # Handle queries without explicit number (implied limit of 1)
+        normalized = re.sub(
+            r'\b(latest|newest|most recent|recent|first|last)\s+(transaction|block|pool|epoch)(?!s)\b',
+            r'\1 <<N>> \2',
+            normalized
+        )
 
         # temporal aggregation terms
         for pattern, replacement in QueryNormalizer.TEMPORAL_TERMS.items():
