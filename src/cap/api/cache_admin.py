@@ -10,7 +10,7 @@ import tempfile
 import os
 import json
 
-from cap.services.redis_nl_client import get_redis_client
+from cap.services.redis_nl_client import get_redis_nl_client
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
