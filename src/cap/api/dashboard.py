@@ -105,6 +105,7 @@ def _ensure_owns_item(db: Session, user_id: int, item_id: int) -> DashboardItem:
 # ---------- Routes: Dashboards ----------
 
 @router.get("/", response_model=List[DashboardOut])
+@router.get("", response_model=List[DashboardOut]) # accept /api/v1/dashboard (no slash)
 def list_dashboards(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
