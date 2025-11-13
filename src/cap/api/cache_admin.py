@@ -10,7 +10,7 @@ import tempfile
 import os
 import json
 
-from cap.services.redis_client import get_redis_client
+from cap.services.redis_nl_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -61,7 +61,7 @@ async def precache_from_file_path(request: PrecacheRequest):
                     detail=f"File not readable: {request.file_path}"
                 )
 
-            redis_client = get_redis_client()
+            redis_client = get_redis_nl_client()
             stats = await redis_client.precache_from_file(
                 file_path=request.file_path,
                 ttl=request.ttl
@@ -109,7 +109,7 @@ async def precache_from_upload(
                 tmp_path = tmp_file.name
 
             try:
-                redis_client = get_redis_client()
+                redis_client = get_redis_nl_client()
                 stats = await redis_client.precache_from_file(
                     file_path=tmp_path,
                     ttl=ttl
@@ -141,8 +141,8 @@ async def clear_cache():
     """
     with tracer.start_as_current_span("clear_cache") as span:
         try:
-            redis_client = get_redis_client()
-            client = await redis_client._get_client()
+            redis_client = get_redis_nl_client()
+            client = await redis_client._get_nl_client()
 
             # Count keys before deletion
             cache_keys = []
@@ -187,8 +187,8 @@ async def get_cache_info():
     """
     with tracer.start_as_current_span("cache_info") as span:
         try:
-            redis_client = get_redis_client()
-            client = await redis_client._get_client()
+            redis_client = get_redis_nl_client()
+            client = await redis_client._get_nl_client()
 
             # Count cache entries
             cache_count = 0
@@ -238,7 +238,7 @@ async def get_cache_info():
     """
     with tracer.start_as_current_span("cache_info_nl") as span:
         try:
-            redis_client = get_redis_client()
+            redis_client = get_redis_nl_client()
 
             # Get popular queries
             popular_queries = await redis_client.get_popular_queries(limit=0)

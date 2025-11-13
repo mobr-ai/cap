@@ -18,7 +18,7 @@ from cap.data.virtuoso import VirtuosoClient
 from cap.config import settings
 from cap.etl.cdb.service import etl_service
 from cap.services.ollama_client import cleanup_ollama_client
-from cap.services.redis_client import cleanup_redis_client
+from cap.services.redis_nl_client import cleanup_redis_nl_client
 
 from cap.database.session import engine
 from cap.database.model import Base
@@ -177,7 +177,7 @@ async def lifespan(app: FastAPI):
         # Shutdown
         await stop_etl_service()
         await cleanup_ollama_client()
-        await cleanup_redis_client()
+        await cleanup_redis_nl_client()
         logger.info("Application shutdown completed")
 
 def setup_tracing():
