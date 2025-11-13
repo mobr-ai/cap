@@ -86,7 +86,7 @@ def _current_user_factory(require_confirmed: bool = True) -> Callable:
     - loads the User from DB
     - (optionally) enforces is_confirmed
     """
-    async def _dep(
+    def _dep(
         request: Request,
         db: Session = Depends(get_db),
         creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
