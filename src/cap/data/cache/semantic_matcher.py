@@ -4,29 +4,83 @@ class SemanticMatcher:
     """Match queries based on semantic similarity, not just exact normalization."""
 
     SEMANTIC_GROUPS = {
-        'list_latest': ['latest', 'most recent', 'newest', 'last', 'current'],
-        'count': ['how many', 'number of', 'count', 'total'],
-        'aggregate_time': ['over time', 'trend', 'historical', 'progression'],
-        'top_ranked': ['top', 'largest', 'biggest', 'highest', 'most', 'by'],
+        'latest': [
+            'latest', 'most recent', 'newest', 'last', 'current',
+            'recent', 'recently', 'fresh', 'up to date', 'updated'
+        ],
+        'oldest': [
+            'oldest', 'older', 'past', 'first', 'earliest',
+            'long ago', 'initial', 'beginning', 'original'
+        ],
+        'count': [
+            'how many', 'number of', 'count', 'amount of',
+            'quantity', 'total number', 'how much'
+        ],
+        'sum': [
+            'sum', 'total', 'add up', 'aggregate', 'combined',
+            'accumulated', 'overall amount'
+        ],
+        'aggregate_time': [
+            'over time', 'trend', 'historical', 'progression',
+            'evolution', 'timeline', 'time series', 'history',
+            'per year', 'per month', 'per day', 'by year', 'by month'
+        ],
+        'top_ranked': [
+            'top', 'largest', 'biggest', 'highest', 'most',
+            'best', 'leading', 'upper', 'ascending', 'asc',
+            'top ranked', 'greatest', 'max', 'maximum'
+        ],
+        'bottom_ranked': [
+            'bottom', 'lowest', 'smallest', 'least', 'worst',
+            'lower', 'descending', 'desc', 'bottom ranked',
+            'min', 'minimum'
+        ],
+        'display_action': [
+            'show', 'display', 'list', 'get', 'create', 'give me',
+            'fetch', 'return', 'pull', 'provide', 'output'
+        ]
     }
 
     CHART_GROUPS = {
-        'bar': ['bar'],
-        'pie': ['pie', 'pizza'],
-        'line': ["line", "timeseries", "trend"],
-        'table': ["list", "table", "display", "show", "get"],
+        'bar': [
+            'bar', 'bar chart', 'bars', 'histogram', 'column chart'
+        ],
+        'pie': [
+            'pie', 'pie chart', 'pizza', 'donut', 'doughnut', 'circle chart'
+        ],
+        'line': [
+            'line', 'line chart', 'timeseries', 'time series', 'trend',
+            'timeline', 'curve', 'line graph'
+        ],
+        'table': [
+            'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
+            'dataset', 'rows', 'columns'
+        ],
     }
 
     # Equivalent comparison terms (normalized forms)
     COMPARISON_EQUIVALENTS = {
-        'above': ['above', 'over', 'more than', 'greater than', 'exceeding', 'beyond'],
-        'below': ['below', 'under', 'less than', 'fewer than'],
-        'equals': ['equals', 'equal to', 'exactly', 'has the same'],
+        'above': [
+            'above', 'over', 'more than', 'greater than', 'exceeding',
+            'beyond', 'higher than', 'greater', '>', 'at least'
+        ],
+        'below': [
+            'below', 'under', 'less than', 'fewer than', 'lower than',
+            'smaller than', '<', 'at most'
+        ],
+        'equals': [
+            'equals', 'equal to', 'exactly', 'same as', 'is', 'match',
+            'matches', 'identical to', '=', 'precisely'
+        ],
     }
 
     # Equivalent possession/relationship terms
     POSSESSION_EQUIVALENTS = {
-        'hold': ['hold', 'has', 'have', 'owns', 'own', 'possess', 'possesses', 'contains', 'contain', 'holds'],
+        'hold': [
+            'hold', 'holds', 'has', 'have', 'owns', 'own', 'possess',
+            'possesses', 'contains', 'contain', 'includes', 'include',
+            'carrying', 'carry'
+        ],
     }
 
     @staticmethod
@@ -49,6 +103,15 @@ class SemanticMatcher:
             for variant in variants:
                 # Use word boundaries to avoid partial matches
                 result = re.sub(rf'\b{re.escape(variant)}\b', canonical, result)
+
+
+        # Normalize display/action verbs to canonical form
+        display_terms = SemanticMatcher.SEMANTIC_GROUPS["display_action"]
+        for term in display_terms:
+            result = re.sub(rf'\b{re.escape(term)}\b', 'show', result)
+
+        # Normalize table/visualization terms
+        result = re.sub(r'\b(table|visualization|chart|graph)\b', 'table', result)
 
         # Remove redundant words that don't change meaning after normalization
         result = re.sub(r'\b(more|much)\b', '', result)

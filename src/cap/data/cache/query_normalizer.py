@@ -139,7 +139,7 @@ class QueryNormalizer:
         'please', 'could', 'can', 'you', 'me', 'the',
         'is', 'are', 'was', 'were', 'your', 'my',
         'a', 'an', 'of', 'in', 'on', 'yours',
-        'do', 'does', 'ever', 'with', 'having'
+        'do', 'does', 'ever', 'with', 'having',
     }
 
     QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
