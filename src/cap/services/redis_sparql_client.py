@@ -83,7 +83,7 @@ class RedisSPARQLClient:
         except Exception as e:
             return -1  # cache error
 
-    async def get_cached_query(
+    async def get_cached_results(
         self,
         sparql_query: str
     ) -> Optional[dict[str, Any]]:

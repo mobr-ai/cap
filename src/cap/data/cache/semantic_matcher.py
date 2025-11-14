@@ -78,6 +78,10 @@ class SemanticMatcher:
         ],
     }
 
+    # Semantic sugar terms
+    SEMANTIC_SUGAR = [
+        'create', 'indeed', 'very', 'too', 'so'
+    ]
     @staticmethod
     def get_semantic_dicts() -> list:
         return [
@@ -104,6 +108,10 @@ class SemanticMatcher:
                 for variant in variants:
                     # Use word boundaries to avoid partial matches
                     result = re.sub(rf'\b({re.escape(variant)})s?\b', canonical, result)
+
+        # Remove redundant words that don't change meaning after normalization
+        pattern = '|'.join(re.escape(term) for term in SemanticMatcher.SEMANTIC_SUGAR)
+        result = re.sub(rf'\b({pattern})\b', '', result)
 
         # Normalize whitespace
         result = re.sub(r'\s+', ' ', result).strip()

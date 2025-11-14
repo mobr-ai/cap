@@ -25,7 +25,6 @@ async def execute_query(request: QueryRequest):
     """Execute a SPARQL query."""
     with tracer.start_as_current_span("execute_query_endpoint") as span:
         span.set_attribute("query_type", request.type)
-        client = VirtuosoClient()
         try:
             user_query = request.query
             if user_query:
@@ -34,18 +33,22 @@ async def execute_query(request: QueryRequest):
                     return QueryResponse(results=[])
 
             redis_client = get_redis_sparql_client()
-            cached_data = await redis_client.get_cached_query(user_query)
+            cached_data = await redis_client.get_cached_results(user_query)
             if cached_data:
+                logger.debug("SPARQLCache hit")
                 return QueryResponse(results=cached_data)
 
+            logger.debug(f"SPARQLCache miss for {user_query}")
+            client = VirtuosoClient()
             results = await client.execute_query(user_query)
+            logger.debug(f"SPARQLCache caching {user_query}")
             redis_client.cache_query(sparql_query=user_query, results=results)
             return QueryResponse(results=results)
 
         except HTTPException as e:
             raise e
         except Exception as e:
-            logger.error(f"Query execution error: {str(e)}", exc_info=True)
+            logger.error(f"SPARQL query execution error: {str(e)}", exc_info=True)
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/graphs", response_model=SuccessResponse)

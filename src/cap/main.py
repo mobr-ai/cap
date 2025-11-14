@@ -11,7 +11,7 @@ from starlette.responses import FileResponse
 from opentelemetry import trace
 from sqlalchemy import text
 
-from cap.api.router import router as api_router
+from cap.api.sparql_query import router as api_router
 from cap.api.nl_query import router as nl_router
 from cap.telemetry import setup_telemetry, instrument_app
 from cap.data.virtuoso import VirtuosoClient
