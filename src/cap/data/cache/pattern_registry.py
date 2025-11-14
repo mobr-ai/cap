@@ -173,14 +173,14 @@ class PatternRegistry:
     ]
 
     # Filler words (shared across normalizers)
-    FILLER_WORDS = {
+    FILLER_WORDS = [
         'please', 'could', 'can', 'you', 'me', 'the',
         'is', 'are', 'was', 'were', 'your', 'my',
         'a', 'an', 'of', 'in', 'on', 'yours', 'to',
         'do', 'does', 'ever', 'with', 'having', 'from'
-    }
+    ]
 
-    QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
+    QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']
 
     @staticmethod
     def ensure_expressions() -> None:
