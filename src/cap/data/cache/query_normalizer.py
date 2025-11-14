@@ -113,7 +113,8 @@ class QueryNormalizer:
         r'\b((protocol)s? parameter)s?\b': 'ENTITY_PROTOCOL_PARAMS',
 
         # System and Status
-        r'\b((etl progress|what is happening|sync status|current (status|tip|height)s?)s?)s?\b': 'ENTITY_STATUS',
+        r'\b((etl progress|sync status|current (status|tip|height)s?)s?)s?\b': 'ENTITY_STATUS',
+        r'\b((what is happening|what up (cardano)s?)s?)s?\b': 'ENTITY_STATUS',
 
         r'\b(reward withdrawal)s?\b': 'ENTITY_REWARD_WITHDRAWAL',
         r'\b(input)s?\b': 'ENTITY_UTXO_INPUT',

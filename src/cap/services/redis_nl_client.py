@@ -1,5 +1,5 @@
 """
-Redis client for caching SPARQL queries and natural language mappings.
+Redis client for caching natural language to sparql mappings.
 """
 import json
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 class RedisNLClient:
-    """Client for Redis caching operations."""
+    """Redis client for caching natural language to sparql mappings. Main goal is to reduce usage of llm model."""
 
     def __init__(
         self,
@@ -97,13 +97,6 @@ class RedisNLClient:
                 # Checking if query already exists
                 if await client.exists(cache_key):
                     logger.info(f"Query already cached, skipping: {nl_query}")
-                    return 0  # Indicates duplicate, not cached
-
-                # Check if semantic variant exists
-                semantic_variant = SemanticMatcher.get_semantic_variant(normalized)
-                variant_key = f"nlq:cache:{semantic_variant}"
-                if semantic_variant != normalized and await client.exists(variant_key):
-                    logger.info(f"Query already cached (semantic variant), skipping: {nl_query}")
                     return 0  # Indicates duplicate, not cached
 
                 # Process SPARQL (single or sequential)
@@ -182,15 +175,6 @@ class RedisNLClient:
                 # Try exact normalized match first
                 cache_key = self._make_cache_key(normalized_query)
                 cached = await client.get(cache_key)
-
-                # If not found, try semantic variant
-                if not cached:
-                    semantic_variant = SemanticMatcher.get_semantic_variant(normalized_query)
-                    if semantic_variant != normalized_query:
-                        variant_key = f"nlq:cache:{semantic_variant}"
-                        cached = await client.get(variant_key)
-                        if cached:
-                            logger.info(f"Cache hit via semantic variant: {semantic_variant}")
 
                 if not cached:
                     span.set_attribute("cache_hit", False)

@@ -21,8 +21,8 @@ class SemanticMatcher:
             'accumulated', 'overall amount'
         ],
         'aggregate_time': [
-            'over time', 'trend', 'historical', 'progression',
-            'evolution', 'timeline', 'time series', 'history',
+            'over time', 'historical', 'progression',
+            'evolution', 'history',
             'per year', 'per month', 'per day', 'by year', 'by month'
         ],
         'top_ranked': [
@@ -34,10 +34,6 @@ class SemanticMatcher:
             'bottom', 'lowest', 'smallest', 'least', 'worst',
             'lower', 'descending', 'desc', 'bottom ranked',
             'min', 'minimum'
-        ],
-        'display_action': [
-            'show', 'display', 'list', 'get', 'create', 'give me',
-            'fetch', 'return', 'pull', 'provide', 'output'
         ]
     }
 
@@ -49,12 +45,12 @@ class SemanticMatcher:
             'pie', 'pie chart', 'pizza', 'donut', 'doughnut', 'circle chart'
         ],
         'line': [
-            'line', 'line chart', 'timeseries', 'time series', 'trend',
+            'line', 'line chart', 'timeseries', 'time serie', 'trend',
             'timeline', 'curve', 'line graph'
         ],
         'table': [
             'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
-            'dataset', 'rows', 'columns'
+            'dataset', 'row', 'column'
         ],
     }
 
@@ -77,11 +73,19 @@ class SemanticMatcher:
     # Equivalent possession/relationship terms
     POSSESSION_EQUIVALENTS = {
         'hold': [
-            'hold', 'holds', 'has', 'have', 'owns', 'own', 'possess',
-            'possesses', 'contains', 'contain', 'includes', 'include',
-            'carrying', 'carry'
+            'hold', 'holds', 'has', 'have', 'own', 'possess', 'possesses',
+            'contain', 'contain', 'include', 'carrying', 'carry'
         ],
     }
+
+    @staticmethod
+    def get_semantic_dicts() -> list:
+        return [
+            SemanticMatcher.COMPARISON_EQUIVALENTS,
+            SemanticMatcher.POSSESSION_EQUIVALENTS,
+            SemanticMatcher.SEMANTIC_GROUPS,
+            SemanticMatcher.CHART_GROUPS
+        ]
 
     @staticmethod
     def normalize_for_matching(normalized_query: str) -> str:
@@ -92,43 +96,16 @@ class SemanticMatcher:
         """
         result = normalized_query
 
-        # Normalize comparison terms to canonical form
-        for canonical, variants in SemanticMatcher.COMPARISON_EQUIVALENTS.items():
-            for variant in variants:
-                if variant in result:
-                    result = result.replace(variant, canonical)
+        dicts = SemanticMatcher.get_semantic_dicts()
 
-        # Normalize possession/relationship terms
-        for canonical, variants in SemanticMatcher.POSSESSION_EQUIVALENTS.items():
-            for variant in variants:
-                # Use word boundaries to avoid partial matches
-                result = re.sub(rf'\b{re.escape(variant)}\b', canonical, result)
-
-
-        # Normalize display/action verbs to canonical form
-        display_terms = SemanticMatcher.SEMANTIC_GROUPS["display_action"]
-        for term in display_terms:
-            result = re.sub(rf'\b{re.escape(term)}\b', 'show', result)
-
-        # Normalize table/visualization terms
-        result = re.sub(r'\b(table|visualization|chart|graph)\b', 'table', result)
-
-        # Remove redundant words that don't change meaning after normalization
-        result = re.sub(r'\b(more|much)\b', '', result)
+        # Normalize to canonical form
+        for d in dicts:
+            for canonical, variants in d.items():
+                for variant in variants:
+                    # Use word boundaries to avoid partial matches
+                    result = re.sub(rf'\b({re.escape(variant)})s?\b', canonical, result)
 
         # Normalize whitespace
         result = re.sub(r'\s+', ' ', result).strip()
 
         return result
-
-    @staticmethod
-    def get_semantic_variant(normalized_query: str) -> str:
-        """Generate semantic variant key for better matching."""
-        variant = normalized_query
-
-        for group_name, terms in SemanticMatcher.SEMANTIC_GROUPS.items():
-            pattern = '|'.join(re.escape(term) for term in terms)
-            if re.search(pattern, variant):
-                variant = re.sub(pattern, f'<<{group_name}>>', variant)
-
-        return variant
