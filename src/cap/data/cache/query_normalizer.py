@@ -202,16 +202,16 @@ class QueryNormalizer:
             normalized
         )
 
-        # Build a list of all entity matches with their positions
+        # Entities: Build a list of all entity matches with their positions
         entity_matches = []
         for pattern, replacement in QueryNormalizer.get_entity_patterns().items():
             for match in re.finditer(pattern, normalized):
                 entity_matches.append((match.start(), match.end(), replacement))
 
-        # Sort by position and resolve overlaps (keep longer matches)
+        # Entities: Sort by position and resolve overlaps (keep longer matches)
         entity_matches.sort(key=lambda x: (x[0], -(x[1] - x[0])))
 
-        # Apply non-overlapping replacements
+        # Entities: Apply non-overlapping replacements
         result_parts = []
         last_end = 0
         used_ranges = []
@@ -229,7 +229,7 @@ class QueryNormalizer:
                 used_ranges.append((start, end))
                 last_end = end
 
-        # Add remaining text
+        # Entities: Add remaining text
         result_parts.append(normalized[last_end:])
         normalized = ''.join(result_parts)
 
