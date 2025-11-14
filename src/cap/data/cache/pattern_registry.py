@@ -50,15 +50,6 @@ class PatternRegistry:
         'chain selection rule'
     ]
 
-    # Entity terms (words only, patterns generated dynamically)
-    TRANSACTION_TERMS = ['transaction', 'tx']
-    TRANSACTION_DETAIL_TERMS = ['script', 'json', 'metadata', 'datum', 'redeemer']
-    GOVERNANCE_TERMS = ['governance', 'proposal', 'action', 'drep', 'vote', 'constitution']
-    POOL_TERMS = ['stake pool', 'pool']
-    BLOCK_TERMS = ['block']
-    EPOCH_TERMS = ['epoch']
-    TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
-
     # Temporal terms
     YEARLY_TERMS = ['yearly', 'annually', 'per year', 'each year', 'every year']
     MONTHLY_TERMS = ['monthly', 'per month', 'each month', 'every month']
@@ -124,7 +115,14 @@ class PatternRegistry:
     ]
 
     # Entities
-    GOVERNANCE_PROPOSAL_TERMS = ['proposal', 'governance proposal']
+    # Entity terms (words only, patterns generated dynamically)
+    TRANSACTION_TERMS = ['transaction', 'tx']
+    TRANSACTION_DETAIL_TERMS = ['script', 'json', 'metadata', 'datum', 'redeemer']
+    POOL_TERMS = ['stake pool', 'pool']
+    BLOCK_TERMS = ['block']
+    EPOCH_TERMS = ['epoch']
+    TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
+    GOVERNANCE_PROPOSAL_TERMS = ['governance', 'proposal', 'action', 'drep', 'vote', 'constitution']
     VOTING_TERMS = ['vote', 'voting', 'voting anchor']
     COMMITTEE_TERMS = ['committee']
     DREP_TERMS = ['drep', 'delegate representative']

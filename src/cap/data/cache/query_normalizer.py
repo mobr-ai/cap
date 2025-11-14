@@ -202,8 +202,36 @@ class QueryNormalizer:
             normalized
         )
 
+        # Build a list of all entity matches with their positions
+        entity_matches = []
         for pattern, replacement in QueryNormalizer.get_entity_patterns().items():
-            normalized = re.sub(pattern, replacement, normalized)
+            for match in re.finditer(pattern, normalized):
+                entity_matches.append((match.start(), match.end(), replacement))
+
+        # Sort by position and resolve overlaps (keep longer matches)
+        entity_matches.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+
+        # Apply non-overlapping replacements
+        result_parts = []
+        last_end = 0
+        used_ranges = []
+
+        for start, end, replacement in entity_matches:
+            # Check if this range overlaps with any used range
+            overlaps = any(start < used_end and end > used_start
+                        for used_start, used_end in used_ranges)
+
+            if not overlaps:
+                # Add text before this entity
+                result_parts.append(normalized[last_end:start])
+                # Add the entity replacement
+                result_parts.append(replacement)
+                used_ranges.append((start, end))
+                last_end = end
+
+        # Add remaining text
+        result_parts.append(normalized[last_end:])
+        normalized = ''.join(result_parts)
 
         # Check for supply/value/amount/limit context before normalizing max/min
         max_min_words = PatternRegistry.MAX_TERMS + PatternRegistry.MIN_TERMS
