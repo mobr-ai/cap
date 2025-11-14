@@ -66,8 +66,8 @@ class SemanticMatcher:
 
         # Remove redundant words that don't change nl meaning after normalization
         reduntant_words = SemanticMatcher.SEMANTIC_SUGAR + PatternRegistry.FILLER_WORDS
-        pattern = '|'.join(re.escape(term) for term in reduntant_words)
-        result = re.sub(rf'\b({pattern})\b', '', result)
+        pattern = '|'.join(reduntant_words)
+        result = re.sub(rf'\b({pattern})?s\b', '', result, flags=re.IGNORECASE)
 
         # Normalize whitespace
         result = re.sub(r'\s+', ' ', result).strip()
