@@ -145,8 +145,9 @@ class QueryNormalizer:
         normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
 
         # Normalize plurals to singular for better matching
-        plural_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS, word_boundary=False)
-        normalized = re.sub(plural_pattern + r's\b', r'\1', normalized)
+        escaped = sorted([re.escape(expr) for expr in PatternRegistry.get_preserved_expressions()], key=len, reverse=True)
+        plural_pattern = r'\b(' + '|'.join(escaped) + r')s\b'
+        normalized = re.sub(plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
@@ -188,7 +189,7 @@ class QueryNormalizer:
         )
 
         # Normalize limit patterns - handle both explicit and implicit limits
-        limit_entities = PatternRegistry.build_pattern(PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS, word_boundary=False)
+        limit_entities = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions(), word_boundary=False)
         normalized = re.sub(
             PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
             r'\1 <<N>> \2',

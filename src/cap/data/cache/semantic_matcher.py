@@ -65,7 +65,7 @@ class SemanticMatcher:
             for canonical, variants in d.items():
                 for variant in variants:
                     # Use word boundaries to avoid partial matches
-                    result = re.sub(rf'\b({re.escape(variant)})s?\b', canonical, result)
+                    result = re.sub(rf'\b({re.escape(variant)})\b', canonical, result)
 
         # Remove redundant words that don't change nl meaning after normalization
         reduntant_words = SemanticMatcher.SEMANTIC_SUGAR + PatternRegistry.FILLER_WORDS
