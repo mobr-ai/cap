@@ -509,16 +509,16 @@ class OllamaClient:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
-            know_info = ""
+            known_info = ""
             temperature = 0.1
             if "chart" in result_type or "table" in result_type:
-                know_info = f"""
+                known_info = f"""
                 The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
                 """
 
             elif context_res != "":
-                know_info = f"""
+                known_info = f"""
                 This is the current value you MUST consider in your answer:
                 {context_res}
 
@@ -526,8 +526,9 @@ class OllamaClient:
                 """
 
             else:
-                know_info = """
+                known_info = """
                 If you do not know how to answer User's question, say you do not know the answer.
+                NEVER explain how to get results for the question.
                 NEVER answer with a SPARQL query.
                 """
 
@@ -535,7 +536,7 @@ class OllamaClient:
             prompt = f"""
                 User Question: {user_query}
 
-                {know_info}
+                {known_info}
             """
 
             logger.info(f"calling ollama model\n    prompt: {prompt}...\n")

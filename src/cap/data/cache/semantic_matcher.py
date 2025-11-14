@@ -64,8 +64,9 @@ class SemanticMatcher:
                     # Use word boundaries to avoid partial matches
                     result = re.sub(rf'\b({re.escape(variant)})s?\b', canonical, result)
 
-        # Remove redundant words that don't change meaning after normalization
-        pattern = '|'.join(re.escape(term) for term in SemanticMatcher.SEMANTIC_SUGAR)
+        # Remove redundant words that don't change nl meaning after normalization
+        reduntant_words = SemanticMatcher.SEMANTIC_SUGAR + PatternRegistry.FILLER_WORDS
+        pattern = '|'.join(re.escape(term) for term in reduntant_words)
         result = re.sub(rf'\b({pattern})\b', '', result)
 
         # Normalize whitespace

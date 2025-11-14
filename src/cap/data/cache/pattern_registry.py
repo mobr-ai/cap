@@ -84,7 +84,7 @@ class PatternRegistry:
     FIRST_TERMS = ['oldest', 'older', 'past', 'first', 'earliest',
                     'long ago', 'initial', 'beginning', 'original']
     COUNT_TERMS = ['how many', 'number of', 'count', 'amount of',
-                    'quantity', 'total number', 'how much']
+                    'quantity', 'how much']
     SUM_TERMS = ['sum', 'total', 'add up', 'aggregate', 'combined',
                     'accumulated', 'overall amount']
     AGGREGATE_TIME_TERMS = ['over time', 'historical', 'progression',
@@ -100,7 +100,9 @@ class PatternRegistry:
 
 
     SEMANTIC_SUGAR = [
-        'create', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose'
+        'create', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
+        'visualization', 'cardano', 'count', 'network', 'represent', 'table', 'versus',
+        'against', 'pie'
     ]
 
     # Comparison terms
@@ -174,8 +176,8 @@ class PatternRegistry:
     FILLER_WORDS = {
         'please', 'could', 'can', 'you', 'me', 'the',
         'is', 'are', 'was', 'were', 'your', 'my',
-        'a', 'an', 'of', 'in', 'on', 'yours',
-        'do', 'does', 'ever', 'with', 'having',
+        'a', 'an', 'of', 'in', 'on', 'yours', 'to',
+        'do', 'does', 'ever', 'with', 'having', 'from'
     }
 
     QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
