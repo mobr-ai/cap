@@ -1,4 +1,4 @@
-# cap/api/auth_dependencies.py
+# cap/core/auth_dependencies.py
 from typing import Optional, Callable, Dict, Any
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,16 +8,10 @@ from sqlalchemy import select
 from cap.database.session import get_db
 from cap.database.model import User
 
-# Try both names to keep compatibility with security module
 try:
     from cap.core.security import decode_access_token as _decode_token
 except Exception:
     _decode_token = None
-
-try:
-    from cap.core.security import verify_access_token as _verify_token
-except Exception:
-    _verify_token = None
 
 # Reusable bearer scheme
 bearer_scheme = HTTPBearer(auto_error=False)
