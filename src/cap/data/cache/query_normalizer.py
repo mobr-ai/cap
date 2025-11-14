@@ -294,6 +294,9 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_chart_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
+        # Apply semantic normalization BEFORE restoring expressions
+        normalized = SemanticMatcher.normalize_for_matching(normalized)
+
         # Clean up
         normalized = re.sub(r'[^\w\s]', '', normalized)
         normalized = re.sub(r'\s+', ' ', normalized)
@@ -317,9 +320,6 @@ class QueryNormalizer:
         # Sort only the content words, keep question words at start
         content_words.sort()
         result = ' '.join(question_words_found + content_words).strip()
-
-        # Apply semantic normalization BEFORE restoring expressions
-        result = SemanticMatcher.normalize_for_matching(result)
 
         for placeholder, expr in expression_map.items():
             result = result.replace(placeholder, expr)
