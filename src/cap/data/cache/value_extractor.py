@@ -169,7 +169,7 @@ class ValueExtractor:
 
         # Implicit limit of 1 for singular nouns without a number
         limit_pattern = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
-        entity_pattern = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions, word_boundary=False)
+        entity_pattern = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions(), word_boundary=False)
         if re.search(limit_pattern + r'\s+' + entity_pattern + r'\b(?!s)', nl_query, re.IGNORECASE):
             if "1" not in values["limits"]:
                 values["limits"].append("1")

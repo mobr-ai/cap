@@ -74,6 +74,4 @@ class SemanticMatcher:
 
         # Normalize whitespace
         result = re.sub(r'\s+', ' ', result).strip()
-
-        logger.debug(f"Semantic from '{normalized_query}' -> '{result}'")
         return result
