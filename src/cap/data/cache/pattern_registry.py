@@ -2,20 +2,24 @@ import re
 import logging
 from opentelemetry import trace
 from pathlib import Path
+from typing import Tuple
 
 ontology_path: str = "src/ontologies/cardano.ttl"
 
 # Static global for preserved expressions
 _PRESERVED_EXPRESSIONS = []
 
-def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> list:
+_ENTITIES = []
+
+def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tuple[list, list]:
     """Load rdfs:label values from the Turtle ontology file."""
-    labels = []
+    entity_labels = []
+    complex_labels = []
     try:
         path = Path(onto_path)
         if not path.exists():
             logger.warning(f"Ontology file not found at {onto_path}")
-            return labels
+            return complex_labels, entity_labels
 
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -28,14 +32,15 @@ def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> list
         for match in matches:
             label_lower = match.lower().strip()
             if label_lower and len(label_lower) > 1:  # Skip empty or single-char labels
-                labels.append(label_lower)
+                complex_labels.append(label_lower)
+            entity_labels.append(label_lower)
 
-        logger.info(f"Loaded {len(labels)} labels from ontology: {onto_path}")
+        logger.info(f"Loaded {len(complex_labels)} complex labels and {len(entity_labels)} from ontology: {onto_path}")
 
     except Exception as e:
         logger.error(f"Error loading ontology labels from {onto_path}: {e}")
 
-    return labels
+    return complex_labels, entity_labels
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -118,7 +123,7 @@ class PatternRegistry:
     # Entity terms (words only, patterns generated dynamically)
     TRANSACTION_TERMS = ['transaction', 'tx']
     TRANSACTION_DETAIL_TERMS = ['script', 'json', 'metadata', 'datum', 'redeemer']
-    POOL_TERMS = ['stake pool', 'pool']
+    POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data']
     BLOCK_TERMS = ['block']
     EPOCH_TERMS = ['epoch']
     TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
@@ -183,24 +188,31 @@ class PatternRegistry:
     @staticmethod
     def ensure_expressions() -> None:
         global _PRESERVED_EXPRESSIONS
+        global _ENTITIES
 
         if not _PRESERVED_EXPRESSIONS:
             # Load labels from ontology
-            ontology_labels = _load_ontology_labels(ontology_path)
+            complex_labels, entity_labels = _load_ontology_labels(ontology_path)
 
             # Add default expressions if ontology loading failed or returned nothing
-            if not ontology_labels:
+            if not complex_labels:
                 logger.warning("No ontology labels loaded, using default preserved expressions")
-                ontology_labels = PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS
+                complex_labels = PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS
 
-            _PRESERVED_EXPRESSIONS = ontology_labels
-            logger.info(f"Initialized PRESERVED_EXPRESSIONS with {len(_PRESERVED_EXPRESSIONS)} terms")
+            _PRESERVED_EXPRESSIONS = complex_labels
+            _ENTITIES = entity_labels
 
     @staticmethod
     def get_preserved_expressions() -> list:
         global _PRESERVED_EXPRESSIONS
         PatternRegistry.ensure_expressions()
         return _PRESERVED_EXPRESSIONS
+
+    @staticmethod
+    def get_entities() -> list:
+        global _ENTITIES
+        PatternRegistry.ensure_expressions()
+        return _ENTITIES
 
     @staticmethod
     def build_pattern(terms: list[str], word_boundary: bool = True) -> str:
@@ -212,7 +224,7 @@ class PatternRegistry:
         return f'({pattern})'
 
     @staticmethod
-    def build_entity_pattern(base_terms: list[str], plural: bool = True) -> str:
+    def build_entity_pattern(base_terms: list[str], plural: bool = False) -> str:
         """Build entity pattern with optional plural."""
         suffix = 's?' if plural else ''
         return PatternRegistry.build_pattern(base_terms) + suffix

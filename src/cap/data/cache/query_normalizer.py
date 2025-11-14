@@ -144,10 +144,16 @@ class QueryNormalizer:
         # Remove possessive 's
         normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
 
-        # Normalize plurals to singular for better matching
-        escaped = sorted([re.escape(expr) for expr in PatternRegistry.get_preserved_expressions()], key=len, reverse=True)
-        plural_pattern = r'\b(' + '|'.join(escaped) + r')s\b'
-        normalized = re.sub(plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
+        # Normalize plurals to singular for ALL entity terms, not just preserved expressions
+        all_entity_terms = (
+            PatternRegistry.get_entities() +
+            PatternRegistry.TRANSACTION_TERMS + PatternRegistry.INPUT_TERMS +
+            PatternRegistry.OUTPUT_TERMS + PatternRegistry.POOL_TERMS +
+            PatternRegistry.BLOCK_TERMS + PatternRegistry.EPOCH_TERMS +
+            PatternRegistry.TOKEN_TERMS + PatternRegistry.ACCOUNT_TERMS
+        )
+        entity_plural_pattern = r'\b(' + '|'.join([re.escape(term) for term in all_entity_terms]) + r')s\b'
+        normalized = re.sub(entity_plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
