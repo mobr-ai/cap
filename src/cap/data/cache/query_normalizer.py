@@ -294,7 +294,7 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_chart_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        # Apply semantic normalization BEFORE restoring expressions
+        # Apply semantic normalization BEFORE sorting expressions
         normalized = SemanticMatcher.normalize_for_matching(normalized)
 
         # Clean up
