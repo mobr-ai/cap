@@ -294,9 +294,6 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_chart_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        # Apply semantic normalization BEFORE sorting expressions
-        normalized = SemanticMatcher.normalize_for_matching(normalized)
-
         # Clean up
         normalized = re.sub(r'[^\w\s]', '', normalized)
         normalized = re.sub(r'\s+', ' ', normalized)
@@ -317,15 +314,25 @@ class QueryNormalizer:
             elif word not in PatternRegistry.FILLER_WORDS:
                 content_words.append(word)
 
-        # Sort only the content words, keep question words at start
-        content_words.sort()
-        result = ' '.join(question_words_found + content_words).strip()
 
+        # Sort only the content words, keep question words at start
+        result = ' '.join(content_words).strip()
         for placeholder, expr in expression_map.items():
             result = result.replace(placeholder, expr)
 
-        # Validate minimum content - LOOSEN THIS CHECK
-        if not result or len(result) < 3:  # Changed from len(result.split()) < 2
+        # Applying semantic normalization BEFORE sorting expressions, but need to be after having the placeholder patterns
+        result = SemanticMatcher.normalize_for_matching(result)
+        content_words = result.split()
+
+        # Sort only the content words, keep question words at start
+        content_words.sort()
+        result = ' '.join(content_words).strip()
+
+        if len(result) < 3:
+            result = ' '.join(question_words_found + content_words).strip()
+
+        # Validate minimum content
+        if not result or len(result) < 3:
             logger.warning(f"Normalization produced too short result for: {query}")
             # Fallback: just lowercase and remove punctuation
             fallback = query.lower()
