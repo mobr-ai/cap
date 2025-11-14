@@ -1,87 +1,42 @@
 import re
 
+from cap.data.cache.pattern_registry import PatternRegistry
+
 class SemanticMatcher:
     """Match queries based on semantic similarity, not just exact normalization."""
 
     SEMANTIC_GROUPS = {
-        'latest': [
-            'latest', 'most recent', 'newest', 'last', 'current',
-            'recent', 'recently', 'fresh', 'up to date', 'updated'
-        ],
-        'oldest': [
-            'oldest', 'older', 'past', 'first', 'earliest',
-            'long ago', 'initial', 'beginning', 'original'
-        ],
-        'count': [
-            'how many', 'number of', 'count', 'amount of',
-            'quantity', 'total number', 'how much'
-        ],
-        'sum': [
-            'sum', 'total', 'add up', 'aggregate', 'combined',
-            'accumulated', 'overall amount'
-        ],
-        'aggregate_time': [
-            'over time', 'historical', 'progression',
-            'evolution', 'history',
-            'per year', 'per month', 'per day', 'by year', 'by month'
-        ],
-        'top_ranked': [
-            'top', 'largest', 'biggest', 'highest', 'most',
-            'best', 'leading', 'upper', 'ascending', 'asc',
-            'top ranked', 'greatest', 'max', 'maximum'
-        ],
-        'bottom_ranked': [
-            'bottom', 'lowest', 'smallest', 'least', 'worst',
-            'lower', 'descending', 'desc', 'bottom ranked',
-            'min', 'minimum'
-        ]
+        'latest': PatternRegistry.LAST_TERMS,
+        'oldest': PatternRegistry.FIRST_TERMS,
+        'count': PatternRegistry.COUNT_TERMS,
+        'sum': PatternRegistry.SUM_TERMS,
+        'aggregate_time': PatternRegistry.AGGREGATE_TIME_TERMS,
+        'top_ranked': PatternRegistry.TOP_TERMS,
+        'bottom_ranked': PatternRegistry.BOTTOM_TERMS,
     }
 
     CHART_GROUPS = {
-        'bar': [
-            'bar', 'bar chart', 'bars', 'histogram', 'column chart'
-        ],
-        'pie': [
-            'pie', 'pie chart', 'pizza', 'donut', 'doughnut', 'circle chart'
-        ],
-        'line': [
-            'line', 'line chart', 'timeseries', 'time serie', 'trend',
-            'timeline', 'curve', 'line graph'
-        ],
-        'table': [
-            'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
-            'dataset', 'row', 'column'
-        ],
+        'bar': PatternRegistry.BAR_CHART_TERMS,
+        'line': PatternRegistry.LINE_CHART_TERMS,
+        'pie': PatternRegistry.PIE_CHART_TERMS,
+        'table': PatternRegistry.TABLE_TERMS,
     }
 
     # Equivalent comparison terms (normalized forms)
     COMPARISON_EQUIVALENTS = {
-        'above': [
-            'above', 'over', 'more than', 'greater than', 'exceeding',
-            'beyond', 'higher than', 'greater', '>', 'at least'
-        ],
-        'below': [
-            'below', 'under', 'less than', 'fewer than', 'lower than',
-            'smaller than', '<', 'at most'
-        ],
-        'equals': [
-            'equals', 'equal to', 'exactly', 'same as', 'is', 'match',
-            'matches', 'identical to', '=', 'precisely'
-        ],
+        'above': PatternRegistry.ABOVE_TERMS,
+        'below': PatternRegistry.BELOW_TERMS,
+        'equals': PatternRegistry.EQUALS_TERMS,
     }
 
     # Equivalent possession/relationship terms
     POSSESSION_EQUIVALENTS = {
-        'hold': [
-            'hold', 'holds', 'has', 'have', 'own', 'possess', 'possesses',
-            'contain', 'contain', 'include', 'carrying', 'carry'
-        ],
+        'hold': PatternRegistry.POSSESSION_TERMS
     }
 
     # Semantic sugar terms
-    SEMANTIC_SUGAR = [
-        'create', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose'
-    ]
+    SEMANTIC_SUGAR = PatternRegistry.SEMANTIC_SUGAR
+
     @staticmethod
     def get_semantic_dicts() -> list:
         return [

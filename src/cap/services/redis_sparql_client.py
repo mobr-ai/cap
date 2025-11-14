@@ -15,7 +15,7 @@ class RedisSPARQLClient:
         host: Optional[str] = None,
         port: int = 6379,
         db: int = 0,
-        ttl: int = 60 * 15
+        ttl: int = 60 * 30
     ):
         """Initialize Redis client."""
         self.host = host or os.getenv("REDIS_HOST", "localhost")
