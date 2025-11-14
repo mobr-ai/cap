@@ -31,11 +31,13 @@ def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tupl
 
         for match in matches:
             label_lower = match.lower().strip()
-            if label_lower and len(label_lower) > 1:  # Skip empty or single-char labels
-                complex_labels.append(label_lower)
-            entity_labels.append(label_lower)
+            if label_lower:
+                if len(label_lower.split()) > 1:
+                    complex_labels.append(label_lower)
 
-        logger.info(f"Loaded {len(complex_labels)} complex labels and {len(entity_labels)} from ontology: {onto_path}")
+                entity_labels.append(label_lower)
+
+        logger.info(f"    Loaded complex labels: \n {complex_labels}\n    Loaded entity labels:\n{entity_labels}\n    From ontology: {onto_path}")
 
     except Exception as e:
         logger.error(f"Error loading ontology labels from {onto_path}: {e}")

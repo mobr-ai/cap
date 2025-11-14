@@ -93,7 +93,7 @@ class QueryNormalizer:
 
             PatternRegistry.build_entity_pattern(PatternRegistry.REWARD_TERMS): 'ENTITY_REWARD_WITHDRAWAL',
             PatternRegistry.build_entity_pattern(PatternRegistry.INPUT_TERMS): 'ENTITY_UTXO_INPUT',
-            PatternRegistry.build_entity_pattern(PatternRegistry.OUTPUT_TERMS): 'ENTITY_UTXO_INPUT',
+            PatternRegistry.build_entity_pattern(PatternRegistry.OUTPUT_TERMS): 'ENTITY_UTXO_OUTPUT',
 
             PatternRegistry.build_entity_pattern(PatternRegistry.POOL_TERMS) + r'(?!\s+owner)': 'ENTITY_POOL',
             PatternRegistry.build_entity_pattern(PatternRegistry.ACCOUNT_TERMS): 'ENTITY_ACCOUNT',
