@@ -41,8 +41,7 @@ async def execute_query(request: QueryRequest):
             logger.debug(f"SPARQLCache miss for {user_query}")
             client = VirtuosoClient()
             results = await client.execute_query(user_query)
-            logger.debug(f"SPARQLCache caching {user_query}")
-            redis_client.cache_query(sparql_query=user_query, results=results)
+            await redis_client.cache_query(sparql_query=user_query, results=results)
             return QueryResponse(results=results)
 
         except HTTPException as e:

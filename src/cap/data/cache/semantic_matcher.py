@@ -80,7 +80,7 @@ class SemanticMatcher:
 
     # Semantic sugar terms
     SEMANTIC_SUGAR = [
-        'create', 'indeed', 'very', 'too', 'so'
+        'create', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose'
     ]
     @staticmethod
     def get_semantic_dicts() -> list:
