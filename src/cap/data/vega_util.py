@@ -11,6 +11,12 @@ tracer = trace.get_tracer(__name__)
 class VegaUtil:
     """Util to convert data to vega format."""
 
+    x_candidates = [
+        'yearMonth', 'year', 'month', 'date', 'timePeriod', 'timestamp', 'ts',
+        'epoch', 'epochNumber', 'x', 'index', 'blockHeight', 'blockNumber',
+        'name', 'label', 'category'
+    ]
+
     @staticmethod
     def _convert_to_vega_format(
         kv_results: dict[str, Any],
@@ -62,8 +68,7 @@ class VegaUtil:
             keys = list(first_item.keys())
 
             # Identify category (x-axis) and value (y-axis) fields
-            # Common category fields: month, year, yearMonth, epoch, name, label
-            category_candidates = ['month', 'yearMonth', 'timePeriod', 'year', 'epoch', 'epochNumber', 'name', 'label', 'category']
+            category_candidates = VegaUtil.x_candidates
             category_key = next((k for k in keys if k.lower() in [c.lower() for c in category_candidates]), keys[0])
 
             # Value field is typically numeric - find first numeric field that's not the category
@@ -76,7 +81,8 @@ class VegaUtil:
                         if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).isdigit()):
                             value_key = k
                             break
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Failed to convert value for {category_key}: {e}")
                         continue
 
             if not value_key:
@@ -115,7 +121,8 @@ class VegaUtil:
                             "category": key,
                             "value": numeric_val
                         })
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Failed to convert value for key {key}: {e}")
                         continue
 
             # If we have meaningful data, return it; otherwise create a simple representation
@@ -152,7 +159,7 @@ class VegaUtil:
         keys = list(first_item.keys())
 
         # Identify x-axis field (typically time-based or sequential)
-        x_candidates = ['yearMonth', 'year', 'month', 'date', 'timePeriod', 'timestamp', 'epoch', 'epochNumber', 'block', 'x', 'index']
+        x_candidates = VegaUtil.x_candidates
         x_key = next((k for k in keys if k.lower() in [c.lower() for c in x_candidates]), keys[0])
 
         # All other numeric fields are series
@@ -164,7 +171,8 @@ class VegaUtil:
                     # Check if it's numeric or can be converted to numeric
                     if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit()):
                         series_keys.append(k)
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to convert value for key {k}: {e}")
                     continue
 
         # Build line chart data with series index
@@ -187,7 +195,8 @@ class VegaUtil:
                             "y": float(y_val),
                             "c": series_idx
                         })
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Failed to build series {series_idx}: {e}")
                         continue
 
         return {"values": values}
