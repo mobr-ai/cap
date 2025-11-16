@@ -215,20 +215,34 @@ class VegaUtil:
                 # Handle nested structures (like timestamps with 'value' key)
                 x_val = x_val.get('value', str(x_val))
 
-            # Extract date from datetime strings like "01T00:00:00.0"
+            # Extract date from epoch and datetime strings like "01T00:00:00.0"
             if isinstance(x_val, str):
-                # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
-                if 'epoch' in x_key:
-                    x_display = epoch_to_date(int(x_val))
+                # Handle epoch
+                if 'epoch' in x_key.lower():
+                    try:
+                        # Convert to float first to handle decimal strings, then to int
+                        epoch_num = int(float(x_val))
+                        x_display = epoch_to_date(epoch_num)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Failed to convert epoch {x_val}: {e}")
+                        x_display = str(x_val)
 
-                if 'T' in x_val:
+                # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
+                elif 'T' in x_val:
                     x_display = x_val.split('T')[0]  # Extract just the date part
                 else:
                     x_display = x_val
+
             else:
                 x_display = str(x_val) if x_val is not None else ""
-                if 'epoch' in x_key:
-                    x_display = epoch_to_date(int(x_display))
+                if 'epoch' in x_key.lower():
+                    try:
+                        # Convert to float first to handle decimal strings, then to int
+                        epoch_num = int(float(x_val)) if isinstance(x_val, str) else int(x_val)
+                        x_display = epoch_to_date(epoch_num)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Failed to convert epoch {x_val}: {e}")
+                        x_display = str(x_val)
 
             for series_idx, series_key in enumerate(series_keys):
                 y_val = item.get(series_key)
