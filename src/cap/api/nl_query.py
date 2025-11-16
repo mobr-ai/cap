@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from opentelemetry import trace
 from typing import Optional, Any
 
-from cap.data.sparql_util import convert_sparql_to_kv, format_for_llm
+from cap.util.sparql_util import convert_sparql_to_kv, format_for_llm
 from cap.services.ollama_client import get_ollama_client
 from cap.services.redis_nl_client import get_redis_nl_client
 from cap.data.virtuoso import VirtuosoClient

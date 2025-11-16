@@ -9,7 +9,7 @@ from typing import AsyncIterator, Optional, Any, Union
 import httpx
 from opentelemetry import trace
 
-from cap.data.vega_util import VegaUtil
+from cap.util.vega_util import VegaUtil
 from cap.data.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)

@@ -5,6 +5,8 @@ import logging
 from typing import Any
 from opentelemetry import trace
 
+from cap.util.epoch_util import epoch_to_date
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -152,22 +154,14 @@ class VegaUtil:
             values = []
             for item in data:
                 cat_val = item.get(category_key, "")
-                if isinstance(cat_val, dict):
-                    cat_val = cat_val.get('value', str(cat_val))
-
                 val = item.get(value_key, 0)
                 if isinstance(val, dict):
                     val = val.get('ada', val.get('lovelace', val.get('value', 0)))
 
                 try:
-                    numeric_val = float(val)
-                    # Convert ratios to percentages if needed
-                    if 0 <= numeric_val <= 1:
-                        numeric_val *= 100
-
                     values.append({
                         "category": str(cat_val),
-                        "value": numeric_val
+                        "value": float(val)
                     })
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Skipping pie chart entry: {e}")
@@ -223,15 +217,17 @@ class VegaUtil:
             # Extract date from datetime strings like "01T00:00:00.0"
             if isinstance(x_val, str):
                 # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
+                if 'epoch' in x_key:
+                    x_display = epoch_to_date(int(x_display))
+
                 if 'T' in x_val:
                     x_display = x_val.split('T')[0]  # Extract just the date part
                 else:
                     x_display = x_val
             else:
-                try:
-                    x_display = float(x_val) if x_val is not None else 0
-                except (ValueError, TypeError):
-                    x_display = str(x_val) if x_val is not None else ""
+                x_display = str(x_val) if x_val is not None else ""
+                if 'epoch' in x_key:
+                    x_display = epoch_to_date(int(x_display))
 
             for series_idx, series_key in enumerate(series_keys):
                 y_val = item.get(series_key)
