@@ -88,15 +88,27 @@ class VegaUtil:
             if not value_key:
                 value_key = keys[-1] if len(keys) > 1 else keys[0]
 
-            return {
-                "values": [
-                    {
-                        "category": str(item.get(category_key, "")),
-                        "amount": float(item.get(value_key, 0))
-                    }
-                    for item in data
-                ]
-            }
+            values = []
+            for item in data:
+                cat_val = item.get(category_key, "")
+                if isinstance(cat_val, dict):
+                    cat_val = cat_val.get('value', str(cat_val))
+
+                amt_val = item.get(value_key, 0)
+                if isinstance(amt_val, dict):
+                    # Handle ADA/lovelace conversions
+                    amt_val = amt_val.get('ada', amt_val.get('lovelace', amt_val.get('value', 0)))
+
+                try:
+                    values.append({
+                        "category": str(cat_val),
+                        "amount": float(amt_val)
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping bar chart entry: {e}")
+                    continue
+
+            return {"values": values}
 
         return {"values": []}
 
@@ -137,15 +149,31 @@ class VegaUtil:
             category_key = next((k for k in keys if k.lower() in ['category', 'label', 'name', 'group']), keys[0])
             value_key = next((k for k in keys if k != category_key), keys[-1])
 
-            return {
-                "values": [
-                    {
-                        "category": str(item.get(category_key, "")),
-                        "value": float(item.get(value_key, 0))
-                    }
-                    for item in data
-                ]
-            }
+            values = []
+            for item in data:
+                cat_val = item.get(category_key, "")
+                if isinstance(cat_val, dict):
+                    cat_val = cat_val.get('value', str(cat_val))
+
+                val = item.get(value_key, 0)
+                if isinstance(val, dict):
+                    val = val.get('ada', val.get('lovelace', val.get('value', 0)))
+
+                try:
+                    numeric_val = float(val)
+                    # Convert ratios to percentages if needed
+                    if 0 <= numeric_val <= 1:
+                        numeric_val *= 100
+
+                    values.append({
+                        "category": str(cat_val),
+                        "value": numeric_val
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping pie chart entry: {e}")
+                    continue
+
+            return {"values": values}
 
         return {"values": []}
 
@@ -166,13 +194,21 @@ class VegaUtil:
         series_keys = []
         for k in keys:
             if k != x_key:
+                val = first_item[k]
+
+                # Handle nested dicts
+                if isinstance(val, dict):
+                    val = val.get('ada', val.get('lovelace', val.get('value', None)))
+
+                # Check if numeric
                 try:
-                    val = first_item[k]
-                    # Check if it's numeric or can be converted to numeric
-                    if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit()):
-                        series_keys.append(k)
+                    if val is not None:
+                        if isinstance(val, (int, float)):
+                            series_keys.append(k)
+                        elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
+                            series_keys.append(k)
                 except Exception as e:
-                    logger.warning(f"Failed to convert value for key {k}: {e}")
+                    logger.warning(f"Failed to check if {k} is numeric: {e}")
                     continue
 
         # Build line chart data with series index
@@ -180,8 +216,10 @@ class VegaUtil:
         for item in data:
             x_val = item.get(x_key)
             # Convert x to appropriate format
-            if isinstance(x_val, str):
-                # Try to parse as date or keep as string
+            if isinstance(x_val, dict):
+                # Handle nested structures (like timestamps with 'value' key)
+                x_display = x_val.get('value', str(x_val))
+            elif isinstance(x_val, str):
                 x_display = x_val
             else:
                 x_display = float(x_val) if x_val is not None else 0
@@ -190,6 +228,10 @@ class VegaUtil:
                 y_val = item.get(series_key)
                 if y_val is not None:
                     try:
+                        # Handle nested dict structures
+                        if isinstance(y_val, dict):
+                            y_val = y_val.get('value', y_val.get('ada', y_val.get('lovelace', 0)))
+
                         values.append({
                             "x": x_display,
                             "y": float(y_val),
@@ -220,12 +262,20 @@ class VegaUtil:
             col_values = []
             for row in data:
                 value = row.get(col_name, "")
-                # Handle nested structures like timestamps
+                # Handle nested structures
                 if isinstance(value, dict):
-                    if 'value' in value:
+                    # Handle ADA conversions - prioritize ADA over lovelace
+                    if 'ada' in value:
+                        value = f"{value['ada']} ADA"
+                    elif 'lovelace' in value:
+                        value = value['lovelace']
+                    elif 'decoded' in value and 'hex' in value:
+                        # Token names - show decoded version
+                        value = value['decoded']
+                    elif 'value' in value:
                         value = value['value']
-                    elif 'type' in value:
-                        # Skip just the type info, look for actual value
+                    else:
+                        # Fallback: try to get meaningful representation
                         value = str(value)
                 col_values.append(value)
 
