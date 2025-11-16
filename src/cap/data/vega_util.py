@@ -218,9 +218,15 @@ class VegaUtil:
             # Convert x to appropriate format
             if isinstance(x_val, dict):
                 # Handle nested structures (like timestamps with 'value' key)
-                x_display = x_val.get('value', str(x_val))
-            elif isinstance(x_val, str):
-                x_display = x_val
+                x_val = x_val.get('value', str(x_val))
+
+            # Extract date from datetime strings like "01T00:00:00.0"
+            if isinstance(x_val, str):
+                # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
+                if 'T' in x_val:
+                    x_display = x_val.split('T')[0]  # Extract just the date part
+                else:
+                    x_display = x_val
             else:
                 try:
                     x_display = float(x_val) if x_val is not None else 0
