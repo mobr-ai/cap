@@ -121,6 +121,7 @@ class VirtuosoClient:
                     response.raise_for_status()
                     ret_ = response.json()
                     logger.info(f"query response: {response} \n    response.json(): {ret_}")
+                    await client.aclose()
                     return ret_
 
                 except Exception as e:

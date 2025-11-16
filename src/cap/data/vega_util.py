@@ -222,7 +222,10 @@ class VegaUtil:
             elif isinstance(x_val, str):
                 x_display = x_val
             else:
-                x_display = float(x_val) if x_val is not None else 0
+                try:
+                    x_display = float(x_val) if x_val is not None else 0
+                except (ValueError, TypeError):
+                    x_display = str(x_val) if x_val is not None else ""
 
             for series_idx, series_key in enumerate(series_keys):
                 y_val = item.get(series_key)
