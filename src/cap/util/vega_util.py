@@ -218,8 +218,8 @@ class VegaUtil:
             # Extract date from datetime strings like "01T00:00:00.0"
             if isinstance(x_val, str):
                 # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
-                if 'epoch' in x_val:
-                    x_display = epoch_to_date(int(x_display))
+                if 'epoch' in x_key:
+                    x_display = epoch_to_date(int(x_val))
 
                 if 'T' in x_val:
                     x_display = x_val.split('T')[0]  # Extract just the date part
@@ -227,7 +227,7 @@ class VegaUtil:
                     x_display = x_val
             else:
                 x_display = str(x_val) if x_val is not None else ""
-                if 'epoch' in x_val:
+                if 'epoch' in x_key:
                     x_display = epoch_to_date(int(x_display))
 
             for series_idx, series_key in enumerate(series_keys):
