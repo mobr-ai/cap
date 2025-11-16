@@ -175,6 +175,7 @@ class VegaUtil:
     def _convert_line_chart(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to line chart format with multi-series support."""
         if not isinstance(data, list) or len(data) == 0:
+            logger.warning(f"cant serialize trend if it is not a list")
             return {"values": []}
 
         first_item = data[0]
@@ -217,7 +218,7 @@ class VegaUtil:
             # Extract date from datetime strings like "01T00:00:00.0"
             if isinstance(x_val, str):
                 # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
-                if 'epoch' in x_key:
+                if 'epoch' in x_val:
                     x_display = epoch_to_date(int(x_display))
 
                 if 'T' in x_val:
@@ -226,7 +227,7 @@ class VegaUtil:
                     x_display = x_val
             else:
                 x_display = str(x_val) if x_val is not None else ""
-                if 'epoch' in x_key:
+                if 'epoch' in x_val:
                     x_display = epoch_to_date(int(x_display))
 
             for series_idx, series_key in enumerate(series_keys):
@@ -246,7 +247,9 @@ class VegaUtil:
                         logger.warning(f"Failed to build series {series_idx}: {e}")
                         continue
 
-        return {"values": values}
+        line_chart = {"values": values}
+        logger.debug(f"converted to line chart: {line_chart}")
+        return line_chart
 
     @staticmethod
     def _convert_table(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
