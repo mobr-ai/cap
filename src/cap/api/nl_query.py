@@ -522,7 +522,7 @@ async def natural_language_query(request: NLQueryRequest):
                     sparql_query = ""  # Ensure always defined
 
                 # Stage 3: Contextualize results with LLM
-                logger.info(f"Initiating stage 3 with results {sparql_results}")
+                logger.info(f"Initiating stage 3")
                 if has_data:
                     yield f"{StatusMessage.processing_results()}"
 
@@ -534,8 +534,6 @@ async def natural_language_query(request: NLQueryRequest):
                         formatted_results = format_for_llm(kv_results, max_items=10000)
 
                         logger.info(f"Converted SPARQL to K/V format: {kv_results.get('result_type')}")
-
-                    logger.debug(f"Formatted results:\n{formatted_results}")
 
                     # Get the context stream from Ollama
                     context_stream = ollama.contextualize_answer(

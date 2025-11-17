@@ -539,7 +539,6 @@ class OllamaClient:
                 {known_info}
             """
 
-            logger.info(f"calling ollama model\n    prompt: {prompt}...\n")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
