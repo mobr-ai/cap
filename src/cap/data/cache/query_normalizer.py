@@ -293,9 +293,16 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_comparison_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        # ordering terms
+        # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
         for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
-            normalized = re.sub(pattern, replacement, normalized)
+            # Check if this is an implicit pattern (no \d+ in the pattern)
+            if r'\d+' not in pattern:
+                # For implicit patterns, add <<N>> to the replacement
+                replacement_with_limit = replacement + ' <<N>>'
+                normalized = re.sub(pattern, replacement_with_limit, normalized)
+            else:
+                # Explicit patterns already have number handling
+                normalized = re.sub(pattern, replacement, normalized)
 
         # numeric patterns
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
