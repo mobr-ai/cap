@@ -533,8 +533,6 @@ async def natural_language_query(request: NLQueryRequest):
                         kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
                         formatted_results = format_for_llm(kv_results, max_items=10000)
 
-                        logger.info(f"Converted SPARQL to K/V format: {kv_results.get('result_type')}")
-
                     # Get the context stream from Ollama
                     context_stream = ollama.contextualize_answer(
                         user_query=user_query,
