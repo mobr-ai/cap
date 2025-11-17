@@ -47,6 +47,7 @@ ENV_CORS = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in ENV_CORS.split(",") if o.strip()] or DEFAULT_CORS
 
 logger = logging.getLogger(__name__)
+logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 tracer = trace.get_tracer(__name__)
 
 # Configure ETL logging

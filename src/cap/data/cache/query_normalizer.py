@@ -30,12 +30,19 @@ class QueryNormalizer:
     def get_ordering_patterns() -> dict[str, str]:
         """Generate ordering patterns from registry."""
         return {
+            # Explicit number patterns (more specific, checked first)
             PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+\b': '<<ORDER_TOP>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
-            PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS) + r'(?=\s+(number|count|amount|value))': '<<ORDER_MAX>>',
-            PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS) + r'(?=\s+(number|count|amount|value))': '<<ORDER_MIN>>'
+            # Implicit limit patterns (no number = limit 1)
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): '<<ORDER_START>>',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): '<<ORDER_END>>',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): '<<ORDER_TOP>>',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): '<<ORDER_BOTTOM>>',
+            # Max/Min patterns (unchanged)
+            PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS): '<<ORDER_MAX>>',
+            PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS): '<<ORDER_MIN>>'
         }
 
     @staticmethod

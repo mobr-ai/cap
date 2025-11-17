@@ -28,8 +28,16 @@ class ValueExtractor:
     def get_ordering_patterns() -> dict[str, str]:
         """Build ordering patterns from registry."""
         return {
+            # Patterns with explicit numbers
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+': 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+': 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+': 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+': 'ordering:ASC',
+            # Patterns without numbers (implicit limit)
             PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): 'ordering:ASC',
             PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): 'ordering:ASC',
             PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS): 'ordering:DESC',
             PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS): 'ordering:ASC',
         }
