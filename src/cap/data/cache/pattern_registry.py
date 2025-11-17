@@ -98,9 +98,9 @@ class PatternRegistry:
 
 
     SEMANTIC_SUGAR = [
-        'create', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
+        'create', 'created', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
         'visualization', 'cardano', 'count', 'network', 'represent', 'table', 'versus',
-        'against', 'pie'
+        'against', 'pie', 'recorded', 'storage', 'storaged',
     ]
 
     # Comparison terms
