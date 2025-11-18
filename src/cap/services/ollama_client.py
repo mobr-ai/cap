@@ -157,6 +157,7 @@ class OllamaClient:
         else:
             cleaned = self._clean_sparql(sparql_text)
             cleaned = self._ensure_prefixes(cleaned)
+            logger.info(f"LLM sparql: \n {sparql_text} \n cleaned {cleaned}")
             return False, cleaned
 
     async def generate_stream(

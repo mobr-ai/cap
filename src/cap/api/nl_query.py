@@ -200,9 +200,6 @@ async def _execute_sequential_queries(
             logger.info(f"Replacing '{param_expr}' with '{replacement}'")
             query = query.replace(param_expr, replacement, 1)
 
-        # Execute the clean SPARQL query string directly
-        logger.info(f"Executing clean sparql query {idx + 1}:\n{query}\n")
-
         # Execute as plain SPARQL string
         results = await virtuoso.execute_query(query)
 
