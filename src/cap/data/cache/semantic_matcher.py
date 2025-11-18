@@ -1,26 +1,53 @@
 import re
+import logging
+
+from cap.data.cache.pattern_registry import PatternRegistry
+
+logger = logging.getLogger(__name__)
 
 class SemanticMatcher:
     """Match queries based on semantic similarity, not just exact normalization."""
 
     SEMANTIC_GROUPS = {
-        'list_latest': ['latest', 'most recent', 'newest', 'last', 'current'],
-        'count': ['how many', 'number of', 'count', 'total'],
-        'aggregate_time': ['over time', 'trend', 'historical', 'progression'],
-        'top_ranked': ['top', 'largest', 'biggest', 'highest', 'most'],
+        'latest': PatternRegistry.LAST_TERMS,
+        'oldest': PatternRegistry.FIRST_TERMS,
+        'count': PatternRegistry.COUNT_TERMS,
+        'sum': PatternRegistry.SUM_TERMS,
+        'aggregate_time': PatternRegistry.AGGREGATE_TIME_TERMS,
+        'top_ranked': PatternRegistry.TOP_TERMS,
+        'bottom_ranked': PatternRegistry.BOTTOM_TERMS,
+    }
+
+    CHART_GROUPS = {
+        'bar': PatternRegistry.BAR_CHART_TERMS,
+        'line': PatternRegistry.LINE_CHART_TERMS,
+        'pie': PatternRegistry.PIE_CHART_TERMS,
+        'table': PatternRegistry.TABLE_TERMS,
     }
 
     # Equivalent comparison terms (normalized forms)
     COMPARISON_EQUIVALENTS = {
-        'above': ['above', 'over', 'more than', 'greater than', 'exceeding', 'beyond'],
-        'below': ['below', 'under', 'less than', 'fewer than'],
-        'equals': ['equals', 'equal to', 'exactly', 'has the same'],
+        'above': PatternRegistry.ABOVE_TERMS,
+        'below': PatternRegistry.BELOW_TERMS,
+        'equals': PatternRegistry.EQUALS_TERMS,
     }
 
     # Equivalent possession/relationship terms
     POSSESSION_EQUIVALENTS = {
-        'hold': ['hold', 'has', 'have', 'owns', 'own', 'possess', 'possesses', 'contains', 'contain', 'holds'],
+        'hold': PatternRegistry.POSSESSION_TERMS
     }
+
+    # Semantic sugar terms
+    SEMANTIC_SUGAR = PatternRegistry.SEMANTIC_SUGAR
+
+    @staticmethod
+    def get_semantic_dicts() -> list:
+        return [
+            SemanticMatcher.COMPARISON_EQUIVALENTS,
+            SemanticMatcher.POSSESSION_EQUIVALENTS,
+            SemanticMatcher.SEMANTIC_GROUPS,
+            SemanticMatcher.CHART_GROUPS
+        ]
 
     @staticmethod
     def normalize_for_matching(normalized_query: str) -> str:
@@ -31,34 +58,20 @@ class SemanticMatcher:
         """
         result = normalized_query
 
-        # Normalize comparison terms to canonical form
-        for canonical, variants in SemanticMatcher.COMPARISON_EQUIVALENTS.items():
-            for variant in variants:
-                if variant in result:
-                    result = result.replace(variant, canonical)
+        dicts = SemanticMatcher.get_semantic_dicts()
 
-        # Normalize possession/relationship terms
-        for canonical, variants in SemanticMatcher.POSSESSION_EQUIVALENTS.items():
-            for variant in variants:
-                # Use word boundaries to avoid partial matches
-                result = re.sub(rf'\b{re.escape(variant)}\b', canonical, result)
+        # Normalize to canonical form
+        for d in dicts:
+            for canonical, variants in d.items():
+                for variant in variants:
+                    # Use word boundaries to avoid partial matches
+                    result = re.sub(rf'\b({re.escape(variant)})\b', canonical, result)
 
-        # Remove redundant words that don't change meaning after normalization
-        result = re.sub(r'\b(more|much)\b', '', result)
+        # Remove redundant words that don't change nl meaning after normalization
+        reduntant_words = SemanticMatcher.SEMANTIC_SUGAR + PatternRegistry.FILLER_WORDS
+        pattern = '|'.join(reduntant_words)
+        result = re.sub(rf'\b({pattern})\b', '', result, flags=re.IGNORECASE)
 
         # Normalize whitespace
         result = re.sub(r'\s+', ' ', result).strip()
-
         return result
-
-    @staticmethod
-    def get_semantic_variant(normalized_query: str) -> str:
-        """Generate semantic variant key for better matching."""
-        variant = normalized_query
-
-        for group_name, terms in SemanticMatcher.SEMANTIC_GROUPS.items():
-            pattern = '|'.join(re.escape(term) for term in terms)
-            if re.search(pattern, variant):
-                variant = re.sub(pattern, f'<<{group_name}>>', variant)
-
-        return variant

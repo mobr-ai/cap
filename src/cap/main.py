@@ -11,14 +11,14 @@ from starlette.responses import FileResponse
 from opentelemetry import trace
 from sqlalchemy import text
 
-from cap.api.router import router as api_router
+from cap.api.sparql_query import router as api_router
 from cap.api.nl_query import router as nl_router
 from cap.telemetry import setup_telemetry, instrument_app
 from cap.data.virtuoso import VirtuosoClient
 from cap.config import settings
 from cap.etl.cdb.service import etl_service
 from cap.services.ollama_client import cleanup_ollama_client
-from cap.services.redis_client import cleanup_redis_client
+from cap.services.redis_nl_client import cleanup_redis_nl_client
 
 from cap.database.session import engine
 from cap.database.model import Base
@@ -27,6 +27,9 @@ from cap.api.waitlist import router as wait_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
+from cap.api.dashboard import router as dashboard_router
+from cap.api.demo_nl import router as demo_router
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -44,6 +47,7 @@ ENV_CORS = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in ENV_CORS.split(",") if o.strip()] or DEFAULT_CORS
 
 logger = logging.getLogger(__name__)
+logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 tracer = trace.get_tracer(__name__)
 
 # Configure ETL logging
@@ -174,7 +178,7 @@ async def lifespan(app: FastAPI):
         # Shutdown
         await stop_etl_service()
         await cleanup_ollama_client()
-        await cleanup_redis_client()
+        await cleanup_redis_nl_client()
         logger.info("Application shutdown completed")
 
 def setup_tracing():
@@ -215,6 +219,8 @@ def create_application() -> FastAPI:
     app.include_router(wait_router)
     app.include_router(cache_router)
     app.include_router(etl_router)
+    app.include_router(dashboard_router)
+    app.include_router(demo_router)
 
     return app
 

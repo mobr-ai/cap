@@ -37,7 +37,7 @@ The engine follows LLM's enhancement with KG architecture for queries: (parse NL
 
 ### 2.2 Components
 - **Ollama Integration**: Asynchronous client (`OllamaClient` in `./services/ollama_client.py`) handles LLM calls. Uses `mobr/cap` for low-temperature (0.0) SPARQL generation and moderate-temperature (0.3) response synthesis. Supports streaming via `/api/v1/nl/query` endpoint.
-- **Redis Caching**: `RedisClient` (`./services/redis_client.py`) normalizes queries (lowercase, stripped) as keys (e.g., `nlq:cache:<normalized_query>`). Stores SPARQL, results, and hit counts.
+- **Redis Caching**: `RedisNLClient` (`./services/redis_client.py`) normalizes queries (lowercase, stripped) as keys (e.g., `nlq:cache:<normalized_query>`). Stores SPARQL, results, and hit counts.
 - **Virtuoso SPARQL Endpoint**: Queries executed via `VirtuosoClient` (not detailed here, but integrated in the API layer).
 - **API Layer**: FastAPI routes in the main app (inferred from endpoints; see `./main.py` or equivalent). Handles CORS, tracing (OpenTelemetry), and error propagation.
 - **Frontend Integration**: A full example with a JavaScript client in `llm.html` demonstrates real-time UI with status indicators consuming SPARQL and Natural Language queries (e.g., sync health, processing states, queres, etc.).

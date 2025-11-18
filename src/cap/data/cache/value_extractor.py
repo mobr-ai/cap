@@ -5,26 +5,42 @@ import logging
 import re
 from opentelemetry import trace
 
+from cap.data.cache.pattern_registry import PatternRegistry
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 class ValueExtractor:
     """Extract values from natural language queries."""
 
-    TEMPORAL_PATTERNS = {
-        r'\b(yearly|annually|per year|each year|every year)\b': 'year',
-        r'\b(monthly|per month|each month|every month)\b': 'month',
-        r'\b(weekly|per week|each week|every week)\b': 'week',
-        r'\b(daily|per day|each day|every day)\b': 'day',
-        r'\b(per epoch|each epoch|every epoch|by epoch)\b': 'epoch'
-    }
+    @staticmethod
+    def get_temporal_patterns() -> dict[str, str]:
+        """Build temporal patterns from registry."""
+        return {
+            PatternRegistry.build_pattern(PatternRegistry.YEARLY_TERMS): 'year',
+            PatternRegistry.build_pattern(PatternRegistry.MONTHLY_TERMS): 'month',
+            PatternRegistry.build_pattern(PatternRegistry.WEEKLY_TERMS): 'week',
+            PatternRegistry.build_pattern(PatternRegistry.DAILY_TERMS): 'day',
+            PatternRegistry.build_pattern(PatternRegistry.EPOCH_PERIOD_TERMS): 'epoch'
+        }
 
-    ORDERING_PATTERNS = {
-        r'\b(first|earliest|oldest|initial)\b': 'ordering:ASC',
-        r'\b(last|latest|newest|most recent|recent)\b': 'ordering:DESC',
-        r'\b(largest|biggest|highest|maximum|max|greatest)\b': 'ordering:DESC',
-        r'\b(smallest|lowest|minimum|min|least)\b': 'ordering:ASC',
-    }
+    @staticmethod
+    def get_ordering_patterns() -> dict[str, str]:
+        """Build ordering patterns from registry."""
+        return {
+            # Patterns with explicit numbers
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+': 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+': 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+': 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+': 'ordering:ASC',
+            # Patterns without numbers (implicit limit)
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS): 'ordering:ASC',
+        }
 
     @staticmethod
     def extract(nl_query: str) -> dict[str, list[str]]:
@@ -44,7 +60,16 @@ class ValueExtractor:
         }
 
         # Extract chart types
-        chart_pattern = r'\b(bar|line|pie|scatter)\s+(chart|graph)\b'
+        chart_names = (
+            PatternRegistry.BAR_CHART_TERMS +
+            PatternRegistry.PIE_CHART_TERMS +
+            PatternRegistry.LINE_CHART_TERMS +
+            PatternRegistry.TABLE_TERMS
+        )
+
+        str_chart_names = '|'.join(re.escape(m) for m in chart_names)
+        str_chart_sf_names = '|'.join(re.escape(m) for m in PatternRegistry.CHART_SUFFIXES)
+        chart_pattern = rf'\b({str_chart_names})\s+({str_chart_sf_names})\b'
         for match in re.finditer(chart_pattern, nl_query, re.IGNORECASE):
             chart_type = match.group(1).lower()
             if chart_type not in values["chart_types"]:
@@ -53,22 +78,33 @@ class ValueExtractor:
         # Extract currency/token URIs (add this new section)
         # Look for ADA references
         if re.search(r'\bADA\b', nl_query, re.IGNORECASE):
-            values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
+            if "http://www.mobr.ai/ontologies/cardano#cnt/ada" not in values["currencies"]:
+                values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
+
+        # Extract token names that might be currencies
+        for token in values["tokens"]:
+            # Construct potential currency URI
+            currency_uri = f"http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}"
+            if currency_uri not in values["currencies"]:
+                values["currencies"].append(currency_uri)
 
         # Extract temporal periods
-        for pattern, period in ValueExtractor.TEMPORAL_PATTERNS.items():
+        for pattern, period in ValueExtractor.get_temporal_patterns().items():
             if re.search(pattern, nl_query, re.IGNORECASE) and period not in values["temporal_periods"]:
                 values["temporal_periods"].append(period)
 
         # Extract years
-        for match in re.finditer(r'\b(in|of|for|during)?\s*(\d{4})\b', nl_query):
+        str_time_prep_names = '|'.join(re.escape(m) for m in PatternRegistry.TEMPORAL_PREPOSITIONS)
+        for match in re.finditer(rf'\b({str_time_prep_names})?\s*(\d{4})\b', nl_query):
             year = match.group(2)
             if 1900 <= int(year) <= 2100 and year not in values["years"]:
                 values["years"].append(year)
 
         # Extract months
         values["months"] = []
-        month_pattern = r'\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*(\d{4})?\b'
+        month_names = PatternRegistry.MONTH_NAMES + PatternRegistry.MONTH_ABBREV
+        str_month_names = '|'.join(re.escape(m) for m in month_names)
+        month_pattern = rf'\b({str_month_names})\s*(\d{4})?\b'
         for match in re.finditer(month_pattern, nl_query, re.IGNORECASE):
             month = match.group(1).lower()
             year = match.group(2)
@@ -80,7 +116,7 @@ class ValueExtractor:
                 values["months"].append(month_str)
 
         # Extract ordering
-        for pattern, ordering in ValueExtractor.ORDERING_PATTERNS.items():
+        for pattern, ordering in ValueExtractor.get_ordering_patterns().items():
             if re.search(pattern, nl_query, re.IGNORECASE) and ordering not in values["orderings"]:
                 values["orderings"].append(ordering)
 
@@ -125,16 +161,32 @@ class ValueExtractor:
     @staticmethod
     def _extract_limits(nl_query: str, values: dict[str, list[str]]) -> None:
         """Extract limit values."""
-        for match in re.finditer(r'top\s+(\d+)', nl_query, re.IGNORECASE):
+        # Explicit limits (top N)
+        str_top_names = '|'.join(re.escape(m) for m in PatternRegistry.TOP_TERMS)
+        for match in re.finditer(rf'\b({str_top_names})\s+(\d+)\b', nl_query, re.IGNORECASE):
             limit = match.group(1)
             if limit not in values["limits"]:
                 values["limits"].append(limit)
+
+        # Explicit limits (latest N, first N, etc.)
+        limit_terms = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
+        for match in re.finditer(limit_terms + r'\s+(\d+)', nl_query, re.IGNORECASE):
+            limit = match.group(2)
+            if limit not in values["limits"]:
+                values["limits"].append(limit)
+
+        # Implicit limit of 1 for singular nouns without a number
+        limit_pattern = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
+        entity_pattern = PatternRegistry.build_pattern(PatternRegistry.get_entities(), word_boundary=False)
+        if re.search(limit_pattern + r'\s+' + entity_pattern + r'\b(?!s)', nl_query, re.IGNORECASE):
+            if "1" not in values["limits"]:
+                values["limits"].append("1")
 
     @staticmethod
     def _extract_tokens(nl_query: str, values: dict[str, list[str]]) -> None:
         """Extract token names."""
         token_pattern = r'\b([A-Z]{3,10})\b(?=\s+(?:holder|token|account|supply|balance))|(?:from\s+the\s+)([A-Z]{3,10})(?:\s+supply)'
-        excluded_words = ['THE', 'FOR', 'TOP', 'MANY', 'MUCH', 'HOW', 'WHAT', 'WHICH', 'ARE', 'DEFINE', "SHOW", "LIST"]
+        excluded_words = PatternRegistry.FILLER_WORDS
 
         for match in re.finditer(token_pattern, nl_query):
             token = (match.group(1) or match.group(2)).upper()
