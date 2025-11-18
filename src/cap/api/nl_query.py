@@ -414,7 +414,7 @@ async def natural_language_query(request: NLQueryRequest):
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
-                        raw_sparql_response = await ollama.nl_to_sparql(prompt=user_query)
+                        raw_sparql_response = await ollama.nl_to_sparql(natural_query=user_query)
                         is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
                         if is_sequential:
                             sparql_queries = sparql_content
