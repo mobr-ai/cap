@@ -332,11 +332,17 @@ class OllamaClient:
         # Clean up whitespace
         lines = [line.strip() for line in sparql_text.strip().split('\n') if line.strip()]
 
-        # Filter out lines that are explanatory text
+        # Filter out lines that are explanatory text and prefixes
         sparql_lines = []
+        in_query = False
         for line in lines:
             upper_line = line.upper()
-            if any(keyword in upper_line for keyword in ['PREFIX', 'SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'WHERE', 'FROM', 'ORDER', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING', 'FILTER']):
+            # Start capturing when we hit query keywords
+            if any(keyword in upper_line for keyword in ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']):
+                in_query = True
+
+            # Once we're in the query, keep all lines
+            if in_query:
                 sparql_lines.append(line)
 
         cleaned = '\n'.join(sparql_lines).strip()
