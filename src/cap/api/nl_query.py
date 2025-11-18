@@ -422,7 +422,6 @@ async def natural_language_query(request: NLQueryRequest):
                         else:
                             sparql_query = sparql_content
                             logger.info(f"Generated single SPARQL")
-                        logger.info(f"SPARQL created by LLM:\n {raw_sparql_response}")
 
                     except Exception as e:
                         logger.error(f"SPARQL generation error: {e}", exc_info=True)

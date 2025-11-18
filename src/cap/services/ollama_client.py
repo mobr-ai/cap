@@ -284,6 +284,7 @@ class OllamaClient:
                 temperature=0.0
             )
 
+            logger.info(f"LLM-generated SPARQL: \n {sparql_response}")
             is_sequential, content = self.detect_and_parse_sparql(sparql_response)
             if is_sequential:
                 # For backward compatibility, return first query if sequential (or raise/log)
