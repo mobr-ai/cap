@@ -120,13 +120,13 @@ class VirtuosoClient:
                     )
                     response.raise_for_status()
                     ret_ = response.json()
-                    logger.info(f"query response: {response} \n    response.json(): {ret_}")
-                    await client.aclose()
+                    await self.close()
                     return ret_
 
                 except Exception as e:
                     logger.error(f"SPARQL query failed: {e}")
                     logger.error(f"Query: {query}")
+                    await self.close()
                     raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
 
             def _execute_sync():
