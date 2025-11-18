@@ -72,31 +72,6 @@ class OllamaClient:
             await self._client.aclose()
             self._client = None
 
-    async def nl_to_sequential_sparql(
-        self,
-        natural_query: str
-    ) -> list[dict[str, Any]]:
-        """
-        Convert natural language query to sequential SPARQL queries.
-
-        Returns:
-            List of query dictionaries with 'query' and 'inject_params' keys
-        """
-        with tracer.start_as_current_span("nl_to_sequential_sparql") as span:
-            span.set_attribute("query", natural_query)
-
-            sparql_response = await self.generate_complete(
-                prompt=natural_query,
-                model=self.llm_model,
-                temperature=0.0
-            )
-
-            # Parse sequential queries
-            queries = self._parse_sequential_sparql(sparql_response)
-            span.set_attribute("query_count", len(queries))
-
-            return queries
-
     def _parse_sequential_sparql(self, sparql_text: str) -> list[dict[str, Any]]:
         """
         Parse sequential SPARQL queries from LLM response with proper INJECT extraction.
@@ -157,7 +132,6 @@ class OllamaClient:
         else:
             cleaned = self._clean_sparql(sparql_text)
             cleaned = self._ensure_prefixes(cleaned)
-            logger.info(f"LLM sparql: \n {sparql_text} \n cleaned {cleaned}")
             return False, cleaned
 
     async def generate_stream(
@@ -299,7 +273,7 @@ class OllamaClient:
             # Use fresh prompt from environment
             system_prompt = ""
             nl_prompt = f"""
-                {self.nl_to_sparql_prompt}
+                {self.nl_to_sparql_prompt()}
                 User Question: {natural_query}
             """
 

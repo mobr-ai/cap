@@ -53,7 +53,7 @@ class StatusMessage:
 
     @staticmethod
     def generating_sparql() -> str:
-        return "status: Analyzing contexts in the knowledge graph\n"
+        return "status: Analyzing how to consume the knowledge graph\n"
 
     @staticmethod
     def executing_query() -> str:
@@ -414,21 +414,16 @@ async def natural_language_query(request: NLQueryRequest):
                     yield f"{StatusMessage.generating_sparql()}"
 
                     try:
-                        raw_sparql_response = await ollama.generate_complete(
-                            prompt=user_query,
-                            model=ollama.llm_model,
-                            system_prompt=ollama.nl_to_sparql_prompt,
-                            temperature=0.0
-                        )
-
+                        raw_sparql_response = await ollama.nl_to_sparql(prompt=user_query)
                         is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
-
                         if is_sequential:
                             sparql_queries = sparql_content
                             logger.info(f"Generated sequential SPARQL with {len(sparql_queries)} queries")
                         else:
                             sparql_query = sparql_content
                             logger.info(f"Generated single SPARQL")
+                        logger.info(f"SPARQL created by LLM:\n {raw_sparql_response}")
+
                     except Exception as e:
                         logger.error(f"SPARQL generation error: {e}", exc_info=True)
                         is_sequential = False
@@ -464,7 +459,6 @@ async def natural_language_query(request: NLQueryRequest):
                                     sparql_query=json.dumps(sparql_queries)  # Store as JSON
                                 )
                         else:
-                            yield f"{StatusMessage.no_data()}"
                             has_data = False
 
                     except Exception as e:
@@ -504,12 +498,10 @@ async def natural_language_query(request: NLQueryRequest):
 
                         except Exception as e:
                             logger.error(f"SPARQL execution error: {e}", exc_info=True)
-                            yield f"{StatusMessage.no_data()}"
                             has_data = False
 
                     else:
                         logger.warning("stage2: executing single sparql with an empty sparql")
-                        yield f"{StatusMessage.no_data()}"
                         has_data = False
 
                 if is_sequential and sparql_queries:
