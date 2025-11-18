@@ -273,7 +273,7 @@ class OllamaClient:
             # Use fresh prompt from environment
             system_prompt = ""
             nl_prompt = f"""
-                {self.nl_to_sparql_prompt()}
+                {self.nl_to_sparql_prompt}
                 User Question: {natural_query}
             """
 
