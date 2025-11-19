@@ -268,13 +268,21 @@ class VegaUtil:
     @staticmethod
     def _convert_table(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to table format."""
-        if not isinstance(data, list) or len(data) == 0:
-            logger.warning(f"Returning empty table for {user_query} with data {data}")
+
+        # Forcing list for one count results
+        table_data = None
+        if isinstance(data, dict):
+            table_data = [data]
+        else:
+            table_data = data
+
+        if not isinstance(table_data, list) or len(table_data) == 0:
+            logger.warning(f"Returning empty table for {user_query} with data {table_data}")
             return {"values": []}
 
         # Get all unique keys from all rows (in case structure varies)
         all_keys = []
-        for item in data:
+        for item in table_data:
             for key in item.keys():
                 if key not in all_keys:
                     all_keys.append(key)
@@ -283,7 +291,7 @@ class VegaUtil:
         columns = []
         for idx, col_name in enumerate(all_keys):
             col_values = []
-            for row in data:
+            for row in table_data:
                 value = row.get(col_name, "")
                 # Handle nested structures
                 if isinstance(value, dict):
