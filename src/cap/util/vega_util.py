@@ -269,6 +269,7 @@ class VegaUtil:
     def _convert_table(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to table format."""
         if not isinstance(data, list) or len(data) == 0:
+            logger.warning(f"Returning empty table for {user_query} with data {data}")
             return {"values": []}
 
         # Get all unique keys from all rows (in case structure varies)
