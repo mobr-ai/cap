@@ -456,7 +456,7 @@ class OllamaClient:
                                 if isinstance(kv_results.get("data"), list):
                                     columns = list(kv_results["data"][0].keys())
                                 elif isinstance(kv_results.get("data"), dict):
-                                    columns = kv_results["data"].keys()
+                                    columns = list(kv_results["data"].keys())
 
                             output_data = {
                                 "result_type": result_type,
@@ -467,6 +467,7 @@ class OllamaClient:
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)
+                            logger.debug(f"output_data: \n {kv_formatted}")
                         else:
                             kv_formatted = json.dumps(kv_results, indent=2)
                     else:
