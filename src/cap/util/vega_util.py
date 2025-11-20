@@ -270,11 +270,9 @@ class VegaUtil:
         """Convert data to table format."""
 
         # Forcing list for one count results
-        table_data = None
+        table_data = data
         if isinstance(data, dict):
             table_data = [data]
-        else:
-            table_data = data
 
         if not isinstance(table_data, list) or len(table_data) == 0:
             logger.warning(f"Returning empty table for {user_query} with data {table_data}")

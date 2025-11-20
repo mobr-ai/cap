@@ -313,7 +313,8 @@ def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[s
     if len(bindings) == 1:
         return {
             'result_type': 'single',
-            'data': _flatten_binding(bindings[0], ada_variables, token_name_variables)
+            'count': 1,
+            'data': [_flatten_binding(bindings[0], ada_variables, token_name_variables)]
         }
 
     # Multiple rows - create structured result
