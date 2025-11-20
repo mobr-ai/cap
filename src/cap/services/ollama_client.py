@@ -451,12 +451,19 @@ class OllamaClient:
                                 user_query,
                                 sparql_query
                             )
+                            columns = []
+                            if kv_results.get("data"):
+                                if isinstance(kv_results.get("data"), list):
+                                    columns = list(kv_results["data"][0].keys())
+                                elif isinstance(kv_results.get("data"), dict):
+                                    columns = kv_results["data"].keys()
+
                             output_data = {
                                 "result_type": result_type,
                                 "data": vega_data,
                                 "metadata": {
                                     "count": kv_results.get("count", 0),
-                                    "columns": list(kv_results.get("data", [{}])[0].keys()) if isinstance(kv_results.get("data"), list) and kv_results.get("data") else []
+                                    "columns": columns
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)
