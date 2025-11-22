@@ -85,9 +85,7 @@ class PatternRegistry:
                     'quantity', 'how much']
     SUM_TERMS = ['sum', 'total', 'add up', 'aggregate', 'combined',
                     'accumulated', 'overall amount']
-    AGGREGATE_TIME_TERMS = ['over time', 'historical', 'progression',
-                            'evolution', 'history',
-                            'per year', 'per month', 'per day', 'by year', 'by month']
+    AGGREGATE_TIME_TERMS = ['per year', 'per month', 'per day', 'by year', 'by month']
     TOP_TERMS = ['top', 'largest', 'biggest', 'highest', 'most',
                         'best', 'leading', 'upper', 'ascending', 'asc',
                         'top ranked', 'greatest', 'max', 'maximum']
@@ -101,7 +99,7 @@ class PatternRegistry:
         'create', 'created', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
         'visualization', 'cardano', 'count', 'network', 'represent', 'table', 'versus',
         'against', 'pie', 'pizza', 'recorded', 'storage', 'storaged', "with", "all",
-        'history', 'ever'
+        'history', 'ever', 'over time', 'historical', 'progression', 'evolution',
     ]
 
     # Comparison terms
