@@ -227,9 +227,6 @@ class VegaUtil:
                         logger.warning(f"Failed to convert epoch {x_val}: {e}")
                         x_display = str(x_val)
 
-                # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
-                elif 'T' in x_val:
-                    x_display = x_val.split('T')[0]  # Extract just the date part
                 else:
                     x_display = x_val
 
