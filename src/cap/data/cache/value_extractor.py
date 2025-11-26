@@ -164,7 +164,7 @@ class ValueExtractor:
         # Explicit limits (top N)
         str_top_names = '|'.join(re.escape(m) for m in PatternRegistry.TOP_TERMS)
         for match in re.finditer(rf'\b({str_top_names})\s+(\d+)\b', nl_query, re.IGNORECASE):
-            limit = match.group(1)
+            limit = match.group(2)
             if limit not in values["limits"]:
                 values["limits"].append(limit)
 
