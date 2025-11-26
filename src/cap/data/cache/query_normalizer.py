@@ -4,107 +4,119 @@ Redis client for caching SPARQL queries and natural language mappings.
 import logging
 import re
 import unicodedata
-from pathlib import Path
 from opentelemetry import trace
 
 from cap.data.cache.semantic_matcher import SemanticMatcher
+from cap.data.cache.pattern_registry import PatternRegistry
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-ontology_path: str = "src/ontologies/cardano.ttl"
-
-# Static global for preserved expressions
-_PRESERVED_EXPRESSIONS = []
-
-def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> list:
-    """Load rdfs:label values from the Turtle ontology file."""
-    labels = []
-    try:
-        path = Path(onto_path)
-        if not path.exists():
-            logger.warning(f"Ontology file not found at {onto_path}")
-            return labels
-
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Match rdfs:label patterns in Turtle format
-        # Handles both single-line and multi-line string literals
-        label_pattern = r'rdfs:label\s+"([^"]+)"'
-        matches = re.findall(label_pattern, content)
-
-        for match in matches:
-            label_lower = match.lower().strip()
-            if label_lower and len(label_lower) > 1:  # Skip empty or single-char labels
-                labels.append(label_lower)
-
-        logger.info(f"Loaded {len(labels)} labels from ontology: {onto_path}")
-
-    except Exception as e:
-        logger.error(f"Error loading ontology labels from {onto_path}: {e}")
-
-    return labels
-
 class QueryNormalizer:
     """Handle natural language query normalization."""
 
-    PRESERVED_EXPRESSIONS = [
-        'asset policy', 'proof of work', 'proof of stake', 'stake pool',
-        'native token', 'smart contract', 'ada pots', 'pot transfer',
-        'collateral input', 'collateral output', 'reference input', 'fungible token'
-        'chain selection rule'
-    ]
+    @staticmethod
+    def get_temporal_patterns() -> dict[str, str]:
+        """Generate temporal patterns from registry."""
+        return {
+            PatternRegistry.build_pattern(PatternRegistry.YEARLY_TERMS): 'per <<PERIOD>>',
+            PatternRegistry.build_pattern(PatternRegistry.MONTHLY_TERMS): 'per <<PERIOD>>',
+            PatternRegistry.build_pattern(PatternRegistry.WEEKLY_TERMS): 'per <<PERIOD>>',
+            PatternRegistry.build_pattern(PatternRegistry.DAILY_TERMS): 'per <<PERIOD>>',
+            PatternRegistry.build_pattern(PatternRegistry.EPOCH_PERIOD_TERMS): 'per <<PERIOD>>'
+        }
 
-    TEMPORAL_TERMS = {
-        r'\b(yearly|annually|per year|each year|every year)\b': 'per <<PERIOD>>',
-        r'\b(monthly|per month|each month|every month)\b': 'per <<PERIOD>>',
-        r'\b(weekly|per week|each week|every week)\b': 'per <<PERIOD>>',
-        r'\b(daily|per day|each day|every day)\b': 'per <<PERIOD>>',
-        r'\b(per epoch|each epoch|every epoch)\b': 'per <<PERIOD>>'
-    }
+    @staticmethod
+    def get_ordering_patterns() -> dict[str, str]:
+        """Generate ordering patterns from registry."""
+        return {
+            # Explicit number patterns (more specific, checked first)
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+\b': '<<ORDER_TOP>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
+            # Implicit limit patterns (no number = limit 1)
+            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): '<<ORDER_START>>',
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): '<<ORDER_END>>',
+            PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): '<<ORDER_TOP>>',
+            PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): '<<ORDER_BOTTOM>>',
+            # Max/Min patterns (unchanged)
+            PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS): '<<ORDER_MAX>>',
+            PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS): '<<ORDER_MIN>>'
+        }
 
-    ORDERING_TERMS = {
-        r'\b(first|earliest|oldest|initial)\s+\d+\b': '<<ORDER_START>> <<N>>',
-        r'\b(last|latest|newest|most recent|recent)\s+\d+\b': '<<ORDER_END>> <<N>>',
-        r'\b(top)\s+\d+\b': '<<ORDER_TOP>> <<N>>',
-        r'\b(bottom|worst)\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
-        r'\b(largest|biggest|highest|greatest)\b(?=\s+(number|count|amount|value))': '<<ORDER_MAX>>',
-        r'\b(smallest|lowest|least)\b(?=\s+(number|count|amount|value))': '<<ORDER_MIN>>'
-    }
+    @staticmethod
+    def get_chart_patterns() -> dict[str, str]:
+        """Generate chart type patterns from registry."""
+        patterns = {}
+        for chart_type, terms in [
+            ('bar', PatternRegistry.BAR_CHART_TERMS),
+            ('line', PatternRegistry.LINE_CHART_TERMS),
+            ('pie', PatternRegistry.PIE_CHART_TERMS)
+        ]:
+            pattern = PatternRegistry.build_pattern(terms) + r'\s+' + \
+                     PatternRegistry.build_pattern(PatternRegistry.CHART_SUFFIXES)
+            patterns[pattern] = f'{chart_type} visualization'
+        return patterns
 
-    CHART_TYPE_PATTERNS = {
-        r'\b(bar|column|histogram)\s+(chart|graph|plot)\b': 'bar visualization',
-        r'\b(line|linear|trend)\s+(chart|graph|plot)\b': 'line visualization',
-        r'\b(pie|donut|doughnut)\s+(chart|graph|plot)\b': 'pie visualization',
-    }
+    @staticmethod
+    def get_entity_patterns() -> dict[str, str]:
+        """Generate entity patterns from registry."""
+        return {
+            # Transaction-related (more specific patterns first)
+            PatternRegistry.build_entity_pattern(PatternRegistry.TRANSACTION_TERMS) +
+                r'\s+' + PatternRegistry.build_pattern(PatternRegistry.TRANSACTION_DETAIL_TERMS): 'ENTITY_TX_DETAIL',
+            r'\b(with|having)\s+' + PatternRegistry.build_pattern(PatternRegistry.TRANSACTION_DETAIL_TERMS): 'ENTITY_DETAIL',
 
-    ENTITY_MAPPINGS = {
-        r'\b(native token|multi[- ]?asset)s?\b': 'ENTITY_TOKEN',  # More specific first
-        r'\b(stake pool)s?\b': 'ENTITY_POOL',
-        r'\b(cnt)s?\b': 'ENTITY_TOKEN',
-        r'\b(wallet)s?\b': 'ENTITY_ACCOUNT',
-        r'\b(transaction|tx)s?\b': 'ENTITY_TX',
-        r'\b(block)s?\b': 'ENTITY_BLOCK',
-        r'\b(epoch)s?\b': 'ENTITY_EPOCH',
-        r'\b(pool)s?\b(?!\s+owner)': 'ENTITY_POOL',  # Only if not "pool owner"
-        r'\b(account)s?\b': 'ENTITY_ACCOUNT',  # Most general last
-    }
+            # Governance and Certificates (more specific first)
+            r'\b(drep (registration|update|retirement))s?\b': 'ENTITY_DREP_CERT',
+            r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
+            PatternRegistry.build_entity_pattern(PatternRegistry.GOVERNANCE_PROPOSAL_TERMS): 'ENTITY_PROPOSAL',
+            PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING_ANCHOR',
+            PatternRegistry.build_entity_pattern(PatternRegistry.COMMITTEE_TERMS): 'ENTITY_COMMITTEE',
+            r'\b(committee (member|credential))s?\b': 'ENTITY_COMMITTEE_MEMBER',
+            r'\b((cold|hot) credential)s?\b': 'ENTITY_CREDENTIAL',
+            PatternRegistry.build_entity_pattern(PatternRegistry.DREP_TERMS): 'ENTITY_DREP',
+            PatternRegistry.build_entity_pattern(PatternRegistry.DELEGATION_TERMS): 'ENTITY_DELEGATION',
+            PatternRegistry.build_entity_pattern(PatternRegistry.VOTE_TERMS): 'ENTITY_VOTE',
+            PatternRegistry.build_entity_pattern(PatternRegistry.CERTIFICATE_TERMS): 'ENTITY_CERTIFICATE',
+            PatternRegistry.build_entity_pattern(PatternRegistry.CONSTITUTION_TERMS): 'ENTITY_CONSTITUTION',
 
-    COMPARISON_PATTERNS = {
-        r'\b(more than|over|above|greater than|exceeding|beyond)\b': 'above',
-        r'\b(less than|under|below|fewer than)\b': 'below',
-        r'\b(equal to|equals|exactly)\b': 'equals',
-    }
+            # Scripts and Smart Contracts
+            PatternRegistry.build_entity_pattern(PatternRegistry.SCRIPT_TERMS): 'ENTITY_SCRIPT',
+            PatternRegistry.build_entity_pattern(PatternRegistry.WITNESS_TERMS): 'ENTITY_WITNESS',
+            PatternRegistry.build_entity_pattern(PatternRegistry.DATUM_TERMS): 'ENTITY_DATUM',
+            PatternRegistry.build_entity_pattern(PatternRegistry.COST_MODEL_TERMS): 'ENTITY_COST_MODEL',
 
-    FILLER_WORDS = {
-        'please', 'could', 'can', 'you', 'me', 'the',
-        'is', 'are', 'was', 'were', 'your', 'my',
-        'a', 'an', 'of', 'in', 'on', 'yours',
-        'do', 'does', 'ever'
-    }
+            # Tokens and Assets
+            PatternRegistry.build_entity_pattern(PatternRegistry.TOKEN_TERMS): 'ENTITY_TOKEN',
+            PatternRegistry.build_entity_pattern(PatternRegistry.ADA_POT_TERMS): 'ENTITY_ADA_POTS',
 
-    QUESTION_WORDS = {'who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long'}
+            PatternRegistry.build_entity_pattern(PatternRegistry.PROTOCOL_PARAM_TERMS): 'ENTITY_PROTOCOL_PARAMS',
+
+            # System and Status
+            PatternRegistry.build_entity_pattern(PatternRegistry.STATUS_TERMS): 'ENTITY_STATUS',
+            r'\b((what is happening|what up (cardano)s?)s?)s?\b': 'ENTITY_STATUS',
+
+            PatternRegistry.build_entity_pattern(PatternRegistry.REWARD_TERMS): 'ENTITY_REWARD_WITHDRAWAL',
+            PatternRegistry.build_entity_pattern(PatternRegistry.INPUT_TERMS): 'ENTITY_UTXO_INPUT',
+            PatternRegistry.build_entity_pattern(PatternRegistry.OUTPUT_TERMS): 'ENTITY_UTXO_OUTPUT',
+
+            PatternRegistry.build_entity_pattern(PatternRegistry.POOL_TERMS) + r'(?!\s+owner)': 'ENTITY_POOL',
+            PatternRegistry.build_entity_pattern(PatternRegistry.ACCOUNT_TERMS): 'ENTITY_ACCOUNT',
+            PatternRegistry.build_entity_pattern(PatternRegistry.TRANSACTION_TERMS): 'ENTITY_TX',
+            PatternRegistry.build_entity_pattern(PatternRegistry.BLOCK_TERMS): 'ENTITY_BLOCK',
+            PatternRegistry.build_entity_pattern(PatternRegistry.EPOCH_TERMS): 'ENTITY_EPOCH',
+        }
+
+    @staticmethod
+    def get_comparison_patterns() -> dict[str, str]:
+        """Generate comparison patterns from registry."""
+        return {
+            PatternRegistry.build_pattern(PatternRegistry.ABOVE_TERMS): 'above',
+            PatternRegistry.build_pattern(PatternRegistry.BELOW_TERMS): 'below',
+            PatternRegistry.build_pattern(PatternRegistry.EQUALS_TERMS): 'equals',
+        }
 
     @staticmethod
     def _normalize_aggregation_terms(text: str) -> str:
@@ -126,30 +138,8 @@ class QueryNormalizer:
         return text
 
     @staticmethod
-    def ensure_expressions() -> None:
-        global _PRESERVED_EXPRESSIONS
-
-        if not _PRESERVED_EXPRESSIONS:
-            # Load labels from ontology
-            ontology_labels = _load_ontology_labels(ontology_path)
-
-            # Add default expressions if ontology loading failed or returned nothing
-            if not ontology_labels:
-                logger.warning("No ontology labels loaded, using default preserved expressions")
-                ontology_labels = [
-                    'asset policy', 'proof of work', 'proof of stake', 'stake pool',
-                    'native token', 'smart contract', 'ada pots', 'pot transfer',
-                    'collateral input', 'collateral output', 'reference input', 'fungible token',
-                    'chain selection rule'
-                ]
-
-            _PRESERVED_EXPRESSIONS = ontology_labels
-            logger.info(f"Initialized PRESERVED_EXPRESSIONS with {len(_PRESERVED_EXPRESSIONS)} terms")
-
-    @staticmethod
     def normalize(query: str) -> str:
         """Normalize natural language query for better cache hits."""
-        QueryNormalizer.ensure_expressions()
         normalized = query.lower()
         normalized = unicodedata.normalize('NFKD', normalized)
         normalized = normalized.encode('ascii', 'ignore').decode('ascii')
@@ -161,17 +151,29 @@ class QueryNormalizer:
         # Remove possessive 's
         normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
 
+        # Normalize plurals to singular for ALL entity terms, not just preserved expressions
+        all_entity_terms = (
+            PatternRegistry.get_entities() +
+            PatternRegistry.TRANSACTION_TERMS + PatternRegistry.INPUT_TERMS +
+            PatternRegistry.OUTPUT_TERMS + PatternRegistry.POOL_TERMS +
+            PatternRegistry.BLOCK_TERMS + PatternRegistry.EPOCH_TERMS +
+            PatternRegistry.TOKEN_TERMS + PatternRegistry.ACCOUNT_TERMS
+        )
+        entity_plural_pattern = r'\b(' + '|'.join([re.escape(term) for term in all_entity_terms]) + r')s\b'
+        normalized = re.sub(entity_plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
+
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
-        for i, expr in enumerate(QueryNormalizer.PRESERVED_EXPRESSIONS):
+        for i, expr in enumerate(PatternRegistry.get_preserved_expressions()):
             if expr in normalized:
                 placeholder = f'__EXPR{i}__'
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
 
         # Normalize definition requests to a standard form
+        definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
         normalized = re.sub(
-            r'\b(define|explain|describe|tell me about|whats?)\s+(an?|the)?\s*',
+            definition_pattern + r's?\s+(an?|the)?\s*',
             'what ',
             normalized
         )
@@ -185,39 +187,97 @@ class QueryNormalizer:
         normalized = QueryNormalizer._normalize_aggregation_terms(normalized)
 
         # Handle ordinal dates (1st, 2nd, 3rd, 4th, etc.)
+        ordinal_suffix = '|'.join(PatternRegistry.ORDINAL_SUFFIXES)
         normalized = re.sub(
-            r'\b(\d{1,2})(st|nd|rd|th)?\s*,?\s*(\d{4})\b',
+            rf'\b(\d{{1,2}})({ordinal_suffix})?\s*,?\s*(\d{{4}})\b',
             r'<<DAY>> <<YEAR>>',
             normalized
         )
         normalized = re.sub(
-            r'\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(st|nd|rd|th)?\s*,?\s*(\d{4})\b',
+            PatternRegistry.build_pattern(PatternRegistry.MONTH_NAMES) +
+                r'\s+(\d{1,2})(st|nd|rd|th)?\s*,?\s*(\d{4})\b',
             r'\1 <<DAY>> <<YEAR>>',
             normalized,
             flags=re.IGNORECASE
         )
 
-        for pattern, replacement in QueryNormalizer.ENTITY_MAPPINGS.items():
-            normalized = re.sub(pattern, replacement, normalized)
+        # Normalize limit patterns - handle both explicit and implicit limits
+        limit_entities = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions(), word_boundary=False)
+        normalized = re.sub(
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
+            r'\1 <<N>> \2',
+            normalized
+        )
+        # Handle queries without explicit number (implied limit of 1)
+        normalized = re.sub(
+            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+' + limit_entities + r'(?!s)\b',
+            r'\1 <<N>> \2',
+            normalized
+        )
 
-        if not re.search(r'\b(max|maximum|min|minimum)\s+(supply|value|amount|limit)', normalized):
-            normalized = re.sub(r'\b(maximum|max)\b(?=\s+(number|count))', '<<ORDER_MAX>>', normalized)
-            normalized = re.sub(r'\b(minimum|min)\b(?=\s+(number|count))', '<<ORDER_MIN>>', normalized)
+        # Entities: Build a list of all entity matches with their positions
+        entity_matches = []
+        for pattern, replacement in QueryNormalizer.get_entity_patterns().items():
+            for match in re.finditer(pattern, normalized):
+                entity_matches.append((match.start(), match.end(), replacement))
+
+        # Entities: Sort by position and resolve overlaps (keep longer matches)
+        entity_matches.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+
+        # Entities: Apply non-overlapping replacements
+        result_parts = []
+        last_end = 0
+        used_ranges = []
+
+        for start, end, replacement in entity_matches:
+            # Check if this range overlaps with any used range
+            overlaps = any(start < used_end and end > used_start
+                        for used_start, used_end in used_ranges)
+
+            if not overlaps:
+                # Add text before this entity
+                result_parts.append(normalized[last_end:start])
+                # Add the entity replacement
+                result_parts.append(replacement)
+                used_ranges.append((start, end))
+                last_end = end
+
+        # Entities: Add remaining text
+        result_parts.append(normalized[last_end:])
+        normalized = ''.join(result_parts)
+
+        # Check for supply/value/amount/limit context before normalizing max/min
+        max_min_words = PatternRegistry.MAX_TERMS + PatternRegistry.MIN_TERMS
+        str_max_min_words = '|'.join(max_min_words)
+        bound_words = '|'.join(PatternRegistry.BOUND_TERMS)
+        if not re.search(rf'\b({str_max_min_words})\s+({bound_words})', normalized):
+            normalized = re.sub(
+                PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS) + r'(?=\s+(number|count))',
+                '<<ORDER_MAX>>',
+                normalized
+            )
+            normalized = re.sub(
+                PatternRegistry.build_pattern(PatternRegistry.MIN_TERMS) + r'(?=\s+(number|count))',
+                '<<ORDER_MIN>>',
+                normalized
+            )
 
         # temporal patterns
-        normalized = re.sub(r'\b(in|of|for|during)?\s*\d{4}\b', ' <<YEAR>> ', normalized)
+        pattern = f"\\b({'|'.join(PatternRegistry.TEMPORAL_PREPOSITIONS)})?\\s*\\d{{4}}\\b"
+        normalized = re.sub(rf'{pattern}', ' <<YEAR>> ', normalized)
+        month_year_pattern = PatternRegistry.build_pattern(PatternRegistry.MONTH_NAMES + PatternRegistry.MONTH_ABBREV) + r'\s*\d{4}\b'
+        normalized = re.sub(month_year_pattern, ' <<MONTH>> ', normalized)
+
+        period_range = PatternRegistry.build_pattern(PatternRegistry.TIME_PERIOD_RANGE_TERMS)
+        period_units = PatternRegistry.build_pattern(PatternRegistry.TIME_PERIOD_UNITS)
         normalized = re.sub(
-            r'\b(january|february|march|april|may|june|july|august|september|october|november|december|'
-            r'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}\b',
-            ' <<MONTH>> ', normalized
-        )
-        normalized = re.sub(
-            r'\b(first|last|second|third)\s+(week|day|month)\s+of\s+<<YEAR>>\b',
+            period_range + r'\s+' + period_units + r'\s+of\s+<<YEAR>>\b',
             '<<PERIOD_RANGE>>',
             normalized
         )
+        time_context = PatternRegistry.build_pattern(PatternRegistry.TEMPORAL_PREPOSITIONS)
         normalized = re.sub(
-            r'\b(on|in|during|for)\s+(<<MONTH>>|<<YEAR>>)\b',
+            time_context + r'\s+(<<MONTH>>|<<YEAR>>)\b',
             'in <<TIME>>',
             normalized
         )
@@ -227,15 +287,22 @@ class QueryNormalizer:
         normalized = re.sub(r'\s+', ' ', normalized).strip()
 
         # temporal aggregation terms
-        for pattern, replacement in QueryNormalizer.TEMPORAL_TERMS.items():
+        for pattern, replacement in QueryNormalizer.get_temporal_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        for pattern, replacement in QueryNormalizer.COMPARISON_PATTERNS.items():
+        for pattern, replacement in QueryNormalizer.get_comparison_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        # ordering terms
-        for pattern, replacement in QueryNormalizer.ORDERING_TERMS.items():
-            normalized = re.sub(pattern, replacement, normalized)
+        # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
+        for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
+            # Check if this is an implicit pattern (no \d+ in the pattern)
+            if r'\d+' not in pattern:
+                # For implicit patterns, add <<N>> to the replacement
+                replacement_with_limit = replacement + ' <<N>>'
+                normalized = re.sub(pattern, replacement_with_limit, normalized)
+            else:
+                # Explicit patterns already have number handling
+                normalized = re.sub(pattern, replacement, normalized)
 
         # numeric patterns
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
@@ -245,12 +312,27 @@ class QueryNormalizer:
         )
 
         # token names
+        # Check for definition contexts more broadly
+        def_terms = '|'.join(PatternRegistry.DEFINITION_TERMS)
+        is_definition_query = bool(re.search(
+            rf'\b({def_terms})\s+(is|are|was|were)?\s+(a|an|the)?\s*\w+',
+            normalized
+        ))
+
         token_pattern = r'\b(ada|snek|hosky|[a-z]{3,10})\b(?=\s+(holder|token|account))'
-        # Don't normalize token names that appear in "what is X" or "define X" contexts
-        if not re.search(r'\b(what is|define|explain)\s+(a|an|the)?\s*\w+\s+(token|cnt)', normalized):
+
+        # Don't normalize if it's a definition query OR if token name is the query subject
+        if not is_definition_query:
+            # Also preserve token if it appears early in query (likely the subject)
+            words = normalized.split()
+            subject_tokens = set(words[:5])  # First 5 words likely contain the subject
+
             normalized = re.sub(
                 token_pattern,
-                lambda m: '<<TOKEN>>' if m.group(1) not in ['many', 'much', 'what', 'which', 'have', 'define'] else m.group(1),
+                lambda m: ('<<TOKEN>>'
+                        if m.group(1) not in PatternRegistry.QUESTION_WORDS
+                        and m.group(1) not in subject_tokens
+                        else m.group(1)),
                 normalized
             )
 
@@ -258,7 +340,7 @@ class QueryNormalizer:
         normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
         normalized = re.sub(r'\b\d+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
 
-        for pattern, replacement in QueryNormalizer.CHART_TYPE_PATTERNS.items():
+        for pattern, replacement in QueryNormalizer.get_chart_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
         # Clean up
@@ -276,23 +358,30 @@ class QueryNormalizer:
             # Preserve placeholder patterns
             if word.startswith('ENTITY_') or word.startswith('<<'):
                 content_words.append(word)
-            elif word in QueryNormalizer.QUESTION_WORDS and not question_words_found:
+            elif word in PatternRegistry.QUESTION_WORDS and not question_words_found:
                 question_words_found.append(word)
-            elif word not in QueryNormalizer.FILLER_WORDS:
+            elif word not in PatternRegistry.FILLER_WORDS:
                 content_words.append(word)
 
+
         # Sort only the content words, keep question words at start
-        content_words.sort()
-        result = ' '.join(question_words_found + content_words).strip()
-
-        # Apply semantic normalization BEFORE restoring expressions
-        result = SemanticMatcher.normalize_for_matching(result)
-
+        result = ' '.join(content_words).strip()
         for placeholder, expr in expression_map.items():
             result = result.replace(placeholder, expr)
 
-        # Validate minimum content - LOOSEN THIS CHECK
-        if not result or len(result) < 3:  # Changed from len(result.split()) < 2
+        # Applying semantic normalization BEFORE sorting expressions, but need to be after having the placeholder patterns
+        result = SemanticMatcher.normalize_for_matching(result)
+        content_words = result.split()
+
+        # Sort only the content words, keep question words at start
+        content_words.sort()
+        result = ' '.join(content_words).strip()
+
+        if len(result) < 3:
+            result = ' '.join(question_words_found + content_words).strip()
+
+        # Validate minimum content
+        if not result or len(result) < 3:
             logger.warning(f"Normalization produced too short result for: {query}")
             # Fallback: just lowercase and remove punctuation
             fallback = query.lower()

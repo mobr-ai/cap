@@ -9,7 +9,8 @@ from typing import AsyncIterator, Optional, Any, Union
 import httpx
 from opentelemetry import trace
 
-from cap.data.vega_util import VegaUtil
+from cap.util.vega_util import VegaUtil
+from cap.data.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -56,7 +57,7 @@ class OllamaClient:
             "Based on the query results, provide a clear and helpful answer."
         )
 
-    async def _get_client(self) -> httpx.AsyncClient:
+    async def _get_nl_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -178,7 +179,7 @@ class OllamaClient:
             Chunks of generated text
         """
         with tracer.start_as_current_span("ollama_generate_stream") as span:
-            client = await self._get_client()
+            client = await self._get_nl_client()
 
             request_data = {
                 "model": model,
@@ -249,7 +250,7 @@ class OllamaClient:
             span.set_attribute("model", model)
             span.set_attribute("prompt_length", len(prompt))
 
-            client = await self._get_client()
+            client = await self._get_nl_client()
 
             request_data = {
                 "model": model,
@@ -357,13 +358,9 @@ class OllamaClient:
 
         # Filter out lines that are explanatory text
         sparql_lines = []
-        in_query = False
         for line in lines:
             upper_line = line.upper()
             if any(keyword in upper_line for keyword in ['PREFIX', 'SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'WHERE', 'FROM', 'ORDER', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING', 'FILTER']):
-                in_query = True
-
-            if in_query:
                 sparql_lines.append(line)
 
         cleaned = '\n'.join(sparql_lines).strip()
@@ -422,15 +419,15 @@ class OllamaClient:
 
         # Chart-related queries
         new_type = ""
-        if result_type == "multiple" and ("bar chart" in low_uq or "bar graph" in low_uq):
+        if result_type == "multiple" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["bar"])):
             new_type = "bar_chart"
-        elif result_type == "single" and ("pie chart" in low_uq or "pie graph" in low_uq):
+        elif result_type == "single" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["pie"])):
             new_type = "pie_chart"
-        elif result_type == "multiple" and (any(keyword in low_uq for keyword in ["line chart", "timeseries", "trend over time"])):
+        elif result_type == "multiple" and (any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["line"])):
             new_type = "line_chart"
 
         # Tabular or list queries
-        elif any(keyword in low_uq for keyword in ["list", "table", "display", "show me"]):
+        elif any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type
@@ -512,37 +509,36 @@ class OllamaClient:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
-            know_info = ""
-            temperature = 0.3
+            known_info = ""
+            temperature = 0.1
             if "chart" in result_type or "table" in result_type:
-                know_info = f"""
-                The system is showing an artifact to the user using the data below. Write a SHORT insight about it.
+                known_info = f"""
+                The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
                 """
 
             elif context_res != "":
-                know_info = f"""
+                known_info = f"""
                 This is the current value you MUST consider in your answer:
                 {context_res}
 
                 {self.contextualize_prompt}
                 """
-                temperature = 0.1
 
             else:
-                know_info = """
+                known_info = """
                 If you do not know how to answer User's question, say you do not know the answer.
-                Do not answer with a SPARQL query.
+                NEVER explain how to get results for the question.
+                NEVER answer with a SPARQL query.
                 """
 
             # Format the prompt with query and results
             prompt = f"""
                 User Question: {user_query}
 
-                {know_info}
+                {known_info}
             """
 
-            logger.info(f"calling ollama model\n    prompt: {prompt}...\n")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
@@ -559,7 +555,7 @@ class OllamaClient:
             True if service is healthy, False otherwise
         """
         try:
-            client = await self._get_client()
+            client = await self._get_nl_client()
             response = await client.get(f"{self.base_url}/api/tags")
             healthy = response.status_code == 200
             if not healthy:

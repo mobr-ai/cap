@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from cap.database.session import get_db
 from cap.database.model import User
-from cap.api.auth_dependencies import get_current_user
+from cap.core.auth_dependencies import get_current_user
 
 router = APIRouter(prefix="/api/v1/user", tags=["user"])
 

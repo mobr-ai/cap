@@ -53,6 +53,7 @@ class VirtuosoClient:
         self.config = config or VirtuosoConfig()
         self._sparql_wrapper = None
         self._http_client = None
+        self._query_lock = asyncio.Lock()
         self._initialize_sparql_wrapper()
 
     async def _get_http_client(self):
@@ -104,48 +105,50 @@ class VirtuosoClient:
     async def _execute_sparql_query_async(self, query: str) -> dict:
         """Execute SPARQL query asynchronously."""
 
-        # If endpoint use plain HTTP GET
-        if not self.config.sparql_endpoint.endswith("/sparql"):
-            client = await self._get_http_client()
+        async with self._query_lock:
+            # If endpoint use plain HTTP GET
+            if not self.config.sparql_endpoint.endswith("/sparql"):
+                client = await self._get_http_client()
+                try:
+                    # URL-encode the query as curl --data-urlencode does
+                    encoded_query = urllib.parse.urlencode({"query": query})
+                    url = f"{self.config.sparql_endpoint}?{encoded_query}"
+
+                    response = await client.get(
+                        url,
+                        headers={"Accept": "application/sparql-results+json"}
+                    )
+                    response.raise_for_status()
+                    ret_ = response.json()
+                    await self.close()
+                    return ret_
+
+                except Exception as e:
+                    logger.error(f"SPARQL query failed: {e}")
+                    logger.error(f"Query: {query}")
+                    await self.close()
+                    raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
+
+            def _execute_sync():
+                try:
+                    if not self._sparql_wrapper:
+                        self._initialize_sparql_wrapper()
+
+                    self._sparql_wrapper.setQuery(query)
+                    result = self._sparql_wrapper.query()
+                    return result.convert()
+                except Exception as e:
+                    logger.error(f"SPARQL query execution failed!")
+                    logger.error(f"     query: {query}")
+                    logger.error(f"     exception: {e}")
+                    raise
+
+            loop = asyncio.get_event_loop()
             try:
-                # URL-encode the query as curl --data-urlencode does
-                encoded_query = urllib.parse.urlencode({"query": query})
-                url = f"{self.config.sparql_endpoint}?{encoded_query}"
-
-                response = await client.get(
-                    url,
-                    headers={"Accept": "application/sparql-results+json"}
-                )
-                response.raise_for_status()
-                ret_ = response.json()
-                logger.info(f"query response: {response} \n    response.json(): {ret_}")
-                return ret_
-
+                return await loop.run_in_executor(None, _execute_sync)
             except Exception as e:
-                logger.error(f"SPARQL query failed: {e}")
-                logger.error(f"Query: {query}")
-                raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
-
-        def _execute_sync():
-            try:
-                if not self._sparql_wrapper:
-                    self._initialize_sparql_wrapper()
-
-                self._sparql_wrapper.setQuery(query)
-                result = self._sparql_wrapper.query()
-                return result.convert()
-            except Exception as e:
-                logger.error(f"SPARQL query execution failed!")
-                logger.error(f"     query: {query}")
-                logger.error(f"     exception: {e}")
-                raise
-
-        loop = asyncio.get_event_loop()
-        try:
-            return await loop.run_in_executor(None, _execute_sync)
-        except Exception as e:
-            logger.error(f"Async SPARQL execution error: {e}")
-            raise HTTPException(status_code=500, detail=f"SPARQL query failed: {str(e)}")
+                logger.error(f"Async SPARQL execution error: {e}")
+                raise HTTPException(status_code=500, detail=f"SPARQL query failed: {str(e)}")
 
     async def _make_crud_request(
         self,

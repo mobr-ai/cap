@@ -1,0 +1,122 @@
+services:
+  api:
+    build: .
+    platform: linux/amd64
+    container_name: cap_server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    command: >
+      sh -c "sleep 15 && uvicorn src.cap.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      jaeger:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16
+    container_name: cap_postgres
+    ports:
+      - "5433:5432"   # host access (avoid clashing with any local 5432)
+    env_file:
+      - .env
+    volumes:
+      - /home/cap/data/postgres:/var/lib/postgresql/data
+      - ./ops/sql/init-cap.sql:/docker-entrypoint-initdb.d/10-init-cap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-postgres} -h localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cap_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - /home/cap/data/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+
+  qlever:
+    image: adfreiburg/qlever:latest
+    platform: linux/amd64
+    container_name: qlever
+    ports:
+      - "7001:7001"   # QLever UI
+      - "7000:7000"   # SPARQL endpoint
+    env_file:
+      - .env
+    user: "1000:1000"
+    volumes:
+      - /home/cap/data/qlever:/data
+    working_dir: /data
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "ServerMain -i cardano -p 7000 -a ${VIRTUOSO_PASSWORD} --persist-updates --memory-max-size 16g"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7000/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - app-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    platform: linux/amd64
+    container_name: jaeger
+    ports:
+      - "16688:16686" # UI
+      - "4319:4317"   # OTLP gRPC
+      - "4322:4318"   # OTLP HTTP
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - /home/cap/data/ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
