@@ -16,31 +16,31 @@ class StakePoolTransformer(BaseTransformer):
         for pool in pools:
             pool_uri = self.create_pool_uri(pool['pool_hash'])
 
-            pool_lines = [f"{pool_uri} a cardano:StakePool ;"]
+            pool_lines = [f"{pool_uri} a c:StakePool ;"]
 
             if pool['pool_hash']:
-                pool_lines.append(f"    blockchain:hasHash \"{pool['pool_hash']}\" ;")
+                pool_lines.append(f"    b:hasHash \"{pool['pool_hash']}\" ;")
 
             if pool['pledge']:
-                pool_lines.append(f"    cardano:hasPoolPledge {self.create_amount_literal(pool['pledge'])} ;")
+                pool_lines.append(f"    c:hasPoolPledge {self.create_amount_literal(pool['pledge'])} ;")
 
             if pool['margin'] is not None:
-                pool_lines.append(f"    cardano:hasMargin {self.format_literal(pool['margin'], 'xsd:decimal')} ;")
+                pool_lines.append(f"    c:hasMargin {self.format_literal(pool['margin'], 'xsd:decimal')} ;")
 
             if pool['fixed_cost']:
-                pool_lines.append(f"    cardano:hasFixedCost {self.create_amount_literal(pool['fixed_cost'])} ;")
+                pool_lines.append(f"    c:hasFixedCost {self.create_amount_literal(pool['fixed_cost'])} ;")
 
             if pool['reward_addr']:
                 reward_addr_uri = self.create_stake_address_uri(pool['reward_addr'])
-                pool_lines.append(f"    cardano:hasStakeAccount {reward_addr_uri} ;")
+                pool_lines.append(f"    c:hasStakeAccount {reward_addr_uri} ;")
 
             if pool['metadata_url']:
                 metadata_uri = self.create_uri('pool_metadata', pool['id'])
-                pool_lines.append(f"    cardano:hasPoolMetadata {metadata_uri} ;")
+                pool_lines.append(f"    c:hasPoolMetadata {metadata_uri} ;")
 
             if pool.get('retirement_epoch'):
                 retirement_uri = self.create_uri('pool_retirement', pool['id'])
-                pool_lines.append(f"    cardano:hasRetirement {retirement_uri} ;")
+                pool_lines.append(f"    c:hasRetirement {retirement_uri} ;")
 
             pool_lines[-1] = pool_lines[-1][:-2] + ' .'
 
@@ -51,13 +51,13 @@ class StakePoolTransformer(BaseTransformer):
             # Add metadata entity
             if pool['metadata_url']:
                 metadata_uri = self.create_uri('pool_metadata', pool['id'])
-                turtle_lines_append(f"{metadata_uri} a cardano:PoolMetadata .")
+                turtle_lines_append(f"{metadata_uri} a c:PoolMetadata .")
                 turtle_lines_append("")
 
             # Add retirement entity
             if pool.get('retirement_epoch'):
                 retirement_uri = self.create_uri('pool_retirement', pool['id'])
-                turtle_lines_append(f"{retirement_uri} a cardano:PoolRetirement .")
+                turtle_lines_append(f"{retirement_uri} a c:PoolRetirement .")
                 turtle_lines_append("")
 
         return '\n'.join(turtle_lines)
@@ -72,16 +72,16 @@ class StakeAddressTransformer(BaseTransformer):
         for addr in stake_addresses:
             addr_uri = self.create_stake_address_uri(addr['view'])
 
-            turtle_lines.append(f"{addr_uri} a blockchain:Account ;")
+            turtle_lines.append(f"{addr_uri} a b:Account ;")
 
             if addr['view']:
-                turtle_lines.append(f"    blockchain:hasAccountAddress \"{addr['view']}\" ;")
+                turtle_lines.append(f"    b:hasAccountAddress \"{addr['view']}\" ;")
 
             if addr['hash_raw']:
-                turtle_lines.append(f"    blockchain:hasHash \"{addr['hash_raw']}\" ;")
+                turtle_lines.append(f"    b:hasHash \"{addr['hash_raw']}\" ;")
 
             if addr.get('stake_amount') and addr['stake_amount'] > 0:
-                turtle_lines.append(f"    cardano:hasStakeAmount {self.format_literal(addr['stake_amount'], 'xsd:decimal')} ;")
+                turtle_lines.append(f"    c:hasStakeAmount {self.format_literal(addr['stake_amount'], 'xsd:decimal')} ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):
@@ -103,17 +103,17 @@ class DelegationTransformer(BaseTransformer):
             pool_uri = self.create_pool_uri(delegation['pool_hash'])
 
             # Create delegation relationship
-            turtle_lines.append(f"{stake_addr_uri} cardano:delegatesTo {pool_uri} .")
+            turtle_lines.append(f"{stake_addr_uri} c:delegatesTo {pool_uri} .")
 
             if delegation.get('stake_amount') and delegation['stake_amount'] > 0:
                 # Create a unique token amount for this delegation state
                 amount_uri = self.create_uri('token_amount', f"delegation_{delegation['id']}_stake")
 
-                turtle_lines.append(f"{stake_addr_uri} blockchain:hasTokenAmount {amount_uri} .")
+                turtle_lines.append(f"{stake_addr_uri} b:hasTokenAmount {amount_uri} .")
 
-                turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
-                turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-                turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(delegation['stake_amount'], 'xsd:decimal')} .")
+                turtle_lines.append(f"{amount_uri} a b:TokenAmount ;")
+                turtle_lines.append(f"    b:hasCurrency c:ADA ;")
+                turtle_lines.append(f"    b:hasAmountValue {self.format_literal(delegation['stake_amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 
@@ -131,17 +131,17 @@ class RewardTransformer(BaseTransformer):
             reward_uri = self.create_uri('reward', reward['id'])
 
             # Link stake address to reward
-            turtle_lines.append(f"{stake_addr_uri} cardano:hasReward {reward_uri} .")
+            turtle_lines.append(f"{stake_addr_uri} c:hasReward {reward_uri} .")
 
             # Create reward entity with minimal properties from ontology
-            turtle_lines.append(f"{reward_uri} a cardano:Reward ;")
+            turtle_lines.append(f"{reward_uri} a c:Reward ;")
 
             # Create token amount for the reward
             amount_uri = self.create_uri('token_amount', f"reward_{reward['id']}")
-            turtle_lines.append(f"    cardano:hasRewardAmount {amount_uri} ;")
+            turtle_lines.append(f"    c:hasRewardAmount {amount_uri} ;")
 
             if reward['type']:
-                turtle_lines.append(f"    cardano:hasRewardType \"{reward['type']}\" ;")
+                turtle_lines.append(f"    c:hasRewardType \"{reward['type']}\" ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines[-1].endswith(' ;'):
@@ -149,9 +149,9 @@ class RewardTransformer(BaseTransformer):
 
             # Create token amount entity
             turtle_lines.append(f"")
-            turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
-            turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(reward['amount'], 'xsd:decimal')} .")
+            turtle_lines.append(f"{amount_uri} a b:TokenAmount ;")
+            turtle_lines.append(f"    b:hasCurrency c:ADA ;")
+            turtle_lines.append(f"    b:hasAmountValue {self.format_literal(reward['amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 
@@ -170,19 +170,19 @@ class WithdrawalTransformer(BaseTransformer):
             # Link withdrawal to account
             if withdrawal.get('stake_address'):
                 stake_addr_uri = self.create_stake_address_uri(withdrawal['stake_address'])
-                turtle_lines.append(f"{stake_addr_uri} cardano:hasWithdrawal {withdrawal_uri} .")
+                turtle_lines.append(f"{stake_addr_uri} c:hasWithdrawal {withdrawal_uri} .")
 
             # Create withdrawal entity
-            turtle_lines.append(f"{withdrawal_uri} a cardano:Withdrawal ;")
+            turtle_lines.append(f"{withdrawal_uri} a c:Withdrawal ;")
 
             # Create token amount for withdrawal
             amount_uri = self.create_uri('token_amount', f"withdrawal_{withdrawal['id']}")
-            turtle_lines.append(f"    cardano:hasWithdrawalAmount {amount_uri} ;")
+            turtle_lines.append(f"    c:hasWithdrawalAmount {amount_uri} ;")
 
             # Link to transaction
             if withdrawal.get('tx_hash'):
                 tx_uri = self.create_transaction_uri(withdrawal['tx_hash'])
-                turtle_lines.append(f"    cardano:withdrawnIn {tx_uri} ;")
+                turtle_lines.append(f"    c:withdrawnIn {tx_uri} ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines[-1].endswith(' ;'):
@@ -190,9 +190,9 @@ class WithdrawalTransformer(BaseTransformer):
 
             # Create token amount entity
             turtle_lines.append(f"")
-            turtle_lines.append(f"{amount_uri} a blockchain:TokenAmount ;")
-            turtle_lines.append(f"    blockchain:hasCurrency cardano:ADA ;")
-            turtle_lines.append(f"    blockchain:hasAmountValue {self.format_literal(withdrawal['amount'], 'xsd:decimal')} .")
+            turtle_lines.append(f"{amount_uri} a b:TokenAmount ;")
+            turtle_lines.append(f"    b:hasCurrency c:ADA ;")
+            turtle_lines.append(f"    b:hasAmountValue {self.format_literal(withdrawal['amount'], 'xsd:decimal')} .")
 
             turtle_lines.append("")
 

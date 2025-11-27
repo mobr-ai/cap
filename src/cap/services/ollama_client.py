@@ -357,8 +357,8 @@ class OllamaClient:
         """
         required_prefixes = {
             "rdf": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>",
-            "blockchain": "PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>",
-            "cardano": "PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>",
+            "blockchain": "PREFIX b: <https://mobr.ai/ont/blockchain#>",
+            "cardano": "PREFIX c: <https://mobr.ai/ont/cardano#>",
             "xsd": "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>",
         }
 

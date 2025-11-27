@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 TEST_GRAPH = "http://www.mobr.ai/ontologies/cardano/test"
 TEST_DATA = """
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-cardano:TestBlock rdf:type cardano:Block .
-cardano:TestBlock cardano:status cardano:Pending .
+c:TestBlock rdf:type c:Block .
+c:TestBlock c:status c:Pending .
 """
 
 @pytest.fixture(autouse=True)
@@ -127,10 +127,10 @@ async def test_update_graph(async_client: AsyncClient, virtuoso_client: Triplest
 
     update_data = {
         "insert_data": """
-            cardano:TestBlock cardano:status cardano:Confirmed .
+            c:TestBlock c:status c:Confirmed .
         """,
         "delete_data": """
-            cardano:TestBlock cardano:status cardano:Pending .
+            c:TestBlock c:status c:Pending .
         """
     }
 

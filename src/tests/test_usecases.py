@@ -6,8 +6,8 @@ from cap.rdf.triplestore import TriplestoreClient
 
 PREFIXES = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-    PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX b: <https://mobr.ai/ont/blockchain#>
+    PREFIX c: <https://mobr.ai/ont/cardano#>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 """
@@ -49,135 +49,135 @@ def generate_test_data():
 
     turtle_data = f"""
         @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-        @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-        @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
+        @prefix b: <https://mobr.ai/ont/blockchain#> .
+        @prefix c: <https://mobr.ai/ont/cardano#> .
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
         # ADA token definition
-        cardano:ADA rdf:type cardano:CNT ;
-            blockchain:hasTokenName "Cardano ADA" ;
-            blockchain:hasTokenSymbol "ADA" ;
-            blockchain:hasMaxSupply 45000000000000000 ;
-            blockchain:hasConversionRate 1000000 ;
-            blockchain:hasDenominationName "Lovelace" .
+        c:ADA rdf:type c:CNT ;
+            b:hasTokenName "Cardano ADA" ;
+            b:hasTokenSymbol "ADA" ;
+            b:hasMaxSupply 45000000000000000 ;
+            b:hasConversionRate 1000000 ;
+            b:hasDenominationName "Lovelace" .
 
         # Test tokens
-        <http://test/token1> rdf:type cardano:CNT ;
-            blockchain:hasTokenName "Test Token 1" .
-        <http://test/token2> rdf:type cardano:CNT ;
-            blockchain:hasTokenName "Test Token 2" .
+        <http://test/token1> rdf:type c:CNT ;
+            b:hasTokenName "Test Token 1" .
+        <http://test/token2> rdf:type c:CNT ;
+            b:hasTokenName "Test Token 2" .
 
         # Blocks with timestamps
-        <http://test/block1> rdf:type blockchain:Block ;
-            blockchain:hasTimestamp "{timestamps['recent']}"^^xsd:dateTime ;
-            blockchain:hasTransaction <http://test/tx1>, <http://test/tx2> .
+        <http://test/block1> rdf:type b:Block ;
+            b:hasTimestamp "{timestamps['recent']}"^^xsd:dateTime ;
+            b:hasTx <http://test/tx1>, <http://test/tx2> .
 
-        <http://test/block2> rdf:type blockchain:Block ;
-            blockchain:hasTimestamp "{timestamps['yesterday']}"^^xsd:dateTime ;
-            blockchain:hasTransaction <http://test/tx3>, <http://test/tx4> .
+        <http://test/block2> rdf:type b:Block ;
+            b:hasTimestamp "{timestamps['yesterday']}"^^xsd:dateTime ;
+            b:hasTx <http://test/tx3>, <http://test/tx4> .
 
-        <http://test/block3> rdf:type blockchain:Block ;
-            blockchain:hasTimestamp "{timestamps['last_week']}"^^xsd:dateTime ;
-            blockchain:hasTransaction <http://test/tx5> .
+        <http://test/block3> rdf:type b:Block ;
+            b:hasTimestamp "{timestamps['last_week']}"^^xsd:dateTime ;
+            b:hasTx <http://test/tx5> .
 
-        <http://test/block4> rdf:type blockchain:Block ;
-            blockchain:hasTimestamp "{timestamps['last_month']}"^^xsd:dateTime ;
-            blockchain:hasTransaction <http://test/tx6> .
+        <http://test/block4> rdf:type b:Block ;
+            b:hasTimestamp "{timestamps['last_month']}"^^xsd:dateTime ;
+            b:hasTx <http://test/tx6> .
 
         # Transactions
-        <http://test/tx1> cardano:hasFee "1000000"^^xsd:decimal ;
-            cardano:hasOutput <http://test/output1>, <http://test/output2> .
+        <http://test/tx1> c:hasFee "1000000"^^xsd:decimal ;
+            c:hasOutput <http://test/output1>, <http://test/output2> .
 
-        <http://test/tx2> cardano:hasFee "900000"^^xsd:decimal ;
-            cardano:hasOutput <http://test/output3> .
+        <http://test/tx2> c:hasFee "900000"^^xsd:decimal ;
+            c:hasOutput <http://test/output3> .
 
-        <http://test/tx3> cardano:hasFee "950000"^^xsd:decimal ;
-            cardano:hasOutput <http://test/output4> .
+        <http://test/tx3> c:hasFee "950000"^^xsd:decimal ;
+            c:hasOutput <http://test/output4> .
 
-        <http://test/tx4> cardano:hasFee "980000"^^xsd:decimal ;
-            cardano:hasOutput <http://test/output5> .
+        <http://test/tx4> c:hasFee "980000"^^xsd:decimal ;
+            c:hasOutput <http://test/output5> .
 
         # Transaction outputs
-        <http://test/output1> blockchain:hasTokenAmount <http://test/amount1> .
-        <http://test/amount1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "5000000000"^^xsd:decimal .
+        <http://test/output1> b:hasTokenAmount <http://test/amount1> .
+        <http://test/amount1> b:hasCurrency c:ADA ;
+            b:hasAmountValue "5000000000"^^xsd:decimal .
 
-        <http://test/output2> blockchain:hasTokenAmount <http://test/amount2> .
-        <http://test/amount2> blockchain:hasCurrency <http://test/token1> ;
-            blockchain:hasAmountValue "1000"^^xsd:decimal .
+        <http://test/output2> b:hasTokenAmount <http://test/amount2> .
+        <http://test/amount2> b:hasCurrency <http://test/token1> ;
+            b:hasAmountValue "1000"^^xsd:decimal .
 
-        <http://test/output3> blockchain:hasTokenAmount <http://test/amount3> .
-        <http://test/amount3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "3000000000"^^xsd:decimal .
+        <http://test/output3> b:hasTokenAmount <http://test/amount3> .
+        <http://test/amount3> b:hasCurrency c:ADA ;
+            b:hasAmountValue "3000000000"^^xsd:decimal .
 
         # Accounts
-        <http://test/account1> rdf:type blockchain:Account ;
-            blockchain:hasTokenAmount <http://test/holding1> ;
-            cardano:hasReward <http://test/reward1> ;
-            blockchain:firstAppearedInTransaction <http://test/tx1> .
+        <http://test/account1> rdf:type b:Account ;
+            b:hasTokenAmount <http://test/holding1> ;
+            c:hasReward <http://test/reward1> ;
+            b:firstAppearedInTransaction <http://test/tx1> .
 
-        <http://test/account2> rdf:type blockchain:Account ;
-            blockchain:hasTokenAmount <http://test/holding2> ;
-            cardano:hasReward <http://test/reward2> ;
-            blockchain:firstAppearedInTransaction <http://test/tx2> .
+        <http://test/account2> rdf:type b:Account ;
+            b:hasTokenAmount <http://test/holding2> ;
+            c:hasReward <http://test/reward2> ;
+            b:firstAppearedInTransaction <http://test/tx2> .
 
-        <http://test/account3> rdf:type blockchain:Account ;
-            blockchain:hasTokenAmount <http://test/holding3> ;
-            blockchain:firstAppearedInTransaction <http://test/tx3> .
+        <http://test/account3> rdf:type b:Account ;
+            b:hasTokenAmount <http://test/holding3> ;
+            b:firstAppearedInTransaction <http://test/tx3> .
 
         # Account holdings
-        <http://test/holding1> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "27670109999999999998"^^xsd:decimal .
+        <http://test/holding1> b:hasCurrency c:ADA ;
+            b:hasAmountValue "27670109999999999998"^^xsd:decimal .
 
-        <http://test/holding2> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "150000000000"^^xsd:decimal .
+        <http://test/holding2> b:hasCurrency c:ADA ;
+            b:hasAmountValue "150000000000"^^xsd:decimal .
 
-        <http://test/holding3> blockchain:hasCurrency cardano:ADA ;
-            blockchain:hasAmountValue "180000000000"^^xsd:decimal .
+        <http://test/holding3> b:hasCurrency c:ADA ;
+            b:hasAmountValue "180000000000"^^xsd:decimal .
 
         # Rewards
-        <http://test/reward1> cardano:hasRewardAmount <http://test/rewardAmount1> .
-        <http://test/rewardAmount1> blockchain:hasAmountValue "1000000"^^xsd:decimal .
+        <http://test/reward1> c:hasRewardAmount <http://test/rewardAmount1> .
+        <http://test/rewardAmount1> b:hasAmountValue "1000000"^^xsd:decimal .
 
-        <http://test/reward2> cardano:hasRewardAmount <http://test/rewardAmount2> .
-        <http://test/rewardAmount2> blockchain:hasAmountValue "1500000"^^xsd:decimal .
+        <http://test/reward2> c:hasRewardAmount <http://test/rewardAmount2> .
+        <http://test/rewardAmount2> b:hasAmountValue "1500000"^^xsd:decimal .
 
         # Smart Contracts
-        <http://test/contract1> rdf:type blockchain:SmartContract ;
-            cardano:embeddedIn <http://test/tx1> .
+        <http://test/contract1> rdf:type b:SmartContract ;
+            c:embeddedIn <http://test/tx1> .
 
-        <http://test/contract2> rdf:type blockchain:SmartContract ;
-            cardano:embeddedIn <http://test/tx2> .
+        <http://test/contract2> rdf:type b:SmartContract ;
+            c:embeddedIn <http://test/tx2> .
 
         # NFTs
-        <http://test/nft1> rdf:type blockchain:NFT .
-        <http://test/nft2> rdf:type blockchain:NFT .
-        <http://test/tx1> cardano:hasMintedAsset <http://test/nft1> .
-        <http://test/tx2> cardano:hasMintedAsset <http://test/nft2> .
+        <http://test/nft1> rdf:type b:NFT .
+        <http://test/nft2> rdf:type b:NFT .
+        <http://test/tx1> c:hasMintedAsset <http://test/nft1> .
+        <http://test/tx2> c:hasMintedAsset <http://test/nft2> .
 
         # Stake Pools
-        <http://test/pool1> rdf:type cardano:StakePool .
-        <http://test/pool2> rdf:type cardano:StakePool .
+        <http://test/pool1> rdf:type c:StakePool .
+        <http://test/pool2> rdf:type c:StakePool .
 
         # Staking
-        <http://test/account1> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "100000000000"^^xsd:decimal .
-        <http://test/account2> cardano:delegatesTo <http://test/pool1> ;
-            cardano:hasStakeAmount "80000000000"^^xsd:decimal .
-        <http://test/account3> cardano:delegatesTo <http://test/pool2> ;
-            cardano:hasStakeAmount "90000000000"^^xsd:decimal .
+        <http://test/account1> c:delegatesTo <http://test/pool1> ;
+            c:hasStakeAmount "100000000000"^^xsd:decimal .
+        <http://test/account2> c:delegatesTo <http://test/pool1> ;
+            c:hasStakeAmount "80000000000"^^xsd:decimal .
+        <http://test/account3> c:delegatesTo <http://test/pool2> ;
+            c:hasStakeAmount "90000000000"^^xsd:decimal .
 
         # Governance
-        <http://test/proposal1> rdf:type cardano:GovernanceProposal .
-        <http://test/metadata1> cardano:hasGovernanceProposal <http://test/proposal1> .
-        <http://test/tx1> cardano:hasTransactionMetadata <http://test/metadata1> .
+        <http://test/proposal1> rdf:type c:GovernanceProposal .
+        <http://test/metadata1> c:hasGovernanceProposal <http://test/proposal1> .
+        <http://test/tx1> c:hasTxMetadata <http://test/metadata1> .
 
         # Voting
-        <http://test/vote1> rdf:type cardano:Vote .
-        <http://test/vote2> rdf:type cardano:Vote .
-        <http://test/account1> cardano:castsVote <http://test/vote1> .
-        <http://test/account2> cardano:castsVote <http://test/vote2> .
-        <http://test/proposal1> cardano:hasVote <http://test/vote1>, <http://test/vote2> .
+        <http://test/vote1> rdf:type c:Vote .
+        <http://test/vote2> rdf:type c:Vote .
+        <http://test/account1> c:castsVote <http://test/vote1> .
+        <http://test/account2> c:castsVote <http://test/vote2> .
+        <http://test/proposal1> c:hasVote <http://test/vote1>, <http://test/vote2> .
     """
 
     return turtle_data
@@ -192,8 +192,8 @@ async def test_sparql_queries(async_client: AsyncClient):
     # Create test graph with sample data
     verification_query = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-        PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+        PREFIX b: <https://mobr.ai/ont/blockchain#>
+        PREFIX c: <https://mobr.ai/ont/cardano#>
 
         SELECT (COUNT(?s) as ?count)
         FROM <{graph}>
@@ -225,16 +225,16 @@ async def test_sparql_queries(async_client: AsyncClient):
     # debugging timestamp
     debug_query = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-        PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+        PREFIX b: <https://mobr.ai/ont/blockchain#>
+        PREFIX c: <https://mobr.ai/ont/cardano#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         # First, check what timestamps we actually have in the graph
         SELECT ?timestamp
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTimestamp ?timestamp .
+            ?block a b:Block ;
+                b:hasTimestamp ?timestamp .
         }}
     """
 
@@ -251,21 +251,21 @@ async def test_sparql_queries(async_client: AsyncClient):
 
     debug_query2 = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-        PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+        PREFIX b: <https://mobr.ai/ont/blockchain#>
+        PREFIX c: <https://mobr.ai/ont/cardano#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         # Check the full path exists without time filter
         SELECT ?tx ?amount ?timestamp
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?timestamp .
-            ?tx cardano:hasOutput ?output .
-            ?output blockchain:hasTokenAmount ?tokenAmount .
-            ?tokenAmount blockchain:hasCurrency cardano:ADA ;
-                blockchain:hasAmountValue ?amount .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?timestamp .
+            ?tx c:hasOutput ?output .
+            ?output b:hasTokenAmount ?tokenAmount .
+            ?tokenAmount b:hasCurrency c:ADA ;
+                b:hasAmountValue ?amount .
         }}
         ORDER BY DESC(?amount)
         LIMIT 10
@@ -284,16 +284,16 @@ async def test_sparql_queries(async_client: AsyncClient):
     # debuggin NOW()
     timestamp_query = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-        PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+        PREFIX b: <https://mobr.ai/ont/blockchain#>
+        PREFIX c: <https://mobr.ai/ont/cardano#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         SELECT DISTINCT ?timestamp (now() as ?current) (now() - "P1D"^^xsd:duration as ?oneDayAgo)
             (?timestamp >= now() - "P1D"^^xsd:duration as ?withinDay)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTimestamp ?timestamp .
+            ?block a b:Block ;
+                b:hasTimestamp ?timestamp .
         }}
         ORDER BY DESC(?timestamp)
     """
@@ -313,20 +313,20 @@ async def test_sparql_queries(async_client: AsyncClient):
     # debugging query 1
     query1 = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-        PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+        PREFIX b: <https://mobr.ai/ont/blockchain#>
+        PREFIX c: <https://mobr.ai/ont/cardano#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         SELECT ?tx ?amount ?timestamp (xsd:dateTime(NOW() - "P1D"^^xsd:duration) as ?oneDayAgo)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?timestamp .
-            ?tx cardano:hasOutput ?output .
-            ?output blockchain:hasTokenAmount ?tokenAmount .
-            ?tokenAmount blockchain:hasCurrency cardano:ADA ;
-                blockchain:hasAmountValue ?amount .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?timestamp .
+            ?tx c:hasOutput ?output .
+            ?output b:hasTokenAmount ?tokenAmount .
+            ?tokenAmount b:hasCurrency c:ADA ;
+                b:hasAmountValue ?amount .
         }}
         ORDER BY DESC(?amount)
         LIMIT 10
@@ -351,13 +351,13 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT ?tx ?amount ?timestamp
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?timestamp .
-            ?tx cardano:hasOutput ?output .
-            ?output blockchain:hasTokenAmount ?tokenAmount .
-            ?tokenAmount blockchain:hasCurrency cardano:ADA ;
-                blockchain:hasAmountValue ?amount .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?timestamp .
+            ?tx c:hasOutput ?output .
+            ?output b:hasTokenAmount ?tokenAmount .
+            ?tokenAmount b:hasCurrency c:ADA ;
+                b:hasAmountValue ?amount .
             BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?oneDayAgo)
             FILTER (?timestamp >= ?oneDayAgo)
         }}
@@ -370,10 +370,10 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (AVG(?fee) as ?avgFee)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?ts .
-            ?tx cardano:hasFee ?fee .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?ts .
+            ?tx c:hasFee ?fee .
             BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?oneWeekAgo)
             FILTER (?ts >= ?oneWeekAgo)
         }}
@@ -384,10 +384,10 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (COUNT(DISTINCT ?account) as ?numAccounts)
         FROM <{graph}>
         WHERE {{
-            ?account a blockchain:Account ;
-                blockchain:hasTokenAmount ?tokenAmount .
-            ?tokenAmount blockchain:hasCurrency cardano:ADA ;
-                blockchain:hasAmountValue ?amount .
+            ?account a b:Account ;
+                b:hasTokenAmount ?tokenAmount .
+            ?tokenAmount b:hasCurrency c:ADA ;
+                b:hasAmountValue ?amount .
             FILTER(?amount > 200000000000)
         }}
         """,
@@ -397,12 +397,12 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (AVG(?rewardValue) as ?avgReward)
         FROM <{graph}>
         WHERE {{
-            ?account blockchain:hasTokenAmount ?holding .
-            ?holding blockchain:hasCurrency cardano:ADA ;
-                blockchain:hasAmountValue ?adaAmount .
-            ?account cardano:hasReward ?reward .
-            ?reward cardano:hasRewardAmount ?rewardAmt .
-            ?rewardAmt blockchain:hasAmountValue ?rewardValue .
+            ?account b:hasTokenAmount ?holding .
+            ?holding b:hasCurrency c:ADA ;
+                b:hasAmountValue ?adaAmount .
+            ?account c:hasReward ?reward .
+            ?reward c:hasRewardAmount ?rewardAmt .
+            ?rewardAmt b:hasAmountValue ?rewardValue .
             FILTER (?adaAmount > 1000000000000)
         }}
         """,
@@ -412,11 +412,11 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (MONTH(?ts) as ?month) (COUNT(DISTINCT ?contract) as ?deployments)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?ts .
-            ?contract a blockchain:SmartContract ;
-                cardano:embeddedIn ?tx .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?ts .
+            ?contract a b:SmartContract ;
+                c:embeddedIn ?tx .
             BIND (NOW() - "P365D"^^xsd:dayTimeDuration as ?oneYearAgo)
             FILTER (?ts >= ?oneYearAgo)
         }}
@@ -429,11 +429,11 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (COUNT(DISTINCT ?nft) as ?nftCount)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?ts .
-            ?tx cardano:hasMintedAsset ?nft .
-            ?nft a blockchain:NFT .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?ts .
+            ?tx c:hasMintedAsset ?nft .
+            ?nft a b:NFT .
             BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?oneMonthAgo)
             FILTER (?ts >= ?oneMonthAgo)
         }}
@@ -444,12 +444,12 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT ?token (COUNT(DISTINCT ?output) as ?transfers)
         FROM <{graph}>
         WHERE {{
-            ?block a blockchain:Block ;
-                blockchain:hasTransaction ?tx ;
-                blockchain:hasTimestamp ?ts .
-            ?tx cardano:hasOutput ?output .
-            ?output blockchain:hasTokenAmount ?tokenAmount .
-            ?tokenAmount blockchain:hasCurrency ?token .
+            ?block a b:Block ;
+                b:hasTx ?tx ;
+                b:hasTimestamp ?ts .
+            ?tx c:hasOutput ?output .
+            ?output b:hasTokenAmount ?tokenAmount .
+            ?tokenAmount b:hasCurrency ?token .
             BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?oneWeekAgo)
             FILTER (?ts >= ?oneWeekAgo)
         }}
@@ -463,9 +463,9 @@ async def test_sparql_queries(async_client: AsyncClient):
         SELECT (xsd:date(?timestamp) as ?date) (COUNT(DISTINCT ?account) as ?new_accounts)
         FROM <{graph}>
         WHERE {{
-            ?account blockchain:firstAppearedInTransaction ?tx .
-            ?block blockchain:hasTransaction ?tx .
-            ?block blockchain:hasTimestamp ?timestamp .
+            ?account b:firstAppearedInTransaction ?tx .
+            ?block b:hasTx ?tx .
+            ?block b:hasTimestamp ?timestamp .
             BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?oneMonthAgo)
             FILTER (?timestamp >= ?oneMonthAgo)
         }}
@@ -481,9 +481,9 @@ async def test_sparql_queries(async_client: AsyncClient):
             {{
                 SELECT ?pool (SUM(?amount) as ?stakeAmount)
                 WHERE {{
-                    ?account cardano:delegatesTo ?pool ;
-                        cardano:hasStakeAmount ?amount .
-                    ?pool a cardano:StakePool .
+                    ?account c:delegatesTo ?pool ;
+                        c:hasStakeAmount ?amount .
+                    ?pool a c:StakePool .
                 }}
                 GROUP BY ?pool
                 ORDER BY DESC(?stakeAmount)
@@ -492,7 +492,7 @@ async def test_sparql_queries(async_client: AsyncClient):
             {{
                 SELECT (SUM(?amount) as ?totalStaked)
                 WHERE {{
-                    ?account cardano:hasStakeAmount ?amount .
+                    ?account c:hasStakeAmount ?amount .
                 }}
             }}
         }}
@@ -506,15 +506,15 @@ async def test_sparql_queries(async_client: AsyncClient):
             {{
                 SELECT ?proposal
                 WHERE {{
-                    ?block blockchain:hasTransaction ?tx .
-                    ?tx cardano:hasTransactionMetadata ?metadata .
-                    ?metadata cardano:hasGovernanceProposal ?proposal .
+                    ?block b:hasTx ?tx .
+                    ?tx c:hasTxMetadata ?metadata .
+                    ?metadata c:hasGovernanceProposal ?proposal .
                 }}
                 ORDER BY DESC(?timestamp)
                 LIMIT 1
             }}
-            ?account cardano:castsVote ?vote .
-            ?proposal cardano:hasVote ?vote .
+            ?account c:castsVote ?vote .
+            ?proposal c:hasVote ?vote .
         }}
         """
     ]

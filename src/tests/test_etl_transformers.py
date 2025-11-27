@@ -30,10 +30,10 @@ async def test_account_transformer():
     turtle_data = transformer.transform(test_accounts)
 
     assert turtle_data
-    assert 'blockchain:Account' in turtle_data
+    assert 'b:Account' in turtle_data
     assert 'stake1ux...' in turtle_data
-    assert 'blockchain:hasTokenAmount' in turtle_data
-    assert 'cardano:ADA' in turtle_data
+    assert 'b:hasTokenAmount' in turtle_data
+    assert 'c:ADA' in turtle_data
 
 @pytest.mark.asyncio
 async def test_block_transformer():
@@ -64,10 +64,10 @@ async def test_block_transformer():
     turtle_data = transformer.transform(test_blocks)
 
     assert turtle_data
-    assert 'blockchain:Block' in turtle_data
-    assert 'blockchain:hasTimestamp' in turtle_data
-    assert 'blockchain:hasTransaction' in turtle_data
-    assert 'cardano:hasSlotNumber' in turtle_data
+    assert 'b:Block' in turtle_data
+    assert 'b:hasTimestamp' in turtle_data
+    assert 'b:hasTx' in turtle_data
+    assert 'c:hasSlotNumber' in turtle_data
 
 @pytest.mark.asyncio
 async def test_transaction_transformer():
@@ -100,10 +100,10 @@ async def test_transaction_transformer():
     turtle_data = transformer.transform(test_transactions)
 
     assert turtle_data
-    assert 'blockchain:Transaction' in turtle_data
-    assert 'cardano:hasFee' in turtle_data
-    assert 'cardano:hasOutput' in turtle_data
-    assert 'blockchain:hasTokenAmount' in turtle_data
+    assert 'b:Transaction' in turtle_data
+    assert 'c:hasFee' in turtle_data
+    assert 'c:hasOutput' in turtle_data
+    assert 'b:hasTokenAmount' in turtle_data
 
 @pytest.mark.asyncio
 async def test_stake_pool_transformer():
@@ -123,10 +123,10 @@ async def test_stake_pool_transformer():
     turtle_data = transformer.transform(test_pools)
 
     assert turtle_data
-    assert 'cardano:StakePool' in turtle_data
-    assert 'cardano:hasPoolPledge' in turtle_data
-    assert 'cardano:hasMargin' in turtle_data
-    assert 'cardano:hasFixedCost' in turtle_data
+    assert 'c:StakePool' in turtle_data
+    assert 'c:hasPoolPledge' in turtle_data
+    assert 'c:hasMargin' in turtle_data
+    assert 'c:hasFixedCost' in turtle_data
 
 @pytest.mark.asyncio
 async def test_transformer_factory_all_types():
@@ -172,9 +172,9 @@ async def test_governance_transformer():
     turtle_data = transformer.transform(test_actions)
 
     assert turtle_data
-    assert 'cardano:GovernanceAction' in turtle_data
-    assert 'cardano:Vote' in turtle_data
-    assert 'cardano:hasVotingResult' in turtle_data
+    assert 'c:GovernanceAction' in turtle_data
+    assert 'c:Vote' in turtle_data
+    assert 'c:hasVotingResult' in turtle_data
 
 @pytest.mark.asyncio
 async def test_multi_asset_transformer():
@@ -191,7 +191,7 @@ async def test_multi_asset_transformer():
     turtle_data = transformer.transform(test_assets)
 
     assert turtle_data
-    assert 'cardano:CNT' in turtle_data
-    assert 'blockchain:hasHash' in turtle_data
-    assert 'cardano:hasPolicyId' in turtle_data
-    assert 'blockchain:hasTokenName' in turtle_data
+    assert 'c:CNT' in turtle_data
+    assert 'b:hasHash' in turtle_data
+    assert 'c:hasPolicyId' in turtle_data
+    assert 'b:hasTokenName' in turtle_data

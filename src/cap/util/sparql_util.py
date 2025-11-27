@@ -105,7 +105,7 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
             context = '\n'.join(lines[max(0, i-3):min(len(lines), i+4)])
             # Checking for the properties that can hold ADA values
             value_vars = re.findall(
-                r'(?:hasTokenStateValue|hasTotalSupply|hasMaxSupply)\s+\?(\w+)',
+                r'(?:hasValue|hasTotalSupply|hasMaxSupply)\s+\?(\w+)',
                 context
             )
             ada_vars.update(value_vars)
@@ -175,10 +175,10 @@ def _detect_token_name_variables(sparql_query: str) -> set[str]:
         query_text = sparql_query.get('query', str(sparql_query))
 
     # Look for hasTokenName property patterns
-    # Pattern: ?something blockchain:hasTokenName ?tokenName
+    # Pattern: ?something b:hasTokenName ?tokenName
     token_name_patterns = [
         r'hasTokenName\s+\?(\w+)',
-        r'blockchain:hasTokenName\s+\?(\w+)',
+        r'b:hasTokenName\s+\?(\w+)',
     ]
 
     for pattern in token_name_patterns:
@@ -539,12 +539,12 @@ if __name__ == "__main__":
 
     # Sample SPARQL query with token name
     sample_query = """
-    PREFIX blockchain: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX b: <https://mobr.ai/ont/cardano#>
     SELECT ?tokenName ?totalOutput
     WHERE {
-        ?token blockchain:hasTokenName ?tn .
-        ?token blockchain:hasTokenStateValue ?totalOutput .
-        ?token blockchain:hasCurrency <http://www.mobr.ai/ontologies/cardano#cnt/ada> .
+        ?token b:hasTokenName ?tn .
+        ?token b:hasValue ?totalOutput .
+        ?token b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> .
     }
     """
 

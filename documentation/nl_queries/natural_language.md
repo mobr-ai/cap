@@ -52,7 +52,7 @@ The engine leverages Ollama for two core tasks, using the `mobr/cap` model optim
   - SPARQL Generation: Temperature=0.0 (deterministic), system prompt includes ontology schema.
   - Response Synthesis: Temperature=0.3 (natural variability).
 - **Prompt Engineering**:
-  - NL-to-SPARQL: "Convert this natural language query to SPARQL: [query]. Use prefixes: PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>..."
+  - NL-to-SPARQL: "Convert this natural language query to SPARQL: [query]. Use prefixes: PREFIX cardano: <https://mobr.ai/ont/cardano#>..."
   - Contextualization: "User Question: [query]\nSPARQL: [sparql]\nResults: [json]\nProvide a clear answer:"
 
 ### 3.2 Performance Considerations
@@ -104,7 +104,7 @@ curl -X POST "http://localhost:8000/api/v1/nl/query" \
 curl -X POST "http://localhost:8000/api/v1/query" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#> SELECT (COUNT(*) AS ?total) WHERE { ?tx a cardano:Transaction }",
+    "query": "PREFIX cardano: <https://mobr.ai/ont/cardano#> SELECT (COUNT(*) AS ?total) WHERE { ?tx a cardano:Transaction }",
     "type": "SELECT"
   }'
 ```

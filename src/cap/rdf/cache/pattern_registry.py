@@ -61,7 +61,7 @@ class PatternRegistry:
         'hasCertificateMetadata', 'hasDelegateMetadata', 'hasStakePoolMetadata',
         'hasProposalMetadata', 'hasVoteMetadata', 'hasConstitutionMetadata',
         'hasMetadataDecodedCBOR', 'hasMetadataCBOR', 'hasMetadataJSON',
-        'hasTransactionMetadata'
+        'hasTxMetadata'
     ]
 
     # Temporal terms

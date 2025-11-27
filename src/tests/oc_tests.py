@@ -153,12 +153,12 @@ async def test_contextualize_answer():
         user_query = "What is the current epoch?"
 
         sparql_query = """
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
 SELECT ?epoch ?epochNo ?startTime
 WHERE {
-?epoch a cardano:Epoch ;
-        cardano:hasEpochNumber ?epochNo ;
-        cardano:hasStartTime ?startTime .
+?epoch a c:Epoch ;
+        c:hasEpochNumber ?epochNo ;
+        c:hasStartTime ?startTime .
 }
 ORDER BY DESC(?epochNo)
 LIMIT 1
@@ -221,11 +221,11 @@ async def test_clean_sparql():
             "input": """Here is the SPARQL query:
 
 ```sparql
-PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
 SELECT ?block ?hash
 WHERE {
-?block a blockchain:Block ;
-        blockchain:hasHash ?hash .
+?block a b:Block ;
+        b:hasHash ?hash .
 }
 LIMIT 5
 ```
@@ -235,21 +235,21 @@ This query will return the latest 5 blocks."""
         {
             "name": "With explanatory text",
             "input": """The query is:
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
 SELECT ?epoch
 WHERE {
-?epoch a cardano:Epoch .
+?epoch a c:Epoch .
 }
 
 This will get all epochs."""
         },
         {
             "name": "Clean query (no cleaning needed)",
-            "input": """PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+            "input": """PREFIX b: <https://mobr.ai/ont/blockchain#>
 SELECT ?tx ?hash
 WHERE {
-?tx a blockchain:Transaction ;
-    blockchain:hasHash ?hash .
+?tx a b:Transaction ;
+    b:hasHash ?hash .
 }
 LIMIT 10"""
         }
@@ -287,13 +287,13 @@ async def test_full_pipeline():
         print("\n🔧 Step 1: Converting to SPARQL...")
         # To test, using mock SPARQL instead of calling the model
         mock_sparql = """
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
-PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
 SELECT (COUNT(?block) as ?count)
 WHERE {
-?block a blockchain:Block ;
-        cardano:belongsToEpoch ?epoch .
-?epoch cardano:hasEpochNumber ?epochNo .
+?block a b:Block ;
+        c:hasEpoch ?epoch .
+?epoch c:hasEpochNumber ?epochNo .
 }
 GROUP BY ?epochNo
 ORDER BY DESC(?epochNo)

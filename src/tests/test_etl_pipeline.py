@@ -87,16 +87,16 @@ async def test_etl_progress_tracking(virtuoso_client: TriplestoreClient):
 
     # Verify progress was saved
     query = f"""
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX c: <https://mobr.ai/ont/cardano#>
 
     SELECT ?lastId ?totalRecords ?processedRecords ?status
     WHERE {{
         GRAPH <{TEST_METADATA_GRAPH}> {{
             <{settings.CARDANO_GRAPH}/etl/progress/{test_entity}>
-                cardano:hasLastProcessedId ?lastId ;
-                cardano:hasTotalRecords ?totalRecords ;
-                cardano:hasProcessedRecords ?processedRecords ;
-                cardano:hasStatus ?status .
+                c:hasLastProcessedId ?lastId ;
+                c:hasTotalRecords ?totalRecords ;
+                c:hasProcessedRecords ?processedRecords ;
+                c:hasStatus ?status .
         }}
     }}
     """
@@ -185,13 +185,11 @@ async def test_etl_batch_loading(virtuoso_client: TriplestoreClient):
 
     # Create test RDF data
     turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-    <http://test/account/1> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake1..." .
+    @prefix b: <https://mobr.ai/ont/blockchain#> .
+    @prefix c: <https://mobr.ai/ont/cardano#> .
+    <http://test/account/1> a b:Account .
 
-    <http://test/account/2> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake2..." .
+    <http://test/account/2> a b:Account .
     """
 
     batch_info = {
@@ -210,11 +208,11 @@ async def test_etl_batch_loading(virtuoso_client: TriplestoreClient):
 
     # Verify data was loaded
     count_query = f"""
-    PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+    PREFIX b: <https://mobr.ai/ont/blockchain#>
     SELECT (COUNT(*) as ?count)
     WHERE {{
         GRAPH <{TEST_ETL_GRAPH}> {{
-            ?s a blockchain:Account
+            ?s a b:Account
         }}
     }}
     """
@@ -230,13 +228,11 @@ async def test_etl_data_integrity_validation(virtuoso_client: TriplestoreClient)
 
     # Load some test data
     turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-    <http://test/account/1> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake1..." .
+    @prefix b: <https://mobr.ai/ont/blockchain#> .
+    @prefix c: <https://mobr.ai/ont/cardano#> .
+    <http://test/account/1> a b:Account .
 
-    <http://test/account/2> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake2..." .
+    <http://test/account/2> a b:Account .
     """
 
     await pipeline.loader.load_batch(TEST_ETL_GRAPH, turtle_data, {"entity_type": "account", "size": 2})
@@ -256,12 +252,12 @@ async def test_etl_graph_statistics(virtuoso_client: TriplestoreClient):
 
     # Load test data
     turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
+    @prefix b: <https://mobr.ai/ont/blockchain#> .
+    @prefix c: <https://mobr.ai/ont/cardano#> .
 
-    <http://test/tx/1> a blockchain:Transaction ;
-        cardano:hasFee "1000000" ;
-        blockchain:hasHash "xyz789" .
+    <http://test/tx/1> a b:Transaction ;
+        c:hasFee "1000000" ;
+        b:hasHash "xyz789" .
     """
 
     await pipeline.loader.load_batch(TEST_ETL_GRAPH, turtle_data, {"entity_type": "transaction", "size": 1})
@@ -300,11 +296,11 @@ async def test_etl_clear_graph_data(virtuoso_client: TriplestoreClient):
 
     # First create and load data
     turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
+    @prefix b: <https://mobr.ai/ont/blockchain#> .
+    @prefix c: <https://mobr.ai/ont/cardano#> .
 
-    <http://test/epoch/1> a cardano:Epoch ;
-        cardano:hasEpochNumber "1" .
+    <http://test/epoch/1> a c:Epoch ;
+        c:hasEpochNumber "1" .
     """
 
     await virtuoso_client.create_graph(TEST_ETL_GRAPH, turtle_data)

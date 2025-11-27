@@ -16,16 +16,16 @@ class ScriptTransformer(BaseTransformer):
             script_uri = self.create_uri('script', script['hash'])
 
             # Determine script type
-            script_class = 'cardano:PlutusScript' if 'plutus' in script['type'].lower() else 'cardano:NativeScript'
+            script_class = 'c:PlutusScript' if 'plutus' in script['type'].lower() else 'c:NativeScript'
 
             turtle_lines.append(f"{script_uri} a {script_class} ;")
 
             if script['hash']:
-                turtle_lines.append(f"    blockchain:hasHash \"{script['hash']}\" ;")
+                turtle_lines.append(f"    b:hasHash \"{script['hash']}\" ;")
 
             if script['tx_hash']:
                 tx_uri = self.create_transaction_uri(script['tx_hash'])
-                turtle_lines.append(f"    cardano:embeddedIn {tx_uri} ;")
+                turtle_lines.append(f"    c:embeddedIn {tx_uri} ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):
@@ -36,16 +36,16 @@ class ScriptTransformer(BaseTransformer):
             # Create SmartContract instance for Plutus scripts
             if 'plutus' in script['type'].lower():
                 contract_uri = self.create_uri('smart_contract', script['hash'])
-                turtle_lines.append(f"{contract_uri} a blockchain:SmartContract ;")
-                turtle_lines.append(f"    cardano:hasScript {script_uri} ;")
+                turtle_lines.append(f"{contract_uri} a b:SmartContract ;")
+                turtle_lines.append(f"    c:hasScript {script_uri} ;")
 
                 if script['tx_hash']:
                     tx_uri = self.create_transaction_uri(script['tx_hash'])
-                    turtle_lines.append(f"    cardano:embeddedIn {tx_uri} ;")
+                    turtle_lines.append(f"    c:embeddedIn {tx_uri} ;")
 
                 # Add script address if available
                 if script.get('hash'):
-                    turtle_lines.append(f"    cardano:hasScriptAddress \"{script['hash']}\" ;")
+                    turtle_lines.append(f"    c:hasScriptAddress \"{script['hash']}\" ;")
 
                 # Remove trailing semicolon and add period
                 if turtle_lines[-1].endswith(' ;'):

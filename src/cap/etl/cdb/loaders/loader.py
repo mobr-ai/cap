@@ -191,13 +191,13 @@ class CDBLoader:
 
                 # Build RDF data for progress
                 turtle_data = f"""
-                    <{progress_uri}> a cardano:ETLProgress ;
-                        cardano:hasEntityType "{entity_type}" ;
-                        cardano:hasLastProcessedId "{progress.last_processed_id if isinstance(progress.last_processed_id, (int, str)) else 0}" ;
-                        cardano:hasTotalRecords {progress.total_records} ;
-                        cardano:hasProcessedRecords {progress.processed_records} ;
-                        cardano:hasStatus "{progress.status.value}" ;
-                        cardano:hasLastUpdated "{progress.last_updated.isoformat() if progress.last_updated else datetime.now().isoformat()}"^^xsd:dateTime .
+                    <{progress_uri}> a c:ETLProgress ;
+                        c:hasEntityType "{entity_type}" ;
+                        c:hasLastProcessedId "{progress.last_processed_id if isinstance(progress.last_processed_id, (int, str)) else 0}" ;
+                        c:hasTotalRecords {progress.total_records} ;
+                        c:hasProcessedRecords {progress.processed_records} ;
+                        c:hasStatus "{progress.status.value}" ;
+                        c:hasLastUpdated "{progress.last_updated.isoformat() if progress.last_updated else datetime.now().isoformat()}"^^xsd:dateTime .
                 """
 
                 # First, ensure the graph exists
@@ -285,8 +285,8 @@ class CDBLoader:
             try:
                 stats_query = f"""
                 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
-                PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+                PREFIX c: <https://mobr.ai/ont/cardano#>
+                PREFIX b: <https://mobr.ai/ont/blockchain#>
 
                 SELECT
                     (COUNT(DISTINCT ?s) AS ?subjects)

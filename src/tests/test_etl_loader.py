@@ -155,16 +155,16 @@ async def test_loader_save_progress_metadata(virtuoso_client: TriplestoreClient)
 
     # Verify metadata was saved
     query = f"""
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX c: <https://mobr.ai/ont/cardano#>
 
     SELECT ?lastId ?total ?processed ?status
     WHERE {{
         GRAPH <{TEST_METADATA_GRAPH}> {{
             <{settings.CARDANO_GRAPH}/etl/progress/test_entity>
-                cardano:hasLastProcessedId ?lastId ;
-                cardano:hasTotalRecords ?total ;
-                cardano:hasProcessedRecords ?processed ;
-                cardano:hasStatus ?status .
+                c:hasLastProcessedId ?lastId ;
+                c:hasTotalRecords ?total ;
+                c:hasProcessedRecords ?processed ;
+                c:hasStatus ?status .
         }}
     }}
     """
@@ -209,14 +209,14 @@ async def test_loader_update_progress_metadata(virtuoso_client: TriplestoreClien
 
     # Verify updated metadata
     query = f"""
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX c: <https://mobr.ai/ont/cardano#>
 
     SELECT ?lastId ?processed
     WHERE {{
         GRAPH <{TEST_METADATA_GRAPH}> {{
             <{settings.CARDANO_GRAPH}/etl/progress/update_test>
-                cardano:hasLastProcessedId ?lastId ;
-                cardano:hasProcessedRecords ?processed .
+                c:hasLastProcessedId ?lastId ;
+                c:hasProcessedRecords ?processed .
         }}
     }}
     """

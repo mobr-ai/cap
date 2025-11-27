@@ -15,19 +15,19 @@ class EpochTransformer(BaseTransformer):
         for epoch in epochs:
             epoch_uri = self.create_epoch_uri(epoch['no'])
 
-            # Epoch as cardano:Epoch
-            turtle_lines.append(f"{epoch_uri} a cardano:Epoch ;")
+            # Epoch as c:Epoch
+            turtle_lines.append(f"{epoch_uri} a c:Epoch ;")
 
             if epoch['no'] is not None:
-                turtle_lines.append(f"    cardano:hasEpochNumber {self.format_literal(epoch['no'], 'xsd:decimal')} ;")
+                turtle_lines.append(f"    c:hasEpochNumber {self.format_literal(epoch['no'], 'xsd:decimal')} ;")
 
             if epoch['start_time']:
-                turtle_lines.append(f"    cardano:hasStartTime {self.format_literal(epoch['start_time'], 'xsd:dateTime')} ;")
+                turtle_lines.append(f"    c:hasStartTime {self.format_literal(epoch['start_time'], 'xsd:dateTime')} ;")
 
             if epoch['end_time']:
-                turtle_lines.append(f"    cardano:hasEndTime {self.format_literal(epoch['end_time'], 'xsd:dateTime')} ;")
+                turtle_lines.append(f"    c:hasEndTime {self.format_literal(epoch['end_time'], 'xsd:dateTime')} ;")
 
-            # Properties not in ontology removed: hasTransactionCount, hasBlockCount, hasOutputSum, hasTotalFees
+            # Properties not in ontology removed: hasTxCount, hasBlockCount, hasOutputSum, hasTotalFees
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):

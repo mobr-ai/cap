@@ -164,7 +164,7 @@ class SPARQLNormalizer:
             (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*1\s*,\s*4\s*\)\s+AS\s+\?timePeriod\s*\)', 'YEAR'),
             (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*9\s*,\s*10\s*\)\s+AS\s+\?timePeriod\s*\)', 'DAY'),
             (r'BIND\s*\(\s*CONCAT\s*\([^)]*SUBSTR[^)]*week[^)]*\)\s+AS\s+\?timePeriod\s*\)', 'WEEK'),
-            (r'\?epoch\s+cardano:hasEpochNumber\s+\?timePeriod', 'EPOCH'),
+            (r'\?epoch\s+c:hasEpochNumber\s+\?timePeriod', 'EPOCH'),
             (r'GROUP\s+BY\s+\?timePeriod', 'GROUPED_PERIOD'),
         ]
 
@@ -259,7 +259,7 @@ class SPARQLNormalizer:
 
     def _extract_uris(self, text: str) -> str:
         """Extract Cardano URIs."""
-        pattern = r'(cardano:(?:addr|asset|stake|pool|tx)[a-zA-Z0-9]+)'
+        pattern = r'(c:(?:addr|asset|stake|pool|tx)[a-zA-Z0-9]+)'
         matches = list(re.finditer(pattern, text))
 
         for match in reversed(matches):

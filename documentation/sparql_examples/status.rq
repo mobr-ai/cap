@@ -1,6 +1,6 @@
 # block height, last block processed, and amount of blocks that have numbers were processed
-PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+PREFIX blockchain: <https://mobr.ai/ont/blockchain#>
+PREFIX cardano: <https://mobr.ai/ont/cardano#>
 
 SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
 WHERE {
