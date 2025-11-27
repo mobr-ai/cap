@@ -57,6 +57,13 @@ class PatternRegistry:
         'chain selection rule'
     ]
 
+    DEFAULT_METADATA_PROPERTIES = [
+        'hasCertificateMetadata', 'hasDelegateMetadata', 'hasStakePoolMetadata',
+        'hasProposalMetadata', 'hasVoteMetadata', 'hasConstitutionMetadata',
+        'hasMetadataDecodedCBOR', 'hasMetadataCBOR', 'hasMetadataJSON',
+        'hasTransactionMetadata'
+    ]
+
     # Temporal terms
     YEARLY_TERMS = ['yearly', 'annually', 'per year', 'each year', 'every year']
     MONTHLY_TERMS = ['monthly', 'per month', 'each month', 'every month']
@@ -72,7 +79,7 @@ class PatternRegistry:
                     'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
     TIME_PERIOD_RANGE_TERMS = ['first', 'last', 'second', 'third']
-    TIME_PERIOD_UNITS = ['week', 'day', 'month']
+    TIME_PERIOD_UNITS = ['week', 'day', 'month', 'epoch']
 
     # Ordering terms
     MAX_TERMS = ['largest', 'biggest', 'highest', 'greatest', 'maximum', 'max']

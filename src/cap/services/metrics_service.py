@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from opentelemetry import trace
 import logging
 
+from cap.rdf.cache.pattern_registry import PatternRegistry
 from cap.database.model import QueryMetrics, KGMetrics, DashboardMetrics
 from cap.services.lang_detect_client import LanguageDetector
 
@@ -20,15 +21,25 @@ class MetricsService:
     @staticmethod
     def calculate_complexity(sparql_query: str, kv_results: Optional[Dict] = None) -> Dict[str, Any]:
         """Calculate query complexity indicators."""
+        temporal_terms = (PatternRegistry.YEARLY_TERMS +
+                          PatternRegistry.MONTHLY_TERMS +
+                          PatternRegistry.WEEKLY_TERMS +
+                          PatternRegistry.DAILY_TERMS +
+                          PatternRegistry.EPOCH_PERIOD_TERMS +
+                          PatternRegistry.TIME_PERIOD_UNITS)
+
+        temporal_pat = '|'.join(temporal_terms)
+        metadata_pat = '|'.join(PatternRegistry.DEFAULT_METADATA_PROPERTIES)
+
         indicators = {
-            'multi_join': len(re.findall(r'\?[\w]+\s+[\w:]+\s+\?[\w]+', sparql_query)) > 3,
+            'multi_join': len(re.findall(r'\?[\w]+\s+[\w:]+\s+\?[\w]+', sparql_query)) > 1,
             'aggregation': bool(re.search(r'\b(COUNT|SUM|AVG|MIN|MAX|GROUP BY)\b', sparql_query, re.IGNORECASE)),
             'subquery': 'SELECT' in sparql_query[sparql_query.find('WHERE'):] if 'WHERE' in sparql_query else False,
             'optional': 'OPTIONAL' in sparql_query.upper(),
             'filter': 'FILTER' in sparql_query.upper(),
             'union': 'UNION' in sparql_query.upper(),
-            'temporal': bool(re.search(r'\b(epoch|timestamp|year|month|day|hasStartTime|hasEndTime)\b', sparql_query, re.IGNORECASE)),
-            'offchain_metadata': bool(re.search(r'\b(hasPoolMetadata|hasTransactionMetadata|hasTokenName|hasDatumContent)\b', sparql_query, re.IGNORECASE))
+            'temporal': bool(re.search(rf'\b({temporal_pat})\b', sparql_query, re.IGNORECASE)),
+            'offchain_metadata': bool(re.search(rf'\b({metadata_pat})\b', sparql_query, re.IGNORECASE))
         }
 
         complexity_score = sum(indicators.values())
