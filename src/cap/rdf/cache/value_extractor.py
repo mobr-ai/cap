@@ -5,7 +5,7 @@ import logging
 import re
 from opentelemetry import trace
 
-from cap.data.cache.pattern_registry import PatternRegistry
+from cap.rdf.cache.pattern_registry import PatternRegistry
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

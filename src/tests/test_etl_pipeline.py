@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from cap.etl.cdb.service import ETLPipeline, ETLStatus
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
 
 TEST_ETL_GRAPH = "http://test.etl.pipeline"
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
 @pytest.fixture(autouse=True)
-async def cleanup(virtuoso_client: VirtuosoClient):
+async def cleanup(virtuoso_client: TriplestoreClient):
     """Cleanup test graphs before and after each test."""
     try:
         for graph in [TEST_ETL_GRAPH, TEST_METADATA_GRAPH]:
@@ -66,7 +66,7 @@ async def test_etl_pipeline_initialization():
         assert progress.status == ETLStatus.RUNNING
 
 @pytest.mark.asyncio
-async def test_etl_progress_tracking(virtuoso_client: VirtuosoClient):
+async def test_etl_progress_tracking(virtuoso_client: TriplestoreClient):
     """Test ETL progress tracking and persistence."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -111,7 +111,7 @@ async def test_etl_progress_tracking(virtuoso_client: VirtuosoClient):
     assert binding['status']['value'] == 'running'
 
 @pytest.mark.asyncio
-async def test_etl_load_existing_progress(virtuoso_client: VirtuosoClient):
+async def test_etl_load_existing_progress(virtuoso_client: TriplestoreClient):
     """Test loading existing ETL progress from metadata."""
     # First save some progress
     pipeline1 = ETLPipeline(batch_size=100)
@@ -162,7 +162,7 @@ async def test_etl_sync_status():
     assert account_progress['progress_percentage'] == 50.0
 
 @pytest.mark.asyncio
-async def test_etl_reset_progress(virtuoso_client: VirtuosoClient):
+async def test_etl_reset_progress(virtuoso_client: TriplestoreClient):
     """Test resetting ETL progress."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -179,7 +179,7 @@ async def test_etl_reset_progress(virtuoso_client: VirtuosoClient):
     assert pipeline.progress['account'].total_records == 0
 
 @pytest.mark.asyncio
-async def test_etl_batch_loading(virtuoso_client: VirtuosoClient):
+async def test_etl_batch_loading(virtuoso_client: TriplestoreClient):
     """Test loading data batches to Virtuoso."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -224,7 +224,7 @@ async def test_etl_batch_loading(virtuoso_client: VirtuosoClient):
     assert count == 2
 
 @pytest.mark.asyncio
-async def test_etl_data_integrity_validation(virtuoso_client: VirtuosoClient):
+async def test_etl_data_integrity_validation(virtuoso_client: TriplestoreClient):
     """Test data integrity validation."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -250,7 +250,7 @@ async def test_etl_data_integrity_validation(virtuoso_client: VirtuosoClient):
     assert validation_result['valid']
 
 @pytest.mark.asyncio
-async def test_etl_graph_statistics(virtuoso_client: VirtuosoClient):
+async def test_etl_graph_statistics(virtuoso_client: TriplestoreClient):
     """Test getting graph statistics."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -294,7 +294,7 @@ async def test_etl_error_handling():
     assert account_status['error_message'] == "Test error"
 
 @pytest.mark.asyncio
-async def test_etl_clear_graph_data(virtuoso_client: VirtuosoClient):
+async def test_etl_clear_graph_data(virtuoso_client: TriplestoreClient):
     """Test clearing graph data."""
     pipeline = ETLPipeline(batch_size=100)
 

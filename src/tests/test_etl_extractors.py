@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from cap.config import settings
 from cap.etl.cdb.extractor_factory import ExtractorFactory
-from cap.data.cdb_model import Epoch
+from cap.rdf.cdb_model import Epoch
 
 @pytest.fixture
 def db_session():

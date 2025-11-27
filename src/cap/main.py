@@ -14,7 +14,7 @@ from sqlalchemy import text
 from cap.api.sparql_query import router as api_router
 from cap.api.nl_query import router as nl_router
 from cap.telemetry import setup_telemetry, instrument_app
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
 from cap.etl.cdb.service import etl_service
 from cap.services.ollama_client import cleanup_ollama_client
@@ -57,7 +57,7 @@ etl_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 # Set uvloop as the event loop policy
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-async def initialize_graph(client: VirtuosoClient, graph_uri: str, ontology_path: str) -> bool:
+async def initialize_graph(client: TriplestoreClient, graph_uri: str, ontology_path: str) -> bool:
     """Initialize a graph with ontology data if it doesn't exist."""
     with tracer.start_as_current_span("initialize_graph") as span:
         span.set_attribute("graph_uri", graph_uri)
@@ -93,7 +93,7 @@ async def initialize_graph(client: VirtuosoClient, graph_uri: str, ontology_path
             logger.error(f"Failed to initialize graph {graph_uri}: {e}")
             raise RuntimeError(f"Failed to initialize graph {graph_uri}: {e}")
 
-async def initialize_required_graphs(client: VirtuosoClient) -> None:
+async def initialize_required_graphs(client: TriplestoreClient) -> None:
     """Initialize all required graphs for the application."""
     with tracer.start_as_current_span("initialize_required_graphs") as span:
         required_graphs = [
@@ -157,7 +157,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager with ETL integration."""
     if settings.ETL_AUTO_START:
         with tracer.start_as_current_span("application_startup") as span:
-            client = VirtuosoClient()
+            client = TriplestoreClient()
 
             try:
                 # Initialize graphs

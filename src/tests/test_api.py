@@ -4,7 +4,7 @@ import logging
 
 from httpx import AsyncClient
 from urllib.parse import quote_plus
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ cardano:TestBlock cardano:status cardano:Pending .
 """
 
 @pytest.fixture(autouse=True)
-async def cleanup(virtuoso_client: VirtuosoClient):
+async def cleanup(virtuoso_client: TriplestoreClient):
     """Cleanup test graph before and after each test."""
     try:
         exists = await virtuoso_client.check_graph_exists(TEST_GRAPH)
@@ -39,7 +39,7 @@ async def cleanup(virtuoso_client: VirtuosoClient):
         logger.error(f"[CLEANUP] After error: {str(e)}")
 
 @pytest.mark.asyncio
-async def test_execute_query(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_execute_query(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test SPARQL query execution."""
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_DATA)
 
@@ -63,7 +63,7 @@ async def test_execute_query(async_client: AsyncClient, virtuoso_client: Virtuos
     assert "results" in response.json()
 
 @pytest.mark.asyncio
-async def test_create_graph(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_create_graph(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph creation."""
     response = await async_client.post(
         "/api/v1/graphs",
@@ -77,7 +77,7 @@ async def test_create_graph(async_client: AsyncClient, virtuoso_client: Virtuoso
     assert response.json()["success"] is True
 
 @pytest.mark.asyncio
-async def test_create_graph_conflict(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_create_graph_conflict(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph creation when graph already exists."""
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_DATA)
 
@@ -92,7 +92,7 @@ async def test_create_graph_conflict(async_client: AsyncClient, virtuoso_client:
     assert response.status_code == 200
 
 @pytest.mark.asyncio
-async def test_read_graph(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_read_graph(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph reading."""
     # Create graph
     logger.debug("[READ TEST] Creating test graph")
@@ -115,7 +115,7 @@ async def test_read_graph(async_client: AsyncClient, virtuoso_client: VirtuosoCl
     assert "data" in response.json()
 
 @pytest.mark.asyncio
-async def test_update_graph(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_update_graph(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph updating."""
     # Create graph
     logger.debug("[UPDATE TEST] Creating test graph")
@@ -148,7 +148,7 @@ async def test_update_graph(async_client: AsyncClient, virtuoso_client: Virtuoso
     assert response.json()["success"] is True
 
 @pytest.mark.asyncio
-async def test_update_graph_validation(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_update_graph_validation(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph update validation."""
     # Create graph first
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_DATA)
@@ -165,7 +165,7 @@ async def test_update_graph_validation(async_client: AsyncClient, virtuoso_clien
     assert response.status_code == 400
 
 @pytest.mark.asyncio
-async def test_delete_graph(async_client: AsyncClient, virtuoso_client: VirtuosoClient):
+async def test_delete_graph(async_client: AsyncClient, virtuoso_client: TriplestoreClient):
     """Test graph deletion."""
     # Create graph
     logger.debug("[DELETE TEST] Creating test graph")

@@ -6,7 +6,7 @@ import re
 from typing import Optional, Tuple
 from opentelemetry import trace
 
-from cap.data.cache.placeholder_counters import PlaceholderCounters
+from cap.rdf.cache.placeholder_counters import PlaceholderCounters
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

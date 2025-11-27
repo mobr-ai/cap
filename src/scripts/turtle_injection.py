@@ -1,5 +1,5 @@
 import asyncio
-from cap.data.virtuoso import VirtuosoClient, VirtuosoConfig
+from cap.rdf.triplestore import TriplestoreClient, TriplestoreConfig
 
 async def inject_ontology_file():
     ontology_path = "src/ontologies/cardano.ttl"
@@ -10,13 +10,13 @@ async def inject_ontology_file():
     else:
         turtle_data = ""
 
-    vc = VirtuosoConfig(
+    vc = TriplestoreConfig(
         host="localhost",
         port=8890,
         username="dba",
         password="dba"
     )
-    client = VirtuosoClient(vc)
+    client = TriplestoreClient(vc)
     return await client._make_crud_request(
         method="POST",
         graph_uri=graph_uri,

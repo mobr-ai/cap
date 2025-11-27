@@ -10,7 +10,7 @@ from typing import Optional
 
 from opentelemetry import trace
 
-from cap.data.virtuoso import VirtuosoClient, DEFAULT_PREFIX
+from cap.rdf.triplestore import TriplestoreClient, DEFAULT_PREFIX
 from cap.config import settings
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class CDBLoader:
 
     def __init__(self):
         """Initialize the CDB loader with Virtuoso client."""
-        self.virtuoso_client = VirtuosoClient()
+        self.virtuoso_client = TriplestoreClient()
 
     async def load_batch(
             self,

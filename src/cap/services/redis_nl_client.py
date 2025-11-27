@@ -10,13 +10,13 @@ from typing import Optional, Any, Tuple
 import redis.asyncio as redis
 from opentelemetry import trace
 
-from cap.data.cache.placeholder_counters import PlaceholderCounters
-from cap.data.cache.placeholder_restorer import PlaceholderRestorer
-from cap.data.cache.query_normalizer import QueryNormalizer
-from cap.data.cache.query_file_parser import QueryFileParser
-from cap.data.cache.sparql_normalizer import SPARQLNormalizer
-from cap.data.cache.value_extractor import ValueExtractor
-from cap.data.cache.semantic_matcher import SemanticMatcher
+from cap.rdf.cache.placeholder_counters import PlaceholderCounters
+from cap.rdf.cache.placeholder_restorer import PlaceholderRestorer
+from cap.rdf.cache.query_normalizer import QueryNormalizer
+from cap.rdf.cache.query_file_parser import QueryFileParser
+from cap.rdf.cache.sparql_normalizer import SPARQLNormalizer
+from cap.rdf.cache.value_extractor import ValueExtractor
+from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

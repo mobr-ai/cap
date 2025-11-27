@@ -4,7 +4,7 @@ import logging
 
 from cap.etl.cdb.loaders.loader import CDBLoader
 from cap.etl.cdb.service import ETLProgress, ETLStatus
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
 
 TEST_LOADER_GRAPH = "http://test.etl.loader"
@@ -13,7 +13,7 @@ TEST_METADATA_GRAPH = "http://test.etl.loader.metadata"
 logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
-async def cleanup(virtuoso_client: VirtuosoClient):
+async def cleanup(virtuoso_client: TriplestoreClient):
     """Cleanup test graphs before and after each test."""
     try:
         for graph in [TEST_LOADER_GRAPH, TEST_METADATA_GRAPH]:
@@ -40,7 +40,7 @@ async def test_loader_initialization():
     assert loader.virtuoso_client is not None
 
 @pytest.mark.asyncio
-async def test_loader_load_batch_empty_data(virtuoso_client: VirtuosoClient):
+async def test_loader_load_batch_empty_data(virtuoso_client: TriplestoreClient):
     """Test loading empty batch data."""
     loader = CDBLoader()
 
@@ -53,7 +53,7 @@ async def test_loader_load_batch_empty_data(virtuoso_client: VirtuosoClient):
     assert not exists  # Empty graph is not created
 
 @pytest.mark.asyncio
-async def test_loader_load_batch_with_prefixes(virtuoso_client: VirtuosoClient):
+async def test_loader_load_batch_with_prefixes(virtuoso_client: TriplestoreClient):
     """Test loading batch with prefix handling."""
     loader = CDBLoader()
 
@@ -89,7 +89,7 @@ async def test_loader_load_batch_with_prefixes(virtuoso_client: VirtuosoClient):
     assert count == 2
 
 @pytest.mark.asyncio
-async def test_loader_load_large_batch(virtuoso_client: VirtuosoClient):
+async def test_loader_load_large_batch(virtuoso_client: TriplestoreClient):
     """Test loading large batch with chunking."""
     loader = CDBLoader()
 
@@ -127,7 +127,7 @@ async def test_loader_load_large_batch(virtuoso_client: VirtuosoClient):
     assert count == 2000
 
 @pytest.mark.asyncio
-async def test_loader_save_progress_metadata(virtuoso_client: VirtuosoClient):
+async def test_loader_save_progress_metadata(virtuoso_client: TriplestoreClient):
     """Test saving ETL progress metadata."""
     loader = CDBLoader()
 
@@ -179,7 +179,7 @@ async def test_loader_save_progress_metadata(virtuoso_client: VirtuosoClient):
     assert binding['status']['value'] == "running"
 
 @pytest.mark.asyncio
-async def test_loader_update_progress_metadata(virtuoso_client: VirtuosoClient):
+async def test_loader_update_progress_metadata(virtuoso_client: TriplestoreClient):
     """Test updating existing progress metadata."""
     loader = CDBLoader()
 
@@ -245,7 +245,7 @@ async def test_loader_error_progress_metadata():
     await loader.save_progress_metadata("error_test", progress, TEST_METADATA_GRAPH)
 
 @pytest.mark.asyncio
-async def test_loader_validate_data_integrity(virtuoso_client: VirtuosoClient):
+async def test_loader_validate_data_integrity(virtuoso_client: TriplestoreClient):
     """Test data integrity validation."""
     loader = CDBLoader()
 
@@ -271,7 +271,7 @@ async def test_loader_validate_data_integrity(virtuoso_client: VirtuosoClient):
     assert result['actual_count'] == 3
 
 @pytest.mark.asyncio
-async def test_loader_get_graph_statistics(virtuoso_client: VirtuosoClient):
+async def test_loader_get_graph_statistics(virtuoso_client: TriplestoreClient):
     """Test getting graph statistics."""
     loader = CDBLoader()
 
@@ -301,7 +301,7 @@ async def test_loader_get_graph_statistics(virtuoso_client: VirtuosoClient):
     assert stats['triples'] == 6
 
 @pytest.mark.asyncio
-async def test_loader_clear_graph_data(virtuoso_client: VirtuosoClient):
+async def test_loader_clear_graph_data(virtuoso_client: TriplestoreClient):
     """Test clearing graph data."""
     loader = CDBLoader()
 

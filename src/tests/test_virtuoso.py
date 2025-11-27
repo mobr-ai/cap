@@ -1,5 +1,5 @@
 import pytest
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 TEST_GRAPH = "http://test.graph"
 TEST_PREFIXES = {
@@ -12,7 +12,7 @@ test:subject rdf:type test:TestType .
 """
 
 @pytest.mark.asyncio
-async def test_check_graph_exists(virtuoso_client: VirtuosoClient):
+async def test_check_graph_exists(virtuoso_client: TriplestoreClient):
     # Clean start
     if await virtuoso_client.check_graph_exists(TEST_GRAPH):
         await virtuoso_client.delete_graph(TEST_GRAPH)
@@ -22,7 +22,7 @@ async def test_check_graph_exists(virtuoso_client: VirtuosoClient):
     assert not exists
 
 @pytest.mark.asyncio
-async def test_create_and_delete_graph(virtuoso_client: VirtuosoClient):
+async def test_create_and_delete_graph(virtuoso_client: TriplestoreClient):
     # Clean start
     if await virtuoso_client.check_graph_exists(TEST_GRAPH):
         await virtuoso_client.delete_graph(TEST_GRAPH)
@@ -38,7 +38,7 @@ async def test_create_and_delete_graph(virtuoso_client: VirtuosoClient):
     assert not exists
 
 @pytest.mark.asyncio
-async def test_execute_query(virtuoso_client: VirtuosoClient):
+async def test_execute_query(virtuoso_client: TriplestoreClient):
     # Setup
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_TRIPLE)
 
@@ -58,7 +58,7 @@ async def test_execute_query(virtuoso_client: VirtuosoClient):
     await virtuoso_client.delete_graph(TEST_GRAPH)
 
 @pytest.mark.asyncio
-async def test_update_graph(virtuoso_client: VirtuosoClient):
+async def test_update_graph(virtuoso_client: TriplestoreClient):
     # Setup
     await virtuoso_client.create_graph(TEST_GRAPH, TEST_TRIPLE)
 

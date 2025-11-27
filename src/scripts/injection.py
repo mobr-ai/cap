@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import asyncio
 
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 PREFIXES = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -161,7 +161,7 @@ def generate_test_data():
     return turtle_data
 
 async def inject_test():
-    vc = VirtuosoClient()
+    vc = TriplestoreClient()
     success = await vc.create_graph(TEST_GRAPH, generate_test_data())
     assert success
 

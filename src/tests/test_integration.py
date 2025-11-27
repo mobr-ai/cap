@@ -1,13 +1,13 @@
 import pytest
 import logging
 from httpx import AsyncClient
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 TEST_GRAPH = "http://test.integration"
 logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
-async def cleanup(virtuoso_client: VirtuosoClient):
+async def cleanup(virtuoso_client: TriplestoreClient):
     """Cleanup test graph before and after each test."""
     # Cleanup before test
     try:

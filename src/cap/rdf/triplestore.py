@@ -24,14 +24,14 @@ tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
 @dataclass
-class VirtuosoConfig:
+class TriplestoreConfig:
     """Configuration settings for Virtuoso connection."""
-    host: str = settings.VIRTUOSO_HOST
-    port: int = settings.VIRTUOSO_PORT
-    username: str = settings.VIRTUOSO_USER
-    password: str = settings.VIRTUOSO_PASSWORD
-    sparql_str_endpoint: str = settings.VIRTUOSO_ENDPOINT
-    query_timeout: int = settings.VIRTUOSO_TIMEOUT
+    host: str = settings.TRIPLESTORE_HOST
+    port: int = settings.TRIPLESTORE_PORT
+    username: str = settings.TRIPLESTORE_USER
+    password: str = settings.TRIPLESTORE_PASSWORD
+    sparql_str_endpoint: str = settings.TRIPLESTORE_ENDPOINT
+    query_timeout: int = settings.TRIPLESTORE_TIMEOUT
 
     @property
     def base_url(self) -> str:
@@ -48,9 +48,9 @@ class VirtuosoConfig:
         """Get the SPARQL Graph CRUD endpoint URL."""
         return f"{self.base_url}/sparql-graph-crud"
 
-class VirtuosoClient:
-    def __init__(self, config: VirtuosoConfig | None = None):
-        self.config = config or VirtuosoConfig()
+class TriplestoreClient:
+    def __init__(self, config: TriplestoreConfig | None = None):
+        self.config = config or TriplestoreConfig()
         self._sparql_wrapper = None
         self._http_client = None
         self._query_lock = asyncio.Lock()
