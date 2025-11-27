@@ -529,6 +529,7 @@ class OllamaClient:
                 {known_info}
             """
 
+            logger.debug(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
