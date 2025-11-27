@@ -69,7 +69,7 @@ async def get_top_queries(limit: int = 5):
             raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/query")
+@router.post("/query", response_model=None)
 async def natural_language_query(
     request: NLQueryRequest,
     db: Session = get_db,
