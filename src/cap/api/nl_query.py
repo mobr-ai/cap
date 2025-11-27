@@ -4,7 +4,7 @@ Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -69,11 +69,11 @@ async def get_top_queries(limit: int = 5):
             raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/query", response_model=None)
+@router.post("/query")
 async def natural_language_query(
     request: NLQueryRequest,
-    db: Session = get_db,
-    current_user: Optional[User] = get_current_user_unconfirmed
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_unconfirmed)
 ):
     """Process natural language query with metrics collection."""
 

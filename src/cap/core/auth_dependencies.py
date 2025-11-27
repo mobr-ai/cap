@@ -47,9 +47,6 @@ def _decode(token: str) -> Dict[str, Any]:
     if _decode_token:
         return _decode_token(token)
 
-    if _verify_token:
-        return _verify_token(token)
-
     # If neither helper exists, raise a helpful error
     raise HTTPException(
         status_code=500,
