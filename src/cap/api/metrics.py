@@ -3,7 +3,7 @@ Metrics reporting API.
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, cast, Float
+from sqlalchemy import func, and_, cast, Float, Integer
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -32,9 +32,9 @@ def get_aggregated_metrics(
     # Dimension 1: LLM Capability
     llm_stats = db.query(
         func.count(QueryMetrics.id).label('total'),
-        func.sum(cast(QueryMetrics.sparql_valid, Float)).label('valid'),
-        func.sum(cast(QueryMetrics.semantic_valid, Float)).label('semantic_valid'),
-        func.sum(cast(QueryMetrics.is_federated, Float)).label('federated'),
+        func.sum(cast(cast(QueryMetrics.sparql_valid, Integer), Float)).label('valid'),
+        func.sum(cast(cast(QueryMetrics.semantic_valid, Integer), Float)).label('semantic_valid'),
+        func.sum(cast(cast(QueryMetrics.is_federated, Integer), Float)).label('federated'),
         func.count(func.distinct(QueryMetrics.detected_language)).label('unique_languages')
     ).filter(and_(*filters) if filters else True).first()
 
@@ -69,12 +69,12 @@ def get_aggregated_metrics(
     kg_stats = db.query(
         func.count(KGMetrics.id).label('total_loads'),
         func.sum(KGMetrics.triples_loaded).label('total_triples'),
-        func.sum(cast(KGMetrics.ontology_aligned, Float)).label('aligned'),
-        func.sum(cast(KGMetrics.has_offchain_metadata, Float)).label('with_metadata')
+        func.sum(cast(cast(KGMetrics.ontology_aligned, Integer), Float)).label('aligned'),
+        func.sum(cast(cast(KGMetrics.has_offchain_metadata, Integer), Float)).label('with_metadata')
     ).first()
 
     query_kg_stats = db.query(
-        func.sum(cast(QueryMetrics.has_offchain_metadata, Float)).label('queries_with_metadata')
+        func.sum(cast(cast(QueryMetrics.has_offchain_metadata, Integer), Float)).label('queries_with_metadata')
     ).filter(and_(*filters) if filters else True).first()
 
     knowledge_graph = {
@@ -145,7 +145,7 @@ def get_aggregated_metrics(
     # Dimension 6: Query Complexity
     complexity_stats = db.query(
         func.avg(QueryMetrics.complexity_score).label('avg_complexity'),
-        func.sum(cast(QueryMetrics.has_multi_relationship, Float)).label('multi_rel')
+        func.sum(cast(cast(QueryMetrics.has_multi_relationship, Integer), Float)).label('multi_rel')
     ).filter(and_(*filters) if filters else True).first()
 
     complexity_dist = db.query(
