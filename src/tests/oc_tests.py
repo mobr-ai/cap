@@ -169,7 +169,7 @@ LIMIT 1
             "results": {
                 "bindings": [
                     {
-                        "epoch": {"value": "http://www.mobr.ai/ontologies/cardano#epoch/450"},
+                        "epoch": {"value": "https://mobr.ai/ont/cardano#epoch/450"},
                         "epochNo": {"value": "450"},
                         "startTime": {"value": "2024-01-15T00:00:00Z"}
                     }

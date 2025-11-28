@@ -30,7 +30,7 @@ The engine follows LLM's enhancement with KG architecture for queries: (parse NL
 1. **Input**: User submits NL query via API (e.g., POST `/api/v1/nl/query`).
 2. **Caching Check**: Redis lookup for prior executions of the same query.
 3. **NL-to-SPARQL**: If uncached, MOBR's Ollama (`mobr/cap` model) generates SPARQL from the NL prompt.
-4. **SPARQL Execution**: Query Virtuoso triplestore (graph: `http://www.mobr.ai/ontologies/cardano#`).
+4. **SPARQL Execution**: Query Virtuoso triplestore (graph: `https://mobr.ai/ont/cardano#`).
 5. **Result Processing**: If successful, cache results; else, fallback to error handling.
 6. **Contextualization**: `mobr/cap` model synthesizes a natural language answer from SPARQL results.
 7. **Output**: Stream response chunks via SSE, including status updates.

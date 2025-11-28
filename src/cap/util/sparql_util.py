@@ -9,7 +9,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-ADA_CURRENCY_URI = "http://www.mobr.ai/ontologies/cardano#cnt/ada"
+ADA_CURRENCY_URI = "https://mobr.ai/ont/cardano#cnt/ada"
 LOVELACE_TO_ADA = 1_000_000
 
 def _is_hex_string(value: str) -> bool:
