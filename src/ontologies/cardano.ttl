@@ -635,12 +635,6 @@ c:hasTxInput a owl:ObjectProperty ;
     rdfs:domain b:Transaction ;
     rdfs:range c:TransactionInput .
 
-c:hasTxInputValue a owl:DatatypeProperty ;
-    rdfs:label "has tx input value" ;
-    rdfs:comment "Relates a transaction with the sum of values of its inputs." ;
-    rdfs:domain b:Transaction ;
-    rdfs:range xsd:decimal .
-
 c:hasTxInputCount a owl:DatatypeProperty ;
     rdfs:label "has tx input count" ;
     rdfs:comment "Relates a transaction with the number of inputs in it." ;
