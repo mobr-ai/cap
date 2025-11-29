@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 from urllib.parse import unquote_plus
 import logging
+import re
 
 from cap.api.models import (
     QueryRequest,
@@ -28,9 +29,14 @@ async def execute_query(request: QueryRequest):
         try:
             user_query = request.query
             if user_query:
-                low_uq = user_query.lower()
-                if "update" in low_uq or "delete" in low_uq or "insert" in low_uq:
+                # Check for actual SPARQL update operations with flexible whitespace
+                # \s+ matches any whitespace (spaces, newlines, tabs) one or more times
+                update_pattern = r'\b(insert|update|delete)\s+(data|where|\{)'
+
+                if re.search(update_pattern, user_query, re.IGNORECASE):
                     return QueryResponse(results=[])
+            else:
+                return QueryResponse(results=[])
 
             redis_client = get_redis_sparql_client()
             cached_data = await redis_client.get_cached_results(user_query)

@@ -192,17 +192,17 @@ c:ConstitutionalCommitteeRetirement a owl:Class ;
     rdfs:label "Constitutional Committee Retirement" ;
     rdfs:comment "Certificate for retiring from constitutional committee" .
 
-c:DelegateRepresentativeRegistration a owl:Class ;
+c:DRepRegistration a owl:Class ;
     rdfs:subClassOf c:Certificate ;
     rdfs:label "DRep Registration" ;
     rdfs:comment "Certificate for registering as a delegate representative" .
 
-c:DelegateRepresentativeUpdate a owl:Class ;
+c:DRepUpdate a owl:Class ;
     rdfs:subClassOf c:Certificate ;
     rdfs:label "DRep Update" ;
     rdfs:comment "Certificate for updating delegate representative information" .
 
-c:DelegateRepresentativeRetirement a owl:Class ;
+c:DRepRetirement a owl:Class ;
     rdfs:subClassOf c:Certificate ;
     rdfs:label "DRep Retirement" ;
     rdfs:comment "Certificate for retiring as a delegate representative" .
@@ -308,7 +308,7 @@ c:ColdCredential a owl:Class ;
     rdfs:comment "Offline administrative credentials for committee members." .
 
 c:DRep a owl:Class ;
-    rdfs:label "Delegated Representative" ;
+    rdfs:label "Delegate Representative" ;
     rdfs:comment "An entity that can vote on behalf of delegators." .
 
 c:GovernanceProposal a owl:Class ;

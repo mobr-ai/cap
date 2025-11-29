@@ -122,7 +122,6 @@ class NLQueryTester:
         total_passed = sum(1 for _, success in results if success)
         print(f"\nPassed: {total_passed}/{len(results)}")
 
-
 async def main():
     """Run the test suite."""
     import sys
@@ -135,6 +134,10 @@ async def main():
     tester = NLQueryTester(base_url)
     await tester.run_all_tests()
 
+# Usage:
+# python nl_query_tests.py
+# or
+# python nl_query_tests.py http://your-server:8000
 
 if __name__ == "__main__":
     print("""
@@ -145,7 +148,6 @@ if __name__ == "__main__":
     This script will test:
     - Service health check
     - Natural language query processing
-    - SPARQL generation and execution
     - Result contextualization
     - Streaming response delivery
 
@@ -163,24 +165,3 @@ if __name__ == "__main__":
         print("\n\nTest cancelled by user")
     except Exception as e:
         print(f"\n\nTest suite error: {e}")
-
-
-# Additional utility functions for manual testing
-
-async def simple_query_test(query: str, base_url: str = "http://localhost:8000"):
-    """Quick test of a single query."""
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        response = await client.post(
-            f"{base_url}/api/v1/nl/query",
-            json={"query": query, "temperature": 0.1},
-            headers={"Accept": "text/event-stream"}
-        )
-
-        async for chunk in response.aiter_text():
-            print(chunk, end='', flush=True)
-
-
-# Usage:
-# python test_nl_query_pipeline.py
-# or
-# python test_nl_query_pipeline.py http://your-server:8000
