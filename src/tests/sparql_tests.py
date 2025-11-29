@@ -7,6 +7,7 @@ import asyncio
 import argparse
 import httpx
 from pathlib import Path
+from pprint import pprint
 
 from cap.rdf.triplestore import TriplestoreClient
 
@@ -91,7 +92,8 @@ class SPARQLQueryTester:
             assert len(bindings) > 0, f"No results returned for {sparql_file}"
 
             print(f"✓ Test passed for {sparql_file} ({len(bindings)} bindings)")
-            print(f"   Bindings: {bindings}")
+            pprint(f"   SPARQL: {query}")
+            pprint(f"   Bindings: {bindings}")
 
 
 async def main():
@@ -122,6 +124,9 @@ async def main():
     )
 
     await tester.run_all_tests()
+
+    print("✓✓✓ All tests passed ✓✓✓")
+
 
 # Usage:
 # python sparql_tests.py
