@@ -123,11 +123,24 @@ class TriplestoreClient:
                     await self.close()
                     return ret_
 
+                except httpx.HTTPStatusError as e:
+                    logger.error(f"SPARQL query failed with HTTP error: {e}")
+                    logger.error(f"Query: {query}")
+                    await self.close()
+                    # Try to extract error details from response
+                    try:
+                        error_detail = e.response.json()
+                        raise HTTPException(status_code=e.response.status_code, detail=error_detail)
+
+                    except Exception:
+                        # If we can't parse JSON, use the text response
+                        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+
                 except Exception as e:
                     logger.error(f"SPARQL query failed: {e}")
                     logger.error(f"Query: {query}")
                     await self.close()
-                    raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
+                    raise HTTPException(status_code=500, detail=str(e))
 
             def _execute_sync():
                 try:
