@@ -349,6 +349,9 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
 
     result = {}
 
+    if not binding:
+        return result
+
     for var_name, value_obj in binding.items():
         if not isinstance(value_obj, dict):
             result[var_name] = value_obj
