@@ -6,7 +6,6 @@ Not for pytest
 import asyncio
 import argparse
 from pathlib import Path
-from pprint import pprint
 
 from cap.services.ollama_client import OllamaClient
 
@@ -19,16 +18,16 @@ def _read_content_nl_file(path: str | Path) -> str:
 class SPARQLGenerationTester:
     """Test SPARQL generation pipeline."""
 
-    def __init__(
-        self,
-        txt_folder
-    ):
+    def __init__(self, txt_folder:str):
         self.txt_folder = txt_folder
         self.oc = OllamaClient()
 
     async def run_all_tests(self):
-        sparql_dir = Path(self.txt_folder)
-        txt_files = sorted(sparql_dir.rglob("*.txt"))
+        if self.txt_folder.endswith(".txt"):
+            txt_files = [self.txt_folder]
+        else:
+            nl_dir = Path(self.txt_folder)
+            txt_files = sorted(nl_dir.rglob("*.txt"))
 
         for txt_file in txt_files:
             print(f"Testing {txt_file}")
@@ -59,8 +58,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Run SPARQL test suite.")
     parser.add_argument(
         "--txt-folder",
-        default="documentation/nl_examples",
-        help="Folder containing .txt text files with nl query examples (default: documentation/nl_examples)"
+        default="documentation/examples/nl",
+        help="Folder containing .txt text files with nl query examples (default: documentation/examples/nl) or a txt file"
     )
     args = parser.parse_args()
 
@@ -75,7 +74,7 @@ async def main():
 # or
 # python sparql_tests.py http://your-server:8000
 # or
-# python sparql_tests.py http://your-server:8000 path_to_folder_with_txt_files
+# python sparql_tests.py http://your-server:8000 path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""

@@ -70,6 +70,9 @@ class MetricsService:
     ) -> QueryMetrics:
         """Record query execution metrics."""
 
+        if db is None:
+            return
+
         # Detect language
         detected_lang = LanguageDetector.detect_language(nl_query)
 

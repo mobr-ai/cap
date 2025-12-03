@@ -107,8 +107,8 @@ async def main():
     )
     parser.add_argument(
         "--sparql-folder",
-        default="documentation/sparql_examples",
-        help="Folder containing .rq SPARQL files (default: documentation/sparql_examples)"
+        default="documentation/examples/sparql",
+        help="Folder containing .rq SPARQL files (default: documentation/examples/sparql)"
     )
     parser.add_argument(
         "--use-api",
