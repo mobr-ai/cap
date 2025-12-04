@@ -444,6 +444,15 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
                 context
             )
             ada_vars.update(value_vars)
+        else:
+            # Checking for the properties that always hold ADA values
+            context = '\n'.join(lines[max(0, i-3):min(len(lines), i+4)])
+            # Checking for the properties that can hold ADA values
+            value_vars = re.findall(
+                r'(?:hasFee)\s+\?(\w+)',
+                context
+            )
+            ada_vars.update(value_vars)
 
     # Step 2: Propagate through aggregations (iteratively until no new vars found)
     # This handles multi-level aggregations like SUM(SUM(?value))
