@@ -5,7 +5,9 @@ import logging
 import json
 import sys
 import asyncio
+
 from cap.services.ollama_client import OllamaClient
+from cap.util.sparql_util import _clean_sparql
 
 async def test_health_check():
     """Test 1: Health Check - Verify Ollama service is running."""
@@ -261,7 +263,7 @@ LIMIT 10"""
         print("INPUT:")
         print(test_case['input'])
         print("\nOUTPUT (cleaned):")
-        cleaned = client._clean_sparql(test_case['input'])
+        cleaned = _clean_sparql(test_case['input'])
         print(cleaned)
         print("-" * 70)
 

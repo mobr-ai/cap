@@ -15,7 +15,7 @@ from cap.rdf.triplestore import TriplestoreClient
 from cap.services.metrics_service import MetricsService
 from cap.rdf.triplestore import TriplestoreClient
 from cap.rdf.cache.query_normalizer import QueryNormalizer
-from cap.util.sparql_util import convert_sparql_to_kv, format_for_llm
+from cap.util.sparql_util import convert_sparql_to_kv, format_for_llm, detect_and_parse_sparql
 from cap.services.ollama_client import get_ollama_client
 from cap.services.redis_nl_client import get_redis_nl_client
 
@@ -128,7 +128,7 @@ async def query_with_stream_response(
 
             try:
                 raw_sparql_response = await ollama.nl_to_sparql(natural_query=user_query)
-                is_sequential, sparql_content = ollama.detect_and_parse_sparql(raw_sparql_response)
+                is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response)
 
                 if is_sequential:
                     sparql_queries = sparql_content
