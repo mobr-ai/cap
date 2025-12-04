@@ -50,6 +50,14 @@ class OllamaClient:
         )
 
     @property
+    def chart_prompt(self) -> str:
+        """Get contextualization prompt (refreshed from env)."""
+        return self._load_prompt(
+            "CHART_PROMPT",
+            "You are the Cardano Analytics Platform chart analyzer."
+        )
+
+    @property
     def contextualize_prompt(self) -> str:
         """Get contextualization prompt (refreshed from env)."""
         return self._load_prompt(
@@ -503,6 +511,7 @@ class OllamaClient:
             temperature = 0.1
             if "chart" in result_type or "table" in result_type:
                 known_info = f"""
+                {self.chart_prompt}
                 The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
                 """
