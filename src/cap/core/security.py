@@ -1,6 +1,6 @@
 # cap/core/security.py
 import os
-import time
+from fastapi import HTTPException
 import jwt  # PyJWT
 import os, re, bcrypt, jwt, secrets, unicodedata
 from datetime import datetime, timedelta, timezone
@@ -83,13 +83,13 @@ def new_confirmation_token() -> str:
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     """
-    Decode & validate JWT; raise jwt exceptions on invalid token.
+    Decode & validate JWT; raise HTTPException on invalid token.
     """
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
         # Optional: basic exp/nbf/iat checks handled by PyJWT if present
         return payload
     except jwt.ExpiredSignatureError:
-        raise Exception("tokenExpired")
+        raise HTTPException(status_code=401, detail="tokenExpired", headers={"WWW-Authenticate": "Bearer"})
     except jwt.InvalidTokenError:
-        raise Exception("invalidToken")
+        raise HTTPException(status_code=401, detail="invalidToken", headers={"WWW-Authenticate": "Bearer"})
