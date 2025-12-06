@@ -28,9 +28,12 @@ from cap.api.waitlist import router as wait_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
+from cap.api.user_admin import router as user_admin_router
+from cap.api.system_admin import router as system_router
 from cap.api.dashboard import router as dashboard_router
 from cap.api.demo_nl import router as demo_router
 from cap.api.metrics import router as metrics_router
+from cap.api.notifications_admin import router as notif_admin_router
 
 
 from dotenv import load_dotenv
@@ -218,12 +221,15 @@ def create_application() -> FastAPI:
     app.include_router(nl_router)
     app.include_router(auth_router)
     app.include_router(user_router)
+    app.include_router(user_admin_router)
     app.include_router(wait_router)
     app.include_router(cache_router)
     app.include_router(etl_router)
     app.include_router(dashboard_router)
+    app.include_router(system_router) 
     app.include_router(metrics_router)
     app.include_router(demo_router)
+    app.include_router(notif_admin_router)
 
     return app
 

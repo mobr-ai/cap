@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from cap.database.session import get_db
 from cap.database.model import User
+from cap.services.admin_alerts_service import maybe_notify_admins_new_user
 from cap.core.security import (
     hash_password, verify_password, make_access_token,
     generate_unique_username, new_confirmation_token
@@ -77,13 +78,18 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
         password_hash=hash_password(data.password),
         confirmation_token=token,
         is_confirmed=False,
+        is_admin=False,
     )
     db.add(new_user)
     db.commit()
 
+    # Notify admins (if configured)
+    maybe_notify_admins_new_user(db, new_user, source="password")
+
     # Build confirmation link
     base = str(request.base_url).rstrip("/")
     activation_link = f"{base}/{route_prefix}/confirm/{token}"
+
 
     # Send confirmation email
     # Uses CAP mailing service (Resend + Jinja templates + i18n). :contentReference[oaicite:2]{index=2}
@@ -159,6 +165,7 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "email": user.email,
         "avatar": user.avatar,
         "settings": user.settings,
+        "is_admin": getattr(user, "is_admin", False),
         "access_token": token,
     }
 
@@ -184,11 +191,15 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
                 display_name=display_name,
                 avatar=avatar,
                 is_confirmed=True,
+                is_admin=False,
             )
             db.add(user)
 
             # Fire an OAuth login trigger (analytics/notice) once
             on_oauth_login(to=[email], language="en", provider="Google")
+
+            # Notify admins (if configured)
+            maybe_notify_admins_new_user(db, user, source="google")
         elif not user.avatar:
             # keep avatar if already defined
             user.avatar = avatar
@@ -204,6 +215,7 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
             "email": user.email,
             "avatar": user.avatar,
             "settings": user.settings,
+            "is_admin": getattr(user, "is_admin", False),
             "access_token": token,
         }
     except Exception as e:
@@ -230,9 +242,13 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
             wallet_address=data.address,
             display_name=display_name,
             is_confirmed=True,
+            is_admin=False,
         )
         db.add(user)
         db.commit()
+
+        # Notify admins (if configured)
+        maybe_notify_admins_new_user(db, user, source="cardano")
 
     token = make_access_token(str(user.user_id), remember=data.remember_me)
 
@@ -248,5 +264,6 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
         "email": user.email,
         "avatar": user.avatar,
         "settings": user.settings,
+        "is_admin": getattr(user, "is_admin", False),
         "access_token": token,
     }
