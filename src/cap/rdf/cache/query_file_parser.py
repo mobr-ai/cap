@@ -7,6 +7,8 @@ import re
 from typing import Tuple
 from opentelemetry import trace
 
+from cap.util.sparql_util import ensure_validity
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -95,4 +97,4 @@ class QueryFileParser:
 
             return json.dumps(queries)
 
-        return sparql
+        return ensure_validity(sparql)

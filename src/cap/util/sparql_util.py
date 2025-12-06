@@ -107,7 +107,7 @@ def _ensure_prefixes(query: str) -> str:
 
     return query
 
-def validate_and_fix_sparql(query: str) -> tuple[bool, str, list[str]]:
+def _validate_and_fix_sparql(query: str) -> tuple[bool, str, list[str]]:
     """
     Validate and attempt to fix SPARQL query issues.
 
@@ -337,15 +337,20 @@ def detect_and_parse_sparql(sparql_text: str) -> tuple[bool, Union[str, list[dic
         queries = _parse_sequential_sparql(sparql_text)
         return len(queries) > 0, queries  # True if parsed successfully
     else:
-        cleaned = _clean_sparql(sparql_text)
-        cleaned = _ensure_prefixes(cleaned)
-
-        # Validate and fix
-        is_valid, fixed_query, issues = validate_and_fix_sparql(cleaned)
-        if issues:
-            logger.info(f"SPARQL validation results: {'; '.join(issues)}")
-
+        fixed_query = ensure_validity(sparql_text)
         return False, fixed_query
+
+def ensure_validity(sparql_query: str) -> str:
+    cleaned = _clean_sparql(sparql_query)
+    cleaned = _ensure_prefixes(cleaned)
+
+    # Validate and fix
+    _, fixed_query, issues = _validate_and_fix_sparql(cleaned)
+    if issues:
+        logger.info(f"SPARQL validation results: {'; '.join(issues)}")
+
+    return fixed_query
+
 
 def _is_hex_string(value: str) -> bool:
     """
