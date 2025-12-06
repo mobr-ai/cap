@@ -231,23 +231,33 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
     agg_pattern = r'(?:COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT|SAMPLE)\s*\([^)]*\?(\w+)'
     aggregated_vars = set(re.findall(agg_pattern, select_clause, re.IGNORECASE))
 
-    # Variables defined as expressions (AS clause)
+    # Variables defined as expressions (AS clause) - these are result variables from aggregations
     defined_vars = set(var_to_expression.keys())
 
+    # ALSO find variables that are defined AS the result of aggregation functions
+    # Pattern: (AGG_FUNCTION(...) AS ?resultVar)
+    result_vars = set(re.findall(
+        r'(?:COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT|SAMPLE)\s*\([^)]*\)\s+AS\s+\?(\w+)',
+        select_clause,
+        re.IGNORECASE
+    ))
+
     # Non-aggregated variables that should be in GROUP BY
-    non_agg_vars = all_select_vars - aggregated_vars - defined_vars
+    # Exclude both aggregated vars AND variables that are results of aggregations
+    non_agg_vars = all_select_vars - aggregated_vars - defined_vars - result_vars
 
     # Missing from GROUP BY
     missing_from_group = non_agg_vars - group_by_vars
 
     if missing_from_group:
         # Add missing variables to GROUP BY
-        for var in missing_from_group:
-            group_by_clause += f' ?{var}'
+        additional_vars = ' '.join([f'?{var}' for var in missing_from_group])
 
-        # Replace the GROUP BY clause
+        # Replace the GROUP BY clause - use the matched text to preserve formatting
         old_group_by = group_by_match.group(0)
-        new_group_by = f'GROUP BY {group_by_clause}'
+        # Extract just the GROUP BY keyword and existing variables
+        group_by_prefix = re.match(r'GROUP\s+BY\s+', old_group_by, re.IGNORECASE).group(0)
+        new_group_by = f'{group_by_prefix}{group_by_clause} {additional_vars}'
         fixed_query = fixed_query.replace(old_group_by, new_group_by)
 
         fix_msg = f"Added missing variables to GROUP BY: {missing_from_group}"
