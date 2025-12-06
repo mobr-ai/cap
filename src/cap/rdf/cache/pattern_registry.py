@@ -79,7 +79,7 @@ class PatternRegistry:
                     'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
     TIME_PERIOD_RANGE_TERMS = ['first', 'last', 'second', 'third']
-    TIME_PERIOD_UNITS = ['week', 'day', 'month', 'epoch']
+    TIME_PERIOD_UNITS = ['week', 'day', 'month', 'hour', 'epoch']
 
     # Ordering terms
     MAX_TERMS = ['largest', 'biggest', 'highest', 'greatest', 'maximum', 'max']
