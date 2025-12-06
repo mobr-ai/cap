@@ -110,7 +110,7 @@ class TriplestoreClient:
         async with self._query_lock:
             test_time = datetime.now(timezone.utc)
             processor = SparqlDateProcessor(reference_time=test_time)
-            query = processor.process(sparql_query)
+            query, _ = processor.process(sparql_query)
             # If endpoint use plain HTTP GET
             if not self.config.sparql_endpoint.endswith("/sparql"):
                 client = await self._get_http_client()
