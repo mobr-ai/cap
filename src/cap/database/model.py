@@ -32,6 +32,13 @@ class User(Base):
     is_confirmed   = Column(Boolean, default=False)
     confirmation_token = Column(String(128), nullable=True)
 
+    is_admin       = Column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        default=False,  # optional but nice for in-memory defaults
+    )
+
     # on-prem avatar storage
     avatar_blob    = Column(LargeBinary, nullable=True)      # BYTEA
     avatar_mime    = Column(String(64), nullable=True)       # e.g., "image/png"
@@ -181,4 +188,17 @@ class DashboardMetrics(Base):
 
     __table_args__ = (
         Index('idx_dashboard_metrics_user_date', 'user_id', 'created_at'),
+    )
+
+
+class AdminSetting(Base):
+    __tablename__ = "admin_setting"
+
+    key = Column(String(64), primary_key=True)
+    value = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at = Column(DateTime, server_default=text("NOW()"))
+    updated_at = Column(
+        DateTime,
+        server_default=text("NOW()"),
+        onupdate=text("NOW()"),
     )
