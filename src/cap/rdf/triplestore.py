@@ -8,7 +8,9 @@ import httpx
 import asyncio
 import logging
 import urllib
+from datetime import datetime, timezone
 
+from cap.util.sparql_date_processor import SparqlDateProcessor
 from cap.config import settings
 
 DEFAULT_PREFIX = """
@@ -102,10 +104,13 @@ class TriplestoreClient:
     def _build_sparql_prefixes(self, additional_prefixes: Optional[dict[str, str]] = None) -> str:
         return self._build_prefixes("PREFIX", DEFAULT_PREFIX, additional_prefixes)
 
-    async def _execute_sparql_query_async(self, query: str) -> dict:
+    async def _execute_sparql_query_async(self, sparql_query: str) -> dict:
         """Execute SPARQL query asynchronously."""
 
         async with self._query_lock:
+            test_time = datetime.now(timezone.utc)
+            processor = SparqlDateProcessor(reference_time=test_time)
+            query = processor.process(sparql_query)
             # If endpoint use plain HTTP GET
             if not self.config.sparql_endpoint.endswith("/sparql"):
                 client = await self._get_http_client()
