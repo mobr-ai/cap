@@ -1,0 +1,82 @@
+{# src/cap/mailing/templates/admin_user_created.html #} {% extends
+"base_email.html" %} {% block preheader %} {{ translations.preheader or "A new
+user has just registered on your Cardano Analytics Platform instance." }} {%
+endblock %} {% block content %}
+<h2 style="margin: 0 0 12px 0">
+  {{ translations.title or "New user registration" }}
+</h2>
+
+<p style="margin: 0 0 12px 0">
+  {{ translations.lead or "A new user account has just been created on" }} {{
+  translations.app_name or "CAP" }}.
+</p>
+
+<table
+  role="presentation"
+  cellpadding="0"
+  cellspacing="0"
+  border="0"
+  style="margin: 0 0 16px 0; border-collapse: collapse; font-size: 14px"
+>
+  {% if new_user_username %}
+  <tr>
+    <td style="padding: 4px 8px 4px 0; font-weight: 600; white-space: nowrap">
+      {{ translations.username_label or "Username" }}:
+    </td>
+    <td style="padding: 4px 0">{{ new_user_username }}</td>
+  </tr>
+  {% endif %} {% if new_user_email %}
+  <tr>
+    <td style="padding: 4px 8px 4px 0; font-weight: 600; white-space: nowrap">
+      {{ translations.email_label or "Email" }}:
+    </td>
+    <td style="padding: 4px 0">{{ new_user_email }}</td>
+  </tr>
+  {% endif %} {% if source %}
+  <tr>
+    <td style="padding: 4px 8px 4px 0; font-weight: 600; white-space: nowrap">
+      {{ translations.source_label or "Signup method" }}:
+    </td>
+    <td style="padding: 4px 0">
+      {# Simple mapping for nicer labels #} {% if source == "password" %} {{
+      translations.source_password or "Email & password" }} {% elif source ==
+      "google" %} {{ translations.source_google or "Google OAuth" }} {% elif
+      source == "cardano" %} {{ translations.source_cardano or "Cardano wallet"
+      }} {% else %} {{ source }} {% endif %}
+    </td>
+  </tr>
+  {% endif %}
+</table>
+
+{% if app_url %}
+<p style="margin: 0 0 16px 0">
+  {{ translations.manage_hint or "You can review this user’s details and adjust
+  their permissions in the admin panel." }}
+</p>
+
+<p style="margin: 0 0 16px 0">
+  <a
+    href="{{ app_url }}"
+    class="btn"
+    style="
+      display: inline-block;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background-color: #2563eb;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      line-height: 1.2;
+    "
+  >
+    {{ translations.manage_link_label or "Open CAP" }}
+  </a>
+</p>
+{% endif %}
+
+<p style="color: #6b7280; font-size: 12px; margin: 0">
+  {{ translations.footer or "You’re receiving this message because admin
+  notifications for new user registrations are enabled." }}
+</p>
+{% endblock %}
