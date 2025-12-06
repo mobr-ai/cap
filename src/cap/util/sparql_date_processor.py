@@ -273,7 +273,6 @@ class SparqlDateProcessor:
             Tuple of (processed_query, number_of_replacements)
         """
         if not query or not isinstance(query, str) or "bind" not in query.lower():
-            logger.warning("Invalid query input")
             return query, 0
 
         # Count replacements

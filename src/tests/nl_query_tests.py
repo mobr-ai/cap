@@ -3,6 +3,7 @@ Test script for the Natural Language Query Pipeline.
 Run this to verify nl components are working correctly.
 Not for pytest
 """
+import logging
 import asyncio
 import argparse
 import httpx
@@ -10,8 +11,12 @@ import json
 import time
 from pathlib import Path
 
+
 from cap.services.nl_service import query_with_stream_response
 from cap.services.ollama_client import OllamaClient
+
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.ERROR)
 
 def _read_content_nl_file(path: str | Path) -> str:
     """Read and return the content of a txt file with nl queries."""
@@ -19,8 +24,10 @@ def _read_content_nl_file(path: str | Path) -> str:
     with path.open("r", encoding="utf-8") as f:
         return f.read()
 
+
 class NLQueryTester:
     """Test harness for NL query pipeline."""
+
 
     def __init__(self, base_url: str, txt_folder: str):
         self.oc = OllamaClient()
@@ -28,7 +35,8 @@ class NLQueryTester:
         self.base_url: str = base_url.rstrip("/")
         self.metrics = []
 
-    async def _print_metrics_summary(self):
+
+    def _print_metrics_summary(self):
         """Print summary of all test metrics."""
         if not self.metrics:
             return
@@ -62,6 +70,7 @@ class NLQueryTester:
                 status_icon = "v" if m['status'] == 'success' else "x"
                 print(f"  {status_icon} {m['execution_time']:.2f}s - {m['query'][:60]}...")
 
+
     async def test_health(self) -> bool:
         """Test if the NL query service is healthy."""
         print("\n" + "="*60)
@@ -82,6 +91,7 @@ class NLQueryTester:
             except Exception as e:
                 print(f"Health check failed: {e}")
                 return False
+
 
     async def test_query(self, query: str) -> bool:
         """Test a natural language query."""
@@ -107,6 +117,7 @@ class NLQueryTester:
 
                     if data == '[DONE]':
                         execution_time = time.time() - start_time
+                        print(resp)
                         print("\n" + "-" * 60)
                         print(f"Execution time: {execution_time:.2f} seconds")
                         print("✓ Query completed successfully")
@@ -117,7 +128,6 @@ class NLQueryTester:
                             'status': 'success'
                         })
 
-                        print(resp)
                         return True
 
                 elif line.startswith('status: '):
@@ -127,8 +137,10 @@ class NLQueryTester:
                 elif line.startswith('Error: '):
                     error = line[7:].strip()
                     print(f"\nx {error}")
+                    return False
+
                 elif line.strip() != "":
-                    resp = resp + " " + line.rstrip("\n")
+                    resp = resp + line.rstrip("\n")
 
             print(resp)
             return True
@@ -145,6 +157,7 @@ class NLQueryTester:
                 'error': str(e)
             })
             return False
+
 
     async def run_all_tests(self):
         """Run all tests."""
@@ -171,13 +184,12 @@ class NLQueryTester:
             txt_files = sorted(nl_dir.rglob("*.txt"))
 
         for txt_file in txt_files:
-            print(f"Testing {txt_file}")
+            print(f"Testing queries in file: {txt_file}")
             txt_content = _read_content_nl_file(txt_file)
             nl_queries = txt_content.split("\n")
             for query in nl_queries:
                 if query.strip():
                     try:
-                        print(f"Testing {query}")
                         result = await self.test_query(query)
 
                     except Exception as e:
@@ -191,9 +203,9 @@ class NLQueryTester:
 
         self._print_metrics_summary()
 
+
 async def main():
     """Run the test suite."""
-    import sys
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run SPARQL test suite.")

@@ -72,6 +72,8 @@ if __name__ == "__main__":
 
         SELECT ?pastWeek ?pastDay ?futureWeek
         WHERE {
+            BIND((NOW() - "P7D"^^xsd:dayTimeDuration) AS ?oneWeekAgo)
+            BIND(NOW() - "P7D"^^xsd:dayTimeDuration as ?lastWeek)
             BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?pastWeek)
             BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?pastDay)
             BIND (NOW() + "P7D"^^xsd:duration as ?futureWeek)
