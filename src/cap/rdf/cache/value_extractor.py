@@ -170,7 +170,7 @@ class ValueExtractor:
 
         # Explicit limits (latest N, first N, etc.)
         limit_terms = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
-        for match in re.finditer(limit_terms + r'\s+(\d+)', nl_query, re.IGNORECASE):
+        for match in re.finditer(limit_terms + r'\s+(\d+)(?!\s*(?:hour|day|week|month|year|epoch)s?)\b', nl_query, re.IGNORECASE):
             limit = match.group(2)
             if limit not in values["limits"]:
                 values["limits"].append(limit)

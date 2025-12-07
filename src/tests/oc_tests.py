@@ -370,15 +370,6 @@ async def run_all_tests():
     print("\n" + "="*70)
     print("All tests completed!")
     print("="*70)
-    print("\nYou now know how to use all OllamaClient methods:")
-    print("  1. health_check() - Check service availability")
-    print("  2. generate_complete() - Non-streaming generation")
-    print("  3. generate_stream() - Streaming generation")
-    print("  4. nl_to_sparql() - Convert NL to SPARQL")
-    print("  5. contextualize_answer() - Generate answers from results")
-    print("  6. _clean_sparql() - Clean LLM-generated SPARQL")
-    print("\nFor production usage, see the API endpoints in nl_query.py")
-    print("\n")
 
 if __name__ == "__main__":
     logging.basicConfig(

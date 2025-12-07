@@ -186,6 +186,7 @@ async def query_with_stream_response(
                     )
             except Exception as e:
                 logger.error(f"SPARQL execution error: {e}", exc_info=True)
+                logger.error(f"    SPARQL: {sparql_query}")
                 error_msg = str(e)
                 has_data = False
                 query_succeeded = False
