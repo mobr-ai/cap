@@ -91,7 +91,7 @@ def get_system_metrics(
 
 def get_disks_info() -> list[dict[str, Any]]:
     """
-    Return usage info for all mounted partitions.
+    Return usage info for real mounted filesystems.
 
     Each entry has:
       - device
@@ -99,28 +99,71 @@ def get_disks_info() -> list[dict[str, Any]]:
       - fstype
       - opts
       - total, used, percent
+
+    Notes:
+      - We filter out pseudo/virtual filesystems (tmpfs, proc, sysfs, overlay, etc.)
+      - We also ignore bind-mounts of individual files (e.g. /etc/hosts inside Docker)
+        by requiring mountpoint to be a directory.
     """
     if psutil is None:
         return []
 
     disks: list[dict[str, Any]] = []
 
+    # Filesystem types we consider "virtual" and want to hide from the UI
+    VIRTUAL_FS = {
+        "proc",
+        "sysfs",
+        "devtmpfs",
+        "tmpfs",
+        "squashfs",
+        "overlay",
+        "rpc_pipefs",
+        "cgroup",
+        "cgroup2",
+        "debugfs",
+        "tracefs",
+        "securityfs",
+        "pstore",
+        "configfs",
+        "fusectl",
+        "binfmt_misc",
+    }
+
     try:
         partitions = psutil.disk_partitions(all=False)
     except Exception:
         return disks
 
+    seen_mounts: set[str] = set()
+
     for part in partitions:
+        mp = part.mountpoint
+
+        # Ignore duplicate mountpoints
+        if mp in seen_mounts:
+            continue
+
+        # Ignore non-directories (file bind-mounts like /etc/hosts in containers)
+        if not os.path.isdir(mp):
+            continue
+
+        # Ignore virtual / pseudo filesystems
+        if part.fstype in VIRTUAL_FS:
+            continue
+
         try:
-            usage = psutil.disk_usage(part.mountpoint)
+            usage = psutil.disk_usage(mp)
         except (PermissionError, FileNotFoundError, OSError):
             # Skip mounts we can't read
             continue
 
+        seen_mounts.add(mp)
+
         disks.append(
             {
                 "device": part.device,
-                "mountpoint": part.mountpoint,
+                "mountpoint": mp,
                 "fstype": part.fstype,
                 "opts": part.opts,
                 "total": usage.total,
