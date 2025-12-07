@@ -91,7 +91,7 @@ def get_system_metrics(
 
 def get_disks_info() -> list[dict[str, Any]]:
     """
-    Return usage info for real mounted filesystems.
+    Return usage info for meaningful mounted filesystems.
 
     Each entry has:
       - device
@@ -100,24 +100,28 @@ def get_disks_info() -> list[dict[str, Any]]:
       - opts
       - total, used, percent
 
-    Notes:
-      - We filter out pseudo/virtual filesystems (tmpfs, proc, sysfs, overlay, etc.)
-      - We also ignore bind-mounts of individual files (e.g. /etc/hosts inside Docker)
-        by requiring mountpoint to be a directory.
+    Heuristics:
+      - Uses disk_partitions(all=True) so we see the root FS even inside containers.
+      - Always keeps the root mountpoint "/" (even if fstype is 'overlay').
+      - Filters out pseudo/virtual filesystems (tmpfs, proc, sysfs, devpts, mqueue, etc.).
+      - Filters out mountpoints under /proc, /sys, /run, /dev (except root).
+      - Ignores bind-mounts of individual files by requiring mountpoint to be
+        a directory.
+      - Ignores filesystems with total == 0.
     """
     if psutil is None:
         return []
 
     disks: list[dict[str, Any]] = []
 
-    # Filesystem types we consider "virtual" and want to hide from the UI
+    # Filesystem types we consider "virtual" or not interesting for the UI
     VIRTUAL_FS = {
         "proc",
         "sysfs",
         "devtmpfs",
         "tmpfs",
         "squashfs",
-        "overlay",
+        "overlay",         # allowed for root "/" only
         "rpc_pipefs",
         "cgroup",
         "cgroup2",
@@ -128,10 +132,24 @@ def get_disks_info() -> list[dict[str, Any]]:
         "configfs",
         "fusectl",
         "binfmt_misc",
+        "mqueue",
+        "hugetlbfs",
+        "devpts",
+        "autofs",
+        "bpf",
+        "fuse.gvfsd-fuse",
     }
 
+    # Mount prefixes that are usually system internals
+    INTERNAL_MOUNT_PREFIXES = (
+        "/proc",
+        "/sys",
+        "/run",
+        "/dev",
+    )
+
     try:
-        partitions = psutil.disk_partitions(all=False)
+        partitions = psutil.disk_partitions(all=True)
     except Exception:
         return disks
 
@@ -139,23 +157,32 @@ def get_disks_info() -> list[dict[str, Any]]:
 
     for part in partitions:
         mp = part.mountpoint
+        is_root = mp == "/"
 
-        # Ignore duplicate mountpoints
+        # De-duplicate
         if mp in seen_mounts:
             continue
 
-        # Ignore non-directories (file bind-mounts like /etc/hosts in containers)
+        # Ignore bind-mounted files like /etc/hosts
         if not os.path.isdir(mp):
             continue
 
-        # Ignore virtual / pseudo filesystems
-        if part.fstype in VIRTUAL_FS:
+        # Filter out internal mountpoints (except root "/")
+        if not is_root and any(mp.startswith(prefix + "/") or mp == prefix for prefix in INTERNAL_MOUNT_PREFIXES):
+            continue
+
+        # Filter out virtual FS types for non-root mounts
+        if not is_root and part.fstype in VIRTUAL_FS:
             continue
 
         try:
             usage = psutil.disk_usage(mp)
         except (PermissionError, FileNotFoundError, OSError):
             # Skip mounts we can't read
+            continue
+
+        # Skip zero-sized filesystems
+        if usage.total == 0:
             continue
 
         seen_mounts.add(mp)
@@ -173,6 +200,7 @@ def get_disks_info() -> list[dict[str, Any]]:
         )
 
     return disks
+
 
 
 def get_gpu_info():
