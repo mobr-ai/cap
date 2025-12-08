@@ -1,8 +1,6 @@
-# cap/src/cap/api/system_admin.py
 import os
 import subprocess
-import json
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -49,10 +47,10 @@ def get_system_metrics(
     mem_percent = vm.percent
 
     # Disk (root filesystem)
-    disk = psutil.disk_usage("/")
-    disk_total = disk.total
-    disk_used = disk.used
-    disk_percent = disk.percent
+    root_disk = psutil.disk_usage("/")
+    root_disk_total = root_disk.total
+    root_disk_used = root_disk.used
+    root_disk_percent = root_disk.percent
 
     # Load average (if available)
     load_avg_1 = load_avg_5 = load_avg_15 = None
@@ -73,12 +71,15 @@ def get_system_metrics(
             "used": mem_used,
             "percent": mem_percent,
         },
+        # Backwards-compatible root disk summary
         "disk": {
-            "total": disk_total,
-            "used": disk_used,
-            "percent": disk_percent,
+            "total": root_disk_total,
+            "used": root_disk_used,
+            "percent": root_disk_percent,
             "mount": "/",
         },
+        # New: detailed disks/partitions list
+        "disks": get_disks_info(),
         "load_avg": {
             "1m": load_avg_1,
             "5m": load_avg_5,
@@ -86,6 +87,121 @@ def get_system_metrics(
         },
         "gpu": get_gpu_info(),
     }
+
+
+def get_disks_info() -> list[dict[str, Any]]:
+    """
+    Return usage info for meaningful mounted filesystems.
+
+    Each entry has:
+      - device
+      - mountpoint
+      - fstype
+      - opts
+      - total, used, percent
+
+    Heuristics:
+      - Uses disk_partitions(all=True) so we see the root FS even inside containers.
+      - Always keeps the root mountpoint "/" (even if fstype is 'overlay').
+      - Filters out pseudo/virtual filesystems (tmpfs, proc, sysfs, devpts, mqueue, etc.).
+      - Filters out mountpoints under /proc, /sys, /run, /dev (except root).
+      - Ignores bind-mounts of individual files by requiring mountpoint to be
+        a directory.
+      - Ignores filesystems with total == 0.
+    """
+    if psutil is None:
+        return []
+
+    disks: list[dict[str, Any]] = []
+
+    # Filesystem types we consider "virtual" or not interesting for the UI
+    VIRTUAL_FS = {
+        "proc",
+        "sysfs",
+        "devtmpfs",
+        "tmpfs",
+        "squashfs",
+        "overlay",         # allowed for root "/" only
+        "rpc_pipefs",
+        "cgroup",
+        "cgroup2",
+        "debugfs",
+        "tracefs",
+        "securityfs",
+        "pstore",
+        "configfs",
+        "fusectl",
+        "binfmt_misc",
+        "mqueue",
+        "hugetlbfs",
+        "devpts",
+        "autofs",
+        "bpf",
+        "fuse.gvfsd-fuse",
+    }
+
+    # Mount prefixes that are usually system internals
+    INTERNAL_MOUNT_PREFIXES = (
+        "/proc",
+        "/sys",
+        "/run",
+        "/dev",
+    )
+
+    try:
+        partitions = psutil.disk_partitions(all=True)
+    except Exception:
+        return disks
+
+    seen_mounts: set[str] = set()
+
+    for part in partitions:
+        mp = part.mountpoint
+        is_root = mp == "/"
+
+        # De-duplicate
+        if mp in seen_mounts:
+            continue
+
+        # Ignore bind-mounted files like /etc/hosts
+        if not os.path.isdir(mp):
+            continue
+
+        # Filter out internal mountpoints (except root "/")
+        if not is_root and any(mp.startswith(prefix + "/") or mp == prefix for prefix in INTERNAL_MOUNT_PREFIXES):
+            continue
+
+        # Filter out virtual FS types for non-root mounts
+        if not is_root and part.fstype in VIRTUAL_FS:
+            continue
+
+        try:
+            usage = psutil.disk_usage(mp)
+        except (PermissionError, FileNotFoundError, OSError):
+            # Skip mounts we can't read
+            continue
+
+        # Skip zero-sized filesystems
+        if usage.total == 0:
+            continue
+
+        seen_mounts.add(mp)
+
+        disks.append(
+            {
+                "device": part.device,
+                "mountpoint": mp,
+                "fstype": part.fstype,
+                "opts": part.opts,
+                "total": usage.total,
+                "used": usage.used,
+                "percent": usage.percent,
+            }
+        )
+
+    return disks
+
+
 
 def get_gpu_info():
     """
@@ -97,7 +213,7 @@ def get_gpu_info():
         cmd = [
             "nvidia-smi",
             "--query-gpu=index,name,driver_version,memory.total,memory.used,utilization.gpu",
-            "--format=csv,noheader,nounits"
+            "--format=csv,noheader,nounits",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=1)
 
@@ -106,21 +222,30 @@ def get_gpu_info():
 
         gpus = []
         for line in result.stdout.strip().split("\n"):
-            idx, name, driver, mem_total, mem_used, util = [x.strip() for x in line.split(",")]
+            idx, name, driver, mem_total, mem_used, util = [
+                x.strip() for x in line.split(",")
+            ]
 
-            gpus.append({
-                "index": int(idx),
-                "name": name,
-                "driver": driver,
-                "memory_total": int(mem_total),
-                "memory_used": int(mem_used),
-                "memory_percent": round((int(mem_used) / int(mem_total)) * 100, 1),
-                "utilization": int(util),
-            })
+            mem_total_int = int(mem_total)
+            mem_used_int = int(mem_used)
+
+            gpus.append(
+                {
+                    "index": int(idx),
+                    "name": name,
+                    "driver": driver,
+                    "memory_total": mem_total_int,
+                    "memory_used": mem_used_int,
+                    "memory_percent": round(
+                        (mem_used_int / mem_total_int) * 100, 1
+                    ),
+                    "utilization": int(util),
+                }
+            )
 
         return gpus
 
     except FileNotFoundError:
-        return None   # nvidia-smi not installed
+        return None  # nvidia-smi not installed
     except Exception:
         return None
