@@ -70,11 +70,9 @@ async def main():
 
 
 # Usage:
-# python sparql_tests.py
+# python sparql_generation_tests.py
 # or
-# python sparql_tests.py http://your-server:8000
-# or
-# python sparql_tests.py http://your-server:8000 path_to_folder_with_txt_files_or_txt_file
+# python sparql_generation_tests.py --txt-folder path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""

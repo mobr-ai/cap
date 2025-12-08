@@ -231,9 +231,9 @@ async def main():
 # Usage:
 # python nl_query_tests.py
 # or
-# python nl_query_tests.py http://your-server:8000
+# python nl_query_tests.py --base-url http://your-server:8000
 # or
-# python nl_query_tests.py http://your-server:8000 path_to_folder_with_txt_files_or_txt_file
+# python nl_query_tests.py --base-url http://your-server:8000 --txt-folder path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""
