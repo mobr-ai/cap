@@ -108,7 +108,7 @@ def _ensure_prefixes(query: str) -> str:
 
     return query
 
-def _validate_and_fix_sparql(query: str) -> tuple[bool, str, list[str]]:
+def _validate_and_fix_sparql(query: str, nl_query: str) -> tuple[bool, str, list[str]]:
     """
     Validate and attempt to fix SPARQL query issues.
 
@@ -136,7 +136,7 @@ def _validate_and_fix_sparql(query: str) -> tuple[bool, str, list[str]]:
     except ParseException as e:
         error_msg = f"Syntax error: {str(e)}"
         issues.append(error_msg)
-        logger.warning(f"Error for query {query}: {error_msg}")
+        logger.warning(f"Error for query {nl_query}: {error_msg}")
 
         # Step 3: Try additional fixes based on the error
         if "expected" in str(e).lower():
@@ -563,7 +563,7 @@ def _parse_sequential_sparql(sparql_text: str) -> list[dict[str, Any]]:
 
     return queries
 
-def detect_and_parse_sparql(sparql_text: str) -> tuple[bool, Union[str, list[dict[str, Any]]]]:
+def detect_and_parse_sparql(sparql_text: str, nl_query) -> tuple[bool, Union[str, list[dict[str, Any]]]]:
     """
     Detect if the SPARQL text contains sequential queries and parse accordingly.
 
@@ -575,15 +575,15 @@ def detect_and_parse_sparql(sparql_text: str) -> tuple[bool, Union[str, list[dic
         queries = _parse_sequential_sparql(sparql_text)
         return len(queries) > 0, queries  # True if parsed successfully
     else:
-        fixed_query = ensure_validity(sparql_text)
+        fixed_query = ensure_validity(sparql_text, nl_query)
         return False, fixed_query
 
-def ensure_validity(sparql_query: str) -> str:
+def ensure_validity(sparql_query: str, nl_query: str) -> str:
     cleaned = _clean_sparql(sparql_query)
     cleaned = _ensure_prefixes(cleaned)
 
     # Validate and fix
-    _, fixed_query, issues = _validate_and_fix_sparql(cleaned)
+    _, fixed_query, issues = _validate_and_fix_sparql(cleaned, nl_query)
     if issues:
         logger.info(f"SPARQL validation results: {'; '.join(issues)}")
 

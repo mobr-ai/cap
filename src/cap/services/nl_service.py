@@ -128,7 +128,7 @@ async def query_with_stream_response(
 
             try:
                 raw_sparql_response = await ollama.nl_to_sparql(natural_query=user_query)
-                is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response)
+                is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response, user_query)
 
                 if is_sequential:
                     sparql_queries = sparql_content

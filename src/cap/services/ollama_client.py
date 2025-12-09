@@ -232,7 +232,7 @@ class OllamaClient:
             )
 
             logger.info(f"LLM-generated SPARQL: \n {sparql_response}")
-            is_sequential, content = detect_and_parse_sparql(sparql_response)
+            is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
             if is_sequential:
                 # For backward compatibility, return first query if sequential (or raise/log)
                 logger.warning("Sequential SPARQL detected in single nl_to_sparql call; using first query")
