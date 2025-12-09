@@ -320,7 +320,8 @@ class SPARQLNormalizer:
         for match in reversed(matches):
             if self._should_skip_number(text, match):
                 continue
-
+            if self._is_inside_bind_if(text, match):
+                continue
             cleaned_num = re.sub(r'[,._]', '', match.group(0))
             placeholder = f"<<NUM_{self.counters.num}>>"
             self.counters.num += 1
@@ -337,7 +338,8 @@ class SPARQLNormalizer:
         for match in reversed(matches):
             if self._should_skip_number(text, match):
                 continue
-
+            if self._is_inside_bind_if(text, match):
+                continue
             placeholder = f"<<NUM_{self.counters.num}>>"
             self.counters.num += 1
             self.placeholder_map[placeholder] = match.group(0)

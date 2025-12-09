@@ -96,7 +96,6 @@ class RedisNLClient:
 
                 # Checking if query already exists
                 if await client.exists(cache_key):
-                    logger.info(f"Query already cached, skipping: {nl_query}")
                     return 0  # Indicates duplicate, not cached
 
                 # Process SPARQL (single or sequential)

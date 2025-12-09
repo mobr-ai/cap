@@ -132,12 +132,11 @@ def _validate_and_fix_sparql(query: str) -> tuple[bool, str, list[str]]:
     # Step 2: Try syntax validation
     try:
         parseQuery(fixed_query)
-        logger.info("SPARQL query validated successfully")
         return True, fixed_query, issues
     except ParseException as e:
         error_msg = f"Syntax error: {str(e)}"
         issues.append(error_msg)
-        logger.warning(error_msg)
+        logger.warning(f"Error for query {query}: {error_msg}")
 
         # Step 3: Try additional fixes based on the error
         if "expected" in str(e).lower():
@@ -292,7 +291,7 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
         fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
         modified = True
 
-        fix_msg = f"Added missing variables to GROUP BY: {missing_vars}"
+        fix_msg = f"In query {query}, added missing variables to GROUP BY: {missing_vars}"
         issues.append(fix_msg)
         logger.info(fix_msg)
 
