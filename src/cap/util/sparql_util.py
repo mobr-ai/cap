@@ -245,7 +245,6 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
     group_by_vars = _extract_grouping_variables(group_by_clause)
 
     fixed_query = query
-    modified = False
 
     # Fix 1: Replace expression variables with actual expressions
     for group_var in list(group_by_vars):
@@ -271,7 +270,6 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
                     group_by_full_match = new_group_by_full
                     group_by_vars.remove(group_var)
                     group_by_vars.update(expr_vars)
-                    modified = True
 
                     fix_msg = f"Replaced GROUP BY '?{group_var}' with expression '({expression})'"
                     issues.append(fix_msg)
@@ -289,9 +287,8 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
             new_group_by_clause
         )
         fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
-        modified = True
 
-        fix_msg = f"In query {query}, added missing variables to GROUP BY: {missing_vars}"
+        fix_msg = f"Added missing variables to GROUP BY: {missing_vars}"
         issues.append(fix_msg)
         logger.info(fix_msg)
 
@@ -312,7 +309,6 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
                 new_group_by_clause
             )
             fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
-            modified = True
 
             fix_msg = f"Removed invalid aggregate result variables from GROUP BY: {invalid_vars}"
             issues.append(fix_msg)
