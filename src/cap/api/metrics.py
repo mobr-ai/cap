@@ -4,7 +4,7 @@ Metrics reporting API.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, cast, Float, Integer
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from cap.database.session import get_db
@@ -122,7 +122,7 @@ def get_aggregated_metrics(
     }
 
     # Dimension 5: Ecosystem Engagement (daily languages)
-    today = datetime.now().date()
+    today = datetime.now(timezone.utc).date()
     last_7_days = today - timedelta(days=7)
 
     daily_langs = db.query(

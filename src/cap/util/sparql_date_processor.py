@@ -13,7 +13,7 @@ This preprocessor handles:
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 import logging
 
@@ -66,7 +66,7 @@ class SparqlDateProcessor:
         """Get the current time or reference time for calculations"""
         if self.reference_time:
             return self.reference_time
-        return datetime.utcnow()
+        return datetime.now(timezone.utc)
 
     def _parse_duration(self, duration_str: str) -> timedelta:
         """
