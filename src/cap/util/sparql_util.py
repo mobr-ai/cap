@@ -664,7 +664,7 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
     Detect which variables in a SPARQL query represent ADA amounts.
     Handles multi-level aggregations (e.g., SUM(SUM(?value))).
     """
-    if not sparql_query or ADA_CURRENCY_URI not in sparql_query:
+    if not sparql_query:
         return set()
 
     ada_vars = set()

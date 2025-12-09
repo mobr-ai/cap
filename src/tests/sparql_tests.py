@@ -23,7 +23,7 @@ class SPARQLQueryTester:
     def __init__(
         self,
         base_url: str,
-        sparql_folder,
+        sparql_folder: str,
         use_api: bool = False
     ):
         self.base_url = base_url.rstrip("/")
@@ -66,8 +66,11 @@ class SPARQLQueryTester:
         return resp.json()
 
     async def run_all_tests(self):
-        sparql_dir = Path(self.sparql_folder)
-        sparql_files = sorted(sparql_dir.rglob("*.rq"))
+        if self.sparql_folder.endswith(".rq"):
+            sparql_files = [self.sparql_folder]
+        else:
+            sparql_dir = Path(self.sparql_folder)
+            sparql_files = sorted(sparql_dir.rglob("*.rq"))
 
         for sparql_file in sparql_files:
             print(f"Testing {sparql_file}")
