@@ -974,6 +974,9 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
 
         result[var_name] = converted_value
 
+    if not result:
+        logger.debug(f"Could not flatten biding: \n   {binding}")
+
     return result
 
 

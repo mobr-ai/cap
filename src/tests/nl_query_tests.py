@@ -188,7 +188,7 @@ class NLQueryTester:
             txt_content = _read_content_nl_file(txt_file)
             nl_queries = txt_content.split("\n")
             for query in nl_queries:
-                if query.strip():
+                if query.strip() and not query.strip().startswith("#"):
                     try:
                         result = await self.test_query(query)
 
