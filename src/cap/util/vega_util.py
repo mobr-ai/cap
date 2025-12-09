@@ -4,7 +4,6 @@ Vega util to convert data to vega format.
 import logging
 from typing import Any
 from opentelemetry import trace
-from decimal import Decimal
 
 from cap.util.epoch_util import epoch_to_date
 
@@ -277,15 +276,12 @@ class VegaUtil:
                     try:
                         # Handle nested dict structures
                         if isinstance(y_val, dict):
-                            y_val = y_val.get('value', y_val.get('ada', y_val.get('lovelace', None)))
+                            y_val_ = y_val.get('value', y_val.get('ada', y_val.get('lovelace', None)))
                             # If still None or empty dict, try to get first value
-                            if y_val is None and isinstance(y_val, dict) and y_val:
+                            if y_val_ is None and isinstance(y_val, dict):
                                 y_val = next(iter(y_val.values()), 0)
-
-                        try:
-                            y_val = Decimal(y_val)
-                        except Exception as e:
-                            pass
+                            else:
+                                y_val = y_val_
 
                         values.append({
                             "x": x_display,
