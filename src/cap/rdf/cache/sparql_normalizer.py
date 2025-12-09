@@ -232,6 +232,8 @@ class SPARQLNormalizer:
         for match in reversed(matches):
             if self._is_inside_placeholder(text, match):
                 continue
+            if self._is_inside_bind_if(text, match):
+                continue
             placeholder = f"<<STR_{self.counters.str}>>"
             self.counters.str += 1
             self.placeholder_map[placeholder] = match.group(0)
@@ -239,6 +241,36 @@ class SPARQLNormalizer:
             text = text[:match.start()] + placeholder + text[match.end():]
 
         return text
+
+    def _is_inside_bind_if(self, text: str, match: re.Match) -> bool:
+        """Check if match is inside a BIND(IF(...)) statement."""
+        # Look backwards for BIND(IF pattern
+        before_text = text[:match.start()]
+
+        # Find the last BIND(IF before this position
+        bind_if_pattern = r'BIND\s*\(\s*IF\s*\('
+        bind_matches = list(re.finditer(bind_if_pattern, before_text, re.IGNORECASE))
+
+        if not bind_matches:
+            return False
+
+        last_bind = bind_matches[-1]
+
+        # Count parentheses from the BIND(IF to our position
+        paren_count = 2  # Start with 2 for BIND( and IF(
+        search_start = last_bind.end()
+
+        for i in range(search_start, match.start()):
+            if text[i] == '(':
+                paren_count += 1
+            elif text[i] == ')':
+                paren_count -= 1
+                if paren_count == 0:
+                    # The BIND statement closed before our match
+                    return False
+
+        # If paren_count > 0, we're still inside the BIND(IF(...))
+        return paren_count > 0
 
     def _extract_limit_offset(self, text: str) -> str:
         """Extract LIMIT and OFFSET values."""

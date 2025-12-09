@@ -3,6 +3,7 @@ SPARQL Results to Key-Value Converter for Blockchain Data
 Handles large integers (ADA amounts in lovelace) and nested structures
 """
 import logging
+import copy
 from typing import Any, Union
 from decimal import Decimal, InvalidOperation
 import re
@@ -888,7 +889,7 @@ def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[s
         logger.warning("Unexpected SPARQL result structure")
         return {'raw_results': sparql_results}
 
-    bindings = sparql_results['results']['bindings']
+    bindings = copy.deepcopy(sparql_results['results']['bindings'])
 
     if not bindings:
         return {
