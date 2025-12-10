@@ -46,20 +46,6 @@ class QueryNormalizer:
         }
 
     @staticmethod
-    def get_chart_patterns() -> dict[str, str]:
-        """Generate chart type patterns from registry."""
-        patterns = {}
-        for chart_type, terms in [
-            ('bar', PatternRegistry.BAR_CHART_TERMS),
-            ('line', PatternRegistry.LINE_CHART_TERMS),
-            ('pie', PatternRegistry.PIE_CHART_TERMS)
-        ]:
-            pattern = PatternRegistry.build_pattern(terms) + r'\s+' + \
-                     PatternRegistry.build_pattern(PatternRegistry.CHART_SUFFIXES)
-            patterns[pattern] = f'{chart_type} visualization'
-        return patterns
-
-    @staticmethod
     def get_entity_patterns() -> dict[str, str]:
         """Generate entity patterns from registry."""
         return {
@@ -339,9 +325,6 @@ class QueryNormalizer:
         # formatted and plain numbers
         normalized = re.sub(r'\b\d{1,3}(?:[,._]\d{3})+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
         normalized = re.sub(r'\b\d+(?:\.\d+)?\b(?!\s*%)', '<<N>>', normalized)
-
-        for pattern, replacement in QueryNormalizer.get_chart_patterns().items():
-            normalized = re.sub(pattern, replacement, normalized)
 
         # Clean up
         normalized = re.sub(r'[^\w\s]', '', normalized)

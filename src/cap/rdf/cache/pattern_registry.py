@@ -153,7 +153,7 @@ class PatternRegistry:
     REWARD_TERMS = ['reward', 'withdrawal', 'reward withdrawal']
     INPUT_TERMS = ['input', 'utxo input']
     OUTPUT_TERMS = ['output', 'utxo output']
-    ACCOUNT_TERMS = ['account', 'stake account']
+    ACCOUNT_TERMS = ['account', 'stake account', 'wallet']
 
     # Chart types
     BAR_CHART_TERMS = [
@@ -188,8 +188,8 @@ class PatternRegistry:
         'please', 'could', 'can', 'you', 'me', 'the',
         'is', 'are', 'was', 'were', 'your', 'my',
         'a', 'an', 'of', 'in', 'on', 'yours', 'to',
-        'do', 'does', 'ever', 'with', 'having', 'from'
-    ]
+        'do', 'does', 'ever', 'with', 'having', 'from',
+    ] + BAR_CHART_TERMS + LINE_CHART_TERMS + PIE_CHART_TERMS + TABLE_TERMS + CHART_SUFFIXES
 
     QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']
 
