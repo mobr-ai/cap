@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from typing import AsyncGenerator
 import logging
 from cap.config import settings
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="session")
 def virtuoso_client():
-    return VirtuosoClient()
+    return TriplestoreClient()
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:

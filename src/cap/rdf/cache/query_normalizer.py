@@ -6,8 +6,8 @@ import re
 import unicodedata
 from opentelemetry import trace
 
-from cap.data.cache.semantic_matcher import SemanticMatcher
-from cap.data.cache.pattern_registry import PatternRegistry
+from cap.rdf.cache.semantic_matcher import SemanticMatcher
+from cap.rdf.cache.pattern_registry import PatternRegistry
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

@@ -5,7 +5,7 @@ from opentelemetry import trace
 import logging
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
-from cap.data.cdb_model import (
+from cap.rdf.cdb_model import (
     GovernanceAction, VotingProcedure, DrepRegistration,
     Treasury, Reserve, PotTransfer, Tx
 )

@@ -4,13 +4,14 @@ Ollama client for interacting with ollama.
 import os
 import logging
 import json
-import re
+from datetime import datetime, timezone
 from typing import AsyncIterator, Optional, Any, Union
 import httpx
 from opentelemetry import trace
 
 from cap.util.vega_util import VegaUtil
-from cap.data.cache.semantic_matcher import SemanticMatcher
+from cap.util.sparql_util import detect_and_parse_sparql
+from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -50,6 +51,14 @@ class OllamaClient:
         )
 
     @property
+    def chart_prompt(self) -> str:
+        """Get contextualization prompt (refreshed from env)."""
+        return self._load_prompt(
+            "CHART_PROMPT",
+            "You are the Cardano Analytics Platform chart analyzer."
+        )
+
+    @property
     def contextualize_prompt(self) -> str:
         """Get contextualization prompt (refreshed from env)."""
         return self._load_prompt(
@@ -71,93 +80,6 @@ class OllamaClient:
         if self._client:
             await self._client.aclose()
             self._client = None
-
-    async def nl_to_sequential_sparql(
-        self,
-        natural_query: str
-    ) -> list[dict[str, Any]]:
-        """
-        Convert natural language query to sequential SPARQL queries.
-
-        Returns:
-            List of query dictionaries with 'query' and 'inject_params' keys
-        """
-        with tracer.start_as_current_span("nl_to_sequential_sparql") as span:
-            span.set_attribute("query", natural_query)
-
-            sparql_response = await self.generate_complete(
-                prompt=natural_query,
-                model=self.llm_model,
-                temperature=0.0
-            )
-
-            # Parse sequential queries
-            queries = self._parse_sequential_sparql(sparql_response)
-            span.set_attribute("query_count", len(queries))
-
-            return queries
-
-    def _parse_sequential_sparql(self, sparql_text: str) -> list[dict[str, Any]]:
-        """
-        Parse sequential SPARQL queries from LLM response with proper INJECT extraction.
-        """
-        queries = []
-
-        # Split by query sequence markers
-        parts = re.split(r'---query sequence \d+:.*?---', sparql_text)
-
-        for part in parts[1:]:  # Skip first empty part
-            cleaned = self._clean_sparql(part)
-            if not cleaned:
-                continue
-            cleaned = self._ensure_prefixes(cleaned)
-
-            # Extract INJECT patterns with nested parentheses
-            inject_params = []
-            pos = 0
-            while True:
-                match = re.search(r'INJECT(?:_FROM_PREVIOUS)?\(', cleaned[pos:])
-                if not match:
-                    break
-
-                start = pos + match.start()
-                paren_count = 1
-                i = start + len(match.group(0))
-                while i < len(cleaned) and paren_count > 0:
-                    if cleaned[i] == '(':
-                        paren_count += 1
-                    elif cleaned[i] == ')':
-                        paren_count -= 1
-                    i += 1
-
-                if paren_count == 0:
-                    inject_params.append(cleaned[start:i])
-                    pos = i
-                else:
-                    break
-
-            queries.append({
-                'query': cleaned,
-                'inject_params': inject_params
-            })
-
-        return queries
-
-    def detect_and_parse_sparql(self, sparql_text: str) -> tuple[bool, Union[str, list[dict[str, Any]]]]:
-        """
-        Detect if the SPARQL text contains sequential queries and parse accordingly.
-
-        Returns:
-            Tuple of (is_sequential: bool, content: str or list[dict])
-        """
-        # Check for sequential markers
-        if re.search(r'---query sequence \d+:.*?---', sparql_text, re.IGNORECASE | re.DOTALL):
-            queries = self._parse_sequential_sparql(sparql_text)
-            return len(queries) > 0, queries  # True if parsed successfully
-        else:
-            cleaned = self._clean_sparql(sparql_text)
-            cleaned = self._ensure_prefixes(cleaned)
-            return False, cleaned
 
     async def generate_stream(
         self,
@@ -309,7 +231,8 @@ class OllamaClient:
                 temperature=0.0
             )
 
-            is_sequential, content = self.detect_and_parse_sparql(sparql_response)
+            logger.info(f"LLM-generated SPARQL: \n {sparql_response}")
+            is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
             if is_sequential:
                 # For backward compatibility, return first query if sequential (or raise/log)
                 logger.warning("Sequential SPARQL detected in single nl_to_sparql call; using first query")
@@ -317,92 +240,6 @@ class OllamaClient:
             else:
                 span.set_attribute("sparql_length", len(content))
                 return content
-
-    def _clean_sparql(self, sparql_text: str) -> str:
-        """
-        Clean and extract SPARQL query from LLM response.
-
-        Args:
-            sparql_text: Raw text from LLM
-
-        Returns:
-            Cleaned SPARQL query
-        """
-        # Remove markdown code blocks
-        sparql_text = re.sub(r'```sparql\s*', '', sparql_text)
-        sparql_text = re.sub(r'```\s*', '', sparql_text)
-
-        # Extract SPARQL query pattern
-        # Look for PREFIX or SELECT/ASK/CONSTRUCT/DESCRIBE
-        match = re.search(
-            r'((?:PREFIX[^\n]+\n)*\s*(?:SELECT|ASK|CONSTRUCT|DESCRIBE).*)',
-            sparql_text,
-            re.IGNORECASE | re.DOTALL
-        )
-
-        if match:
-            sparql_text = match.group(1)
-
-        # Remove common explanatory text
-        sparql_text = re.sub(r'(?i)here is the sparql query:?\s*', '', sparql_text)
-        sparql_text = re.sub(r'(?i)the query is:?\s*', '', sparql_text)
-        sparql_text = re.sub(r'(?i)this query will:?\s*.*$', '', sparql_text, flags=re.MULTILINE)
-
-        # Remaining nl before PREFIX
-        index = sparql_text.find("PREFIX")
-        if index > -1:
-            sparql_text = sparql_text[index:]
-
-        # Clean up whitespace
-        lines = [line.strip() for line in sparql_text.strip().split('\n') if line.strip()]
-
-        # Filter out lines that are explanatory text
-        sparql_lines = []
-        for line in lines:
-            upper_line = line.upper()
-            if any(keyword in upper_line for keyword in ['PREFIX', 'SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'WHERE', 'FROM', 'ORDER', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING', 'FILTER']):
-                sparql_lines.append(line)
-
-        cleaned = '\n'.join(sparql_lines).strip()
-
-        logger.debug(f"Cleaned SPARQL query: {cleaned}")
-        return cleaned
-
-    def _ensure_prefixes(self, query: str) -> str:
-        """
-        Ensure the four required PREFIX declarations are present in the SPARQL query.
-        Prepends missing ones at the top if not found.
-        """
-        required_prefixes = {
-            "rdf": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>",
-            "blockchain": "PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>",
-            "cardano": "PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>",
-            "xsd": "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>",
-        }
-
-        stripped = query.strip()
-        query_upper = query.upper()
-
-        # Check which prefixes are already present
-        missing_prefixes = []
-        for prefix_name, prefix_declaration in required_prefixes.items():
-            # Look for the prefix declaration pattern (case-insensitive)
-            # Check for both "PREFIX rdf:" and "PREFIX rdf :" patterns
-            pattern1 = f"PREFIX {prefix_name}:".upper()
-            pattern2 = f"PREFIX {prefix_name} :".upper()
-
-            if pattern1 not in query_upper and pattern2 not in query_upper:
-                missing_prefixes.append(prefix_declaration)
-
-        if missing_prefixes:
-            # Prepend missing prefixes with newline separation
-            prepend = "\n".join(missing_prefixes) + "\n\n"
-            query = prepend + stripped
-            logger.debug(f"Added {len(missing_prefixes)} missing prefixes to SPARQL query")
-        else:
-            logger.debug("All required prefixes already present in SPARQL query")
-
-        return query
 
     def _categorize_query(user_query: str, result_type: str) -> str:
         """
@@ -469,15 +306,23 @@ class OllamaClient:
                                 user_query,
                                 sparql_query
                             )
+                            columns = []
+                            if kv_results.get("data"):
+                                if isinstance(kv_results.get("data"), list):
+                                    columns = list(kv_results["data"][0].keys())
+                                elif isinstance(kv_results.get("data"), dict):
+                                    columns = list(kv_results["data"].keys())
+
                             output_data = {
                                 "result_type": result_type,
                                 "data": vega_data,
                                 "metadata": {
                                     "count": kv_results.get("count", 0),
-                                    "columns": list(kv_results.get("data", [{}])[0].keys()) if isinstance(kv_results.get("data"), list) and kv_results.get("data") else []
+                                    "columns": columns
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)
+                            logger.debug(f"output_data: \n {kv_formatted}")
                         else:
                             kv_formatted = json.dumps(kv_results, indent=2)
                     else:
@@ -509,16 +354,20 @@ class OllamaClient:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
+            current_date = datetime.now(timezone.utc).date()
             known_info = ""
             temperature = 0.1
             if "chart" in result_type or "table" in result_type:
                 known_info = f"""
+                Today is {current_date}.
+                {self.chart_prompt}
                 The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
                 """
 
             elif context_res != "":
                 known_info = f"""
+                Today is {current_date}.
                 This is the current value you MUST consider in your answer:
                 {context_res}
 
@@ -526,7 +375,7 @@ class OllamaClient:
                 """
 
             else:
-                known_info = """
+                known_info = f"""
                 If you do not know how to answer User's question, say you do not know the answer.
                 NEVER explain how to get results for the question.
                 NEVER answer with a SPARQL query.
@@ -539,6 +388,7 @@ class OllamaClient:
                 {known_info}
             """
 
+            logger.debug(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,

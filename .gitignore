@@ -120,7 +120,12 @@ dist
 .tern-port
 
 # Stores VSCode versions used for testing VSCode extensions
+.vscode 
 .vscode-test
+
+# Local dev
+.python-version 
+docker-compose.yml
 
 # yarn v2
 .yarn/cache

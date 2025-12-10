@@ -1,0 +1,10 @@
+What were the 10 largest ADA transactions in the last 24 hours?
+What were the average transaction fees last week?
+How many accounts hold over 200,000 ADA?
+What are the average staking rewards for accounts holding more than 1 million ADA?
+Plot a bar chart showing monthly smart contract deployments in the last year
+List the number of NFTs minted in the last month
+Which tokens were the most frequently transfered in the last week
+How many new accounts were created daily over the last month
+What percentage of delegated ADA is to the top 10 stake pools
+How many accounts voted on the latest governance proposal

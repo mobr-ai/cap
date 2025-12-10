@@ -107,7 +107,7 @@ class PlaceholderRestorer:
 
         # Final fallback: use ADA as default currency
         logger.warning(f"No currency available for {placeholder}, using default ADA")
-        return "<http://www.mobr.ai/ontologies/cardano#cnt/ada>"
+        return "<https://mobr.ai/ont/cardano#cnt/ada>"
 
     @staticmethod
     def _restore_inject(

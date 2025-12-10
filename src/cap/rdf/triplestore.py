@@ -8,30 +8,32 @@ import httpx
 import asyncio
 import logging
 import urllib
+from datetime import datetime, timezone
 
+from cap.util.sparql_date_processor import SparqlDateProcessor
 from cap.config import settings
 
 DEFAULT_PREFIX = """
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+    PREFIX c: <https://mobr.ai/ont/cardano#>
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
     PREFIX owl: <http://www.w3.org/2002/07/owl#>
-    PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
+    PREFIX b: <https://mobr.ai/ont/blockchain#>
 """
 
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
 @dataclass
-class VirtuosoConfig:
+class TriplestoreConfig:
     """Configuration settings for Virtuoso connection."""
-    host: str = settings.VIRTUOSO_HOST
-    port: int = settings.VIRTUOSO_PORT
-    username: str = settings.VIRTUOSO_USER
-    password: str = settings.VIRTUOSO_PASSWORD
-    sparql_str_endpoint: str = settings.VIRTUOSO_ENDPOINT
-    query_timeout: int = settings.VIRTUOSO_TIMEOUT
+    host: str = settings.TRIPLESTORE_HOST
+    port: int = settings.TRIPLESTORE_PORT
+    username: str = settings.TRIPLESTORE_USER
+    password: str = settings.TRIPLESTORE_PASSWORD
+    sparql_str_endpoint: str = settings.TRIPLESTORE_ENDPOINT
+    query_timeout: int = settings.TRIPLESTORE_TIMEOUT
 
     @property
     def base_url(self) -> str:
@@ -48,9 +50,9 @@ class VirtuosoConfig:
         """Get the SPARQL Graph CRUD endpoint URL."""
         return f"{self.base_url}/sparql-graph-crud"
 
-class VirtuosoClient:
-    def __init__(self, config: VirtuosoConfig | None = None):
-        self.config = config or VirtuosoConfig()
+class TriplestoreClient:
+    def __init__(self, config: TriplestoreConfig | None = None):
+        self.config = config or TriplestoreConfig()
         self._sparql_wrapper = None
         self._http_client = None
         self._query_lock = asyncio.Lock()
@@ -102,10 +104,13 @@ class VirtuosoClient:
     def _build_sparql_prefixes(self, additional_prefixes: Optional[dict[str, str]] = None) -> str:
         return self._build_prefixes("PREFIX", DEFAULT_PREFIX, additional_prefixes)
 
-    async def _execute_sparql_query_async(self, query: str) -> dict:
+    async def _execute_sparql_query_async(self, sparql_query: str) -> dict:
         """Execute SPARQL query asynchronously."""
 
         async with self._query_lock:
+            test_time = datetime.now(timezone.utc)
+            processor = SparqlDateProcessor(reference_time=test_time)
+            query, _ = processor.process(sparql_query)
             # If endpoint use plain HTTP GET
             if not self.config.sparql_endpoint.endswith("/sparql"):
                 client = await self._get_http_client()
@@ -123,11 +128,24 @@ class VirtuosoClient:
                     await self.close()
                     return ret_
 
+                except httpx.HTTPStatusError as e:
+                    logger.error(f"SPARQL query failed with HTTP error: {e}")
+                    logger.error(f"Query: {query}")
+                    await self.close()
+                    # Try to extract error details from response
+                    try:
+                        error_detail = e.response.json()
+                        raise HTTPException(status_code=e.response.status_code, detail=error_detail)
+
+                    except Exception:
+                        # If we can't parse JSON, use the text response
+                        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+
                 except Exception as e:
                     logger.error(f"SPARQL query failed: {e}")
                     logger.error(f"Query: {query}")
                     await self.close()
-                    raise HTTPException(status_code=500, detail=f"query get failed: {str(e)}")
+                    raise HTTPException(status_code=500, detail=str(e))
 
             def _execute_sync():
                 try:

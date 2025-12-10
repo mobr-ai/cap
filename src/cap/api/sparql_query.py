@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 from urllib.parse import unquote_plus
 import logging
+import re
 
 from cap.api.models import (
     QueryRequest,
@@ -12,7 +13,7 @@ from cap.api.models import (
     SuccessResponse
 )
 from cap.services.redis_sparql_client import get_redis_sparql_client
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 
 router = APIRouter(prefix="/api/v1")
 tracer = trace.get_tracer(__name__)
@@ -28,9 +29,14 @@ async def execute_query(request: QueryRequest):
         try:
             user_query = request.query
             if user_query:
-                low_uq = user_query.lower()
-                if "update" in low_uq or "delete" in low_uq or "insert" in low_uq:
+                # Check for actual SPARQL update operations with flexible whitespace
+                # \s+ matches any whitespace (spaces, newlines, tabs) one or more times
+                update_pattern = r'\b(insert|update|delete)\s+(data|where|\{)'
+
+                if re.search(update_pattern, user_query, re.IGNORECASE):
                     return QueryResponse(results=[])
+            else:
+                return QueryResponse(results=[])
 
             redis_client = get_redis_sparql_client()
             cached_data = await redis_client.get_cached_results(user_query)
@@ -39,7 +45,7 @@ async def execute_query(request: QueryRequest):
                 return QueryResponse(results=cached_data)
 
             logger.debug(f"SPARQLCache miss for {user_query}")
-            client = VirtuosoClient()
+            client = TriplestoreClient()
             results = await client.execute_query(user_query)
             if results.get('results', {}).get('bindings') and results['results']['bindings']:
                 await redis_client.cache_query(sparql_query=user_query, results=results)
@@ -57,7 +63,7 @@ async def create_graph(request: GraphCreateRequest):
     """Create a new graph with the provided Turtle data."""
     with tracer.start_as_current_span("create_graph_endpoint") as span:
         span.set_attribute("graph_uri", request.graph_uri)
-        client = VirtuosoClient()
+        client = TriplestoreClient()
         try:
             success = await client.create_graph(request.graph_uri, request.turtle_data)
             return SuccessResponse(success=success)
@@ -74,7 +80,7 @@ async def read_graph(graph_uri: str):
         graph_uri = unquote_plus(graph_uri)
         logger.debug(f"[READ] Decoded graph_uri: {graph_uri}")
 
-        client = VirtuosoClient()
+        client = TriplestoreClient()
         exists = await client.check_graph_exists(graph_uri)
         logger.debug(f"[READ] Graph exists check: {exists}")
 
@@ -98,7 +104,7 @@ async def update_graph(graph_uri: str, update_request: GraphUpdateRequest):
         graph_uri = unquote_plus(graph_uri)
         logger.debug(f"[UPDATE] Decoded graph_uri: {graph_uri}")
 
-        client = VirtuosoClient()
+        client = TriplestoreClient()
         exists = await client.check_graph_exists(graph_uri)
         logger.debug(f"[UPDATE] Graph exists check: {exists}")
 
@@ -133,7 +139,7 @@ async def delete_graph(graph_uri: str):
         graph_uri = unquote_plus(graph_uri)
         logger.debug(f"[DELETE] Decoded graph_uri: {graph_uri}")
 
-        client = VirtuosoClient()
+        client = TriplestoreClient()
         exists = await client.check_graph_exists(graph_uri)
         logger.debug(f"[DELETE] Graph exists check: {exists}")
 

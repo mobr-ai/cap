@@ -18,6 +18,21 @@ class VegaUtil:
         'epoch', 'epochNumber', 'x', 'index', 'blockHeight', 'blockNumber',
         'name', 'label', 'category'
     ]
+    @staticmethod
+    def _get_x_candidates(first_item:dict, keys:list) -> list:
+        x_candidates = VegaUtil.x_candidates.copy()
+
+        # Extend x_candidates with any keys containing 'date' or having datetime values
+        for k in keys:
+            val = first_item[k]
+            # Add keys with 'date' in the name
+            if 'date' in k.lower() and k.lower() not in [c.lower() for c in x_candidates]:
+                x_candidates.append(k)
+            # Add keys with datetime type values
+            elif isinstance(val, dict) and val.get('type') == 'datetime' and k.lower() not in [c.lower() for c in x_candidates]:
+                x_candidates.append(k)
+
+        return x_candidates
 
     @staticmethod
     def _convert_to_vega_format(
@@ -70,7 +85,7 @@ class VegaUtil:
             keys = list(first_item.keys())
 
             # Identify category (x-axis) and value (y-axis) fields
-            category_candidates = VegaUtil.x_candidates
+            category_candidates = VegaUtil._get_x_candidates(first_item, keys)
             category_key = next((k for k in keys if k.lower() in [c.lower() for c in category_candidates]), keys[0])
 
             # Value field is typically numeric - find first numeric field that's not the category
@@ -182,12 +197,13 @@ class VegaUtil:
         keys = list(first_item.keys())
 
         # Identify x-axis field (typically time-based or sequential)
-        x_candidates = VegaUtil.x_candidates
+        x_candidates = VegaUtil._get_x_candidates(first_item, keys)
         x_key = next((k for k in keys if k.lower() in [c.lower() for c in x_candidates]), keys[0])
 
         # All other numeric fields are series
         series_keys = []
         for k in keys:
+            is_numeric = False
             if k != x_key:
                 val = first_item[k]
 
@@ -199,12 +215,25 @@ class VegaUtil:
                 try:
                     if val is not None:
                         if isinstance(val, (int, float)):
-                            series_keys.append(k)
-                        elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
-                            series_keys.append(k)
+                            is_numeric = True
+                        elif isinstance(val, str):
+                            if val.replace('.', '', 1).replace('-', '', 1).isdigit():
+                                is_numeric = True
+                            else:
+                                float(val)
+                                is_numeric = True
+
                 except Exception as e:
                     logger.warning(f"Failed to check if {k} is numeric: {e}")
                     continue
+
+            if is_numeric:
+                series_keys.append(k)
+
+        # If no series keys found, skip this conversion
+        if not series_keys:
+            logger.warning(f"No numeric series found in data for line chart")
+            return {"values": []}
 
         # Build line chart data with series index
         values = []
@@ -227,9 +256,6 @@ class VegaUtil:
                         logger.warning(f"Failed to convert epoch {x_val}: {e}")
                         x_display = str(x_val)
 
-                # Handle ISO-style datetime strings (e.g., "2021-03-01T00:00:00.0")
-                elif 'T' in x_val:
-                    x_display = x_val.split('T')[0]  # Extract just the date part
                 else:
                     x_display = x_val
 
@@ -250,11 +276,16 @@ class VegaUtil:
                     try:
                         # Handle nested dict structures
                         if isinstance(y_val, dict):
-                            y_val = y_val.get('value', y_val.get('ada', y_val.get('lovelace', 0)))
+                            y_val_ = y_val.get('value', y_val.get('ada', y_val.get('lovelace', None)))
+                            # If still None or empty dict, try to get first value
+                            if y_val_ is None and isinstance(y_val, dict):
+                                y_val = next(iter(y_val.values()), 0)
+                            else:
+                                y_val = y_val_
 
                         values.append({
                             "x": x_display,
-                            "y": float(y_val),
+                            "y": y_val,
                             "c": series_idx
                         })
                     except Exception as e:
@@ -268,12 +299,19 @@ class VegaUtil:
     @staticmethod
     def _convert_table(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to table format."""
-        if not isinstance(data, list) or len(data) == 0:
+
+        # Forcing list for one count results
+        table_data = data
+        if isinstance(data, dict):
+            table_data = [data]
+
+        if not isinstance(table_data, list) or len(table_data) == 0:
+            logger.warning(f"Returning empty table for {user_query} with data {table_data}")
             return {"values": []}
 
         # Get all unique keys from all rows (in case structure varies)
         all_keys = []
-        for item in data:
+        for item in table_data:
             for key in item.keys():
                 if key not in all_keys:
                     all_keys.append(key)
@@ -282,7 +320,7 @@ class VegaUtil:
         columns = []
         for idx, col_name in enumerate(all_keys):
             col_values = []
-            for row in data:
+            for row in table_data:
                 value = row.get(col_name, "")
                 # Handle nested structures
                 if isinstance(value, dict):

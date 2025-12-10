@@ -98,14 +98,14 @@ class BaseTransformer(ABC):
         lines = []
 
         if block.get('slot_no') is not None:
-            lines.append(f"    cardano:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:decimal')} ;")
+            lines.append(f"    c:hasSlotNumber {self.format_literal(block['slot_no'], 'xsd:decimal')} ;")
 
         if block.get('epoch_no') is not None:
             epoch_uri = self.create_epoch_uri(block['epoch_no'])
-            lines.append(f"    cardano:belongsToEpoch {epoch_uri} ;")
+            lines.append(f"    c:hasEpoch {epoch_uri} ;")
 
         if block.get('time'):
-            lines.append(f"    blockchain:hasTimestamp {self.format_literal(block['time'], 'xsd:dateTime')} ;")
+            lines.append(f"    b:hasTimestamp {self.format_literal(block['time'], 'xsd:dateTime')} ;")
 
         return lines
 

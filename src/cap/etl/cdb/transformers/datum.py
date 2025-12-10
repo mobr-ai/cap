@@ -16,11 +16,11 @@ class DatumTransformer(BaseTransformer):
         for datum in datums:
             datum_uri = self.create_uri('datum', datum['hash'])
 
-            # Datum as cardano:Datum
-            turtle_lines.append(f"{datum_uri} a cardano:Datum ;")
+            # Datum as c:Datum
+            turtle_lines.append(f"{datum_uri} a c:Datum ;")
 
             if datum['hash']:
-                turtle_lines.append(f"    blockchain:hasHash \"{datum['hash']}\" ;")
+                turtle_lines.append(f"    b:hasHash \"{datum['hash']}\" ;")
 
             if datum['value'] is not None:
                 # Handle the case where value might be a dict or string
@@ -33,14 +33,14 @@ class DatumTransformer(BaseTransformer):
 
                 # Now escape the string
                 escaped_value = value_str.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-                turtle_lines.append(f"    cardano:hasDatumContent {self.format_literal(escaped_value)} ;")
+                turtle_lines.append(f"    c:hasDatumContent {self.format_literal(escaped_value)} ;")
 
             if datum['bytes']:
-                turtle_lines.append(f"    cardano:hasDatumBytes \"{datum['bytes']}\" ;")
+                turtle_lines.append(f"    c:hasDatumBytes \"{datum['bytes']}\" ;")
 
             if datum['tx_hash']:
                 tx_uri = self.create_transaction_uri(datum['tx_hash'])
-                turtle_lines.append(f"    cardano:datumEmbeddedIn {tx_uri} ;")
+                turtle_lines.append(f"    c:datumEmbeddedIn {tx_uri} ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):

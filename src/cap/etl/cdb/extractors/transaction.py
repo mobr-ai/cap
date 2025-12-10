@@ -5,7 +5,7 @@ from opentelemetry import trace
 import logging
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
-from cap.data.cdb_model import Tx, TxIn, TxOut, MaTxOut, MaTxMint, TxMetadata
+from cap.rdf.cdb_model import Tx, TxIn, TxOut, MaTxOut, MaTxMint, TxMetadata
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -139,7 +139,7 @@ class TransactionExtractor(BaseExtractor):
 
     def _extract_certificates(self, tx: Tx) -> list[dict[str, Any]]:
         """Extract certificate data from transaction."""
-        from cap.data.cdb_model import StakeRegistration, StakeDeregistration, Delegation, PoolUpdate, PoolRetire
+        from cap.rdf.cdb_model import StakeRegistration, StakeDeregistration, Delegation, PoolUpdate, PoolRetire
 
         certificates = []
 
@@ -197,7 +197,7 @@ class TransactionExtractor(BaseExtractor):
 
     def _extract_withdrawals(self, tx: Tx) -> list[dict[str, Any]]:
        """Extract withdrawal data from transaction."""
-       from cap.data.cdb_model import Withdrawal
+       from cap.rdf.cdb_model import Withdrawal
 
        withdrawals = []
 

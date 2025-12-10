@@ -15,12 +15,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from opentelemetry import trace
 
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
 from cap.etl.cdb.extractor_factory import ExtractorFactory
 from cap.etl.cdb.transformer_factory import TransformerFactory
 from cap.etl.cdb.loaders.loader import CDBLoader
-from cap.data.cdb_model import Block
+from cap.rdf.cdb_model import Block
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -80,7 +80,7 @@ class ETLPipeline:
             raise RuntimeError(f"Database connection failed: {e}")
 
         # Virtuoso client and loader
-        self.virtuoso_client = VirtuosoClient()
+        self.virtuoso_client = TriplestoreClient()
         self.loader = CDBLoader()
 
         # ETL entity types
@@ -200,21 +200,21 @@ class ETLPipeline:
 
             try:
                 query = f"""
-                PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
+                PREFIX c: <https://mobr.ai/ont/cardano#>
                 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
                 SELECT ?lastId ?totalRecords ?processedRecords ?status ?lastUpdated ?errorMessage
                 WHERE {{
                     GRAPH <{graph_uri}> {{
                         <{settings.CARDANO_GRAPH}/etl/progress/{entity_type}>
-                            cardano:hasLastProcessedId ?lastId ;
-                            cardano:hasTotalRecords ?totalRecords ;
-                            cardano:hasProcessedRecords ?processedRecords ;
-                            cardano:hasStatus ?status ;
-                            cardano:hasLastUpdated ?lastUpdated .
+                            c:hasLastProcessedId ?lastId ;
+                            c:hasTotalRecords ?totalRecords ;
+                            c:hasProcessedRecords ?processedRecords ;
+                            c:hasStatus ?status ;
+                            c:hasLastUpdated ?lastUpdated .
                         OPTIONAL {{
                             <{settings.CARDANO_GRAPH}/etl/progress/{entity_type}>
-                                cardano:hasErrorMessage ?errorMessage .
+                                c:hasErrorMessage ?errorMessage .
                         }}
                     }}
                 }}

@@ -5,7 +5,7 @@ import logging
 import re
 from opentelemetry import trace
 
-from cap.data.cache.pattern_registry import PatternRegistry
+from cap.rdf.cache.pattern_registry import PatternRegistry
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -78,13 +78,13 @@ class ValueExtractor:
         # Extract currency/token URIs (add this new section)
         # Look for ADA references
         if re.search(r'\bADA\b', nl_query, re.IGNORECASE):
-            if "http://www.mobr.ai/ontologies/cardano#cnt/ada" not in values["currencies"]:
-                values["currencies"].append("http://www.mobr.ai/ontologies/cardano#cnt/ada")
+            if "https://mobr.ai/ont/cardano#cnt/ada" not in values["currencies"]:
+                values["currencies"].append("https://mobr.ai/ont/cardano#cnt/ada")
 
         # Extract token names that might be currencies
         for token in values["tokens"]:
             # Construct potential currency URI
-            currency_uri = f"http://www.mobr.ai/ontologies/cardano#cnt/{token.lower()}"
+            currency_uri = f"https://mobr.ai/ont/cardano#cnt/{token.lower()}"
             if currency_uri not in values["currencies"]:
                 values["currencies"].append(currency_uri)
 
@@ -164,13 +164,13 @@ class ValueExtractor:
         # Explicit limits (top N)
         str_top_names = '|'.join(re.escape(m) for m in PatternRegistry.TOP_TERMS)
         for match in re.finditer(rf'\b({str_top_names})\s+(\d+)\b', nl_query, re.IGNORECASE):
-            limit = match.group(1)
+            limit = match.group(2)
             if limit not in values["limits"]:
                 values["limits"].append(limit)
 
         # Explicit limits (latest N, first N, etc.)
         limit_terms = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
-        for match in re.finditer(limit_terms + r'\s+(\d+)', nl_query, re.IGNORECASE):
+        for match in re.finditer(limit_terms + r'\s+(\d+)(?!\s*(?:hour|day|week|month|year|epoch)s?)\b', nl_query, re.IGNORECASE):
             limit = match.group(2)
             if limit not in values["limits"]:
                 values["limits"].append(limit)

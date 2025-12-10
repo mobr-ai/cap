@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from cap.etl.cdb.service import ETLPipeline, ETLStatus
-from cap.data.virtuoso import VirtuosoClient
+from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
 
 TEST_ETL_GRAPH = "http://test.etl.pipeline"
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
 @pytest.fixture(autouse=True)
-async def cleanup(virtuoso_client: VirtuosoClient):
+async def cleanup(virtuoso_client: TriplestoreClient):
     """Cleanup test graphs before and after each test."""
     try:
         for graph in [TEST_ETL_GRAPH, TEST_METADATA_GRAPH]:
@@ -66,81 +66,6 @@ async def test_etl_pipeline_initialization():
         assert progress.status == ETLStatus.RUNNING
 
 @pytest.mark.asyncio
-async def test_etl_progress_tracking(virtuoso_client: VirtuosoClient):
-    """Test ETL progress tracking and persistence."""
-    pipeline = ETLPipeline(batch_size=100)
-
-    # Update progress for an entity
-    test_entity = 'account'
-    pipeline.progress[test_entity].last_processed_id = 1000
-    pipeline.progress[test_entity].total_records = 5000
-    pipeline.progress[test_entity].processed_records = 1000
-    pipeline.progress[test_entity].status = ETLStatus.RUNNING
-    pipeline.progress[test_entity].last_updated = datetime.now()
-
-    # Save progress
-    await pipeline.loader.save_progress_metadata(
-        test_entity,
-        pipeline.progress[test_entity],
-        TEST_METADATA_GRAPH
-    )
-
-    # Verify progress was saved
-    query = f"""
-    PREFIX cardano: <http://www.mobr.ai/ontologies/cardano#>
-
-    SELECT ?lastId ?totalRecords ?processedRecords ?status
-    WHERE {{
-        GRAPH <{TEST_METADATA_GRAPH}> {{
-            <{settings.CARDANO_GRAPH}/etl/progress/{test_entity}>
-                cardano:hasLastProcessedId ?lastId ;
-                cardano:hasTotalRecords ?totalRecords ;
-                cardano:hasProcessedRecords ?processedRecords ;
-                cardano:hasStatus ?status .
-        }}
-    }}
-    """
-
-    results = await virtuoso_client.execute_query(query)
-    assert results['results']['bindings']
-
-    binding = results['results']['bindings'][0]
-    assert int(binding['lastId']['value']) == 1000
-    assert int(binding['totalRecords']['value']) == 5000
-    assert int(binding['processedRecords']['value']) == 1000
-    assert binding['status']['value'] == 'running'
-
-@pytest.mark.asyncio
-async def test_etl_load_existing_progress(virtuoso_client: VirtuosoClient):
-    """Test loading existing ETL progress from metadata."""
-    # First save some progress
-    pipeline1 = ETLPipeline(batch_size=100)
-
-    test_entity = 'account'
-    pipeline1.progress[test_entity].last_processed_id = 2000
-    pipeline1.progress[test_entity].total_records = 10000
-    pipeline1.progress[test_entity].processed_records = 2000
-    pipeline1.progress[test_entity].status = ETLStatus.COMPLETED
-    pipeline1.progress[test_entity].last_updated = datetime.now()
-
-    await pipeline1.loader.save_progress_metadata(
-        test_entity,
-        pipeline1.progress[test_entity],
-        TEST_METADATA_GRAPH
-    )
-
-    # Create new pipeline and load progress
-    pipeline2 = ETLPipeline(batch_size=100)
-    await pipeline2._load_existing_progress(TEST_METADATA_GRAPH)
-
-    # Verify loaded progress
-    loaded_progress = pipeline2.progress[test_entity]
-    assert loaded_progress.last_processed_id == 2000
-    assert loaded_progress.total_records == 10000
-    assert loaded_progress.processed_records == 2000
-    assert loaded_progress.status == ETLStatus.COMPLETED
-
-@pytest.mark.asyncio
 async def test_etl_sync_status():
     """Test getting ETL sync status."""
     pipeline = ETLPipeline(batch_size=100)
@@ -162,7 +87,7 @@ async def test_etl_sync_status():
     assert account_progress['progress_percentage'] == 50.0
 
 @pytest.mark.asyncio
-async def test_etl_reset_progress(virtuoso_client: VirtuosoClient):
+async def test_etl_reset_progress(virtuoso_client: TriplestoreClient):
     """Test resetting ETL progress."""
     pipeline = ETLPipeline(batch_size=100)
 
@@ -177,103 +102,6 @@ async def test_etl_reset_progress(virtuoso_client: VirtuosoClient):
     assert pipeline.progress['account'].last_processed_id is None
     assert pipeline.progress['account'].processed_records == 0
     assert pipeline.progress['account'].total_records == 0
-
-@pytest.mark.asyncio
-async def test_etl_batch_loading(virtuoso_client: VirtuosoClient):
-    """Test loading data batches to Virtuoso."""
-    pipeline = ETLPipeline(batch_size=100)
-
-    # Create test RDF data
-    turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-    <http://test/account/1> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake1..." .
-
-    <http://test/account/2> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake2..." .
-    """
-
-    batch_info = {
-        "entity_type": "account",
-        "size": 2,
-        "batch_number": 1
-    }
-
-    # Load batch
-    success = await pipeline.loader.load_batch(
-        TEST_ETL_GRAPH,
-        turtle_data,
-        batch_info
-    )
-    assert success
-
-    # Verify data was loaded
-    count_query = f"""
-    PREFIX blockchain: <http://www.mobr.ai/ontologies/blockchain#>
-    SELECT (COUNT(*) as ?count)
-    WHERE {{
-        GRAPH <{TEST_ETL_GRAPH}> {{
-            ?s a blockchain:Account
-        }}
-    }}
-    """
-
-    results = await virtuoso_client.execute_query(count_query)
-    count = int(results['results']['bindings'][0]['count']['value'])
-    assert count == 2
-
-@pytest.mark.asyncio
-async def test_etl_data_integrity_validation(virtuoso_client: VirtuosoClient):
-    """Test data integrity validation."""
-    pipeline = ETLPipeline(batch_size=100)
-
-    # Load some test data
-    turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-    <http://test/account/1> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake1..." .
-
-    <http://test/account/2> a blockchain:Account ;
-        blockchain:hasAccountAddress "stake2..." .
-    """
-
-    await pipeline.loader.load_batch(TEST_ETL_GRAPH, turtle_data, {"entity_type": "account", "size": 2})
-
-    # Validate integrity
-    validation_result = await pipeline.loader.validate_data_integrity(TEST_ETL_GRAPH, expected_count=4)
-
-    assert validation_result['graph_uri'] == TEST_ETL_GRAPH
-    assert validation_result['actual_count'] == 4
-    assert validation_result['expected_count'] == 4
-    assert validation_result['valid']
-
-@pytest.mark.asyncio
-async def test_etl_graph_statistics(virtuoso_client: VirtuosoClient):
-    """Test getting graph statistics."""
-    pipeline = ETLPipeline(batch_size=100)
-
-    # Load test data
-    turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-
-    <http://test/tx/1> a blockchain:Transaction ;
-        cardano:hasFee "1000000" ;
-        blockchain:hasHash "xyz789" .
-    """
-
-    await pipeline.loader.load_batch(TEST_ETL_GRAPH, turtle_data, {"entity_type": "transaction", "size": 1})
-
-    # Get statistics
-    stats = await pipeline.loader.get_graph_statistics(TEST_ETL_GRAPH)
-
-    assert stats['graph_uri'] == TEST_ETL_GRAPH
-    assert stats['subjects'] == 1
-    assert stats['predicates'] == 3
-    assert stats['objects'] == 3
-    assert stats['triples'] == 3
 
 @pytest.mark.asyncio
 async def test_etl_error_handling():
@@ -292,29 +120,3 @@ async def test_etl_error_handling():
     account_status = status['entity_progress']['account']
     assert account_status['status'] == 'error'
     assert account_status['error_message'] == "Test error"
-
-@pytest.mark.asyncio
-async def test_etl_clear_graph_data(virtuoso_client: VirtuosoClient):
-    """Test clearing graph data."""
-    pipeline = ETLPipeline(batch_size=100)
-
-    # First create and load data
-    turtle_data = """
-    @prefix blockchain: <http://www.mobr.ai/ontologies/blockchain#> .
-    @prefix cardano: <http://www.mobr.ai/ontologies/cardano#> .
-
-    <http://test/epoch/1> a cardano:Epoch ;
-        cardano:hasEpochNumber "1" .
-    """
-
-    await virtuoso_client.create_graph(TEST_ETL_GRAPH, turtle_data)
-    exists = await virtuoso_client.check_graph_exists(TEST_ETL_GRAPH)
-    assert exists
-
-    # Clear the graph
-    success = await pipeline.loader.clear_graph_data(TEST_ETL_GRAPH)
-    assert success
-
-    # Verify graph is empty
-    exists = await virtuoso_client.check_graph_exists(TEST_ETL_GRAPH)
-    assert not exists

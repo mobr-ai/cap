@@ -15,20 +15,20 @@ class MultiAssetTransformer(BaseTransformer):
         for asset in assets:
             asset_uri = self.create_uri('native_token', asset['fingerprint'])
 
-            # Asset as cardano:CNT
-            turtle_lines.append(f"{asset_uri} a cardano:CNT ;")
+            # Asset as c:CNT
+            turtle_lines.append(f"{asset_uri} a c:CNT ;")
 
-            # Use blockchain:hasHash for fingerprint
+            # Use b:hasHash for fingerprint
             if asset['fingerprint']:
-                turtle_lines.append(f"    blockchain:hasHash \"{asset['fingerprint']}\" ;")
+                turtle_lines.append(f"    b:hasHash \"{asset['fingerprint']}\" ;")
 
             if asset['policy']:
-                turtle_lines.append(f"    cardano:hasPolicyId \"{asset['policy']}\" ;")
+                turtle_lines.append(f"    c:hasPolicyId \"{asset['policy']}\" ;")
 
             if asset['name']:
                 # Escape the name properly
                 escaped_name = asset['name'].replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-                turtle_lines.append(f"    blockchain:hasTokenName \"{escaped_name}\" ;")
+                turtle_lines.append(f"    b:hasTokenName \"{escaped_name}\" ;")
 
             # Remove trailing semicolon and add period
             if turtle_lines and turtle_lines[-1].endswith(' ;'):

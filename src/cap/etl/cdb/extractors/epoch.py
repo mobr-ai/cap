@@ -4,7 +4,7 @@ from opentelemetry import trace
 import logging
 
 from cap.etl.cdb.extractors.extractor import BaseExtractor
-from cap.data.cdb_model import Epoch
+from cap.rdf.cdb_model import Epoch
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

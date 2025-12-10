@@ -57,6 +57,13 @@ class PatternRegistry:
         'chain selection rule'
     ]
 
+    DEFAULT_METADATA_PROPERTIES = [
+        'hasCertificateMetadata', 'hasDelegateMetadata', 'hasStakePoolMetadata',
+        'hasProposalMetadata', 'hasVoteMetadata', 'hasConstitutionMetadata',
+        'hasMetadataDecodedCBOR', 'hasMetadataCBOR', 'hasMetadataJSON',
+        'hasTxMetadata'
+    ]
+
     # Temporal terms
     YEARLY_TERMS = ['yearly', 'annually', 'per year', 'each year', 'every year']
     MONTHLY_TERMS = ['monthly', 'per month', 'each month', 'every month']
@@ -72,7 +79,7 @@ class PatternRegistry:
                     'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
     TIME_PERIOD_RANGE_TERMS = ['first', 'last', 'second', 'third']
-    TIME_PERIOD_UNITS = ['week', 'day', 'month']
+    TIME_PERIOD_UNITS = ['week', 'day', 'month', 'hour', 'epoch']
 
     # Ordering terms
     MAX_TERMS = ['largest', 'biggest', 'highest', 'greatest', 'maximum', 'max']
@@ -85,9 +92,7 @@ class PatternRegistry:
                     'quantity', 'how much']
     SUM_TERMS = ['sum', 'total', 'add up', 'aggregate', 'combined',
                     'accumulated', 'overall amount']
-    AGGREGATE_TIME_TERMS = ['over time', 'historical', 'progression',
-                            'evolution', 'history',
-                            'per year', 'per month', 'per day', 'by year', 'by month']
+    AGGREGATE_TIME_TERMS = ['per year', 'per month', 'per day', 'by year', 'by month']
     TOP_TERMS = ['top', 'largest', 'biggest', 'highest', 'most',
                         'best', 'leading', 'upper', 'ascending', 'asc',
                         'top ranked', 'greatest', 'max', 'maximum']
@@ -100,7 +105,8 @@ class PatternRegistry:
     SEMANTIC_SUGAR = [
         'create', 'created', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
         'visualization', 'cardano', 'count', 'network', 'represent', 'table', 'versus',
-        'against', 'pie', 'pizza', 'recorded', 'storage', 'storaged', "with", "all"
+        'against', 'pie', 'pizza', 'recorded', 'storage', 'storaged', "with", "all",
+        'history', 'ever', 'over time', 'historical', 'progression', 'evolution',
     ]
 
     # Comparison terms

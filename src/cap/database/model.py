@@ -10,6 +10,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     JSON,
+    Text,
+    Index,
     text,
 )
 
@@ -29,6 +31,13 @@ class User(Base):
     refer_id       = Column(Integer)
     is_confirmed   = Column(Boolean, default=False)
     confirmation_token = Column(String(128), nullable=True)
+
+    is_admin       = Column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        default=False,  # optional but nice for in-memory defaults
+    )
 
     # on-prem avatar storage
     avatar_blob    = Column(LargeBinary, nullable=True)      # BYTEA
@@ -85,3 +94,111 @@ class DashboardItem(Base):
     position      = Column(Integer, nullable=False, server_default=text("0"))
 
     created_at    = Column(DateTime, server_default=text("NOW()"))
+
+
+class QueryMetrics(Base):
+    __tablename__ = "query_metrics"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), index=True, nullable=True)
+
+    # Query details
+    nl_query = Column(Text, nullable=False)
+    normalized_query = Column(Text, nullable=False, index=True)
+    detected_language = Column(String(10), nullable=False, index=True)
+    sparql_query = Column(Text, nullable=False)
+    is_sequential = Column(Boolean, default=False)
+    is_federated = Column(Boolean, default=False)
+
+    # Results
+    result_count = Column(Integer)
+    result_type = Column(String(50))  # table, bar_chart, etc.
+    kv_results = Column(JSON)
+
+    # Quality indicators
+    sparql_valid = Column(Boolean, nullable=False)
+    semantic_valid = Column(Boolean, nullable=False)
+    query_succeeded = Column(Boolean, nullable=False)
+    error_message = Column(Text, nullable=True)
+
+    # Complexity metrics
+    complexity_score = Column(Integer, default=0)
+    has_multi_relationship = Column(Boolean, default=False)
+    has_aggregation = Column(Boolean, default=False)
+    has_temporal = Column(Boolean, default=False)
+    has_offchain_metadata = Column(Boolean, default=False)
+
+    # Performance metrics (milliseconds)
+    llm_latency_ms = Column(Integer)
+    sparql_latency_ms = Column(Integer)
+    total_latency_ms = Column(Integer)
+
+    # Timestamps
+    created_at = Column(DateTime, server_default=text("NOW()"), index=True)
+
+    # Indexing for analytics
+    __table_args__ = (
+        Index('idx_query_metrics_language_date', 'detected_language', 'created_at'),
+        Index('idx_query_metrics_user_date', 'user_id', 'created_at'),
+        Index('idx_query_metrics_performance', 'total_latency_ms', 'created_at'),
+    )
+
+
+class KGMetrics(Base):
+    __tablename__ = "kg_metrics"
+
+    id = Column(Integer, primary_key=True)
+    entity_type = Column(String(100), nullable=False, index=True)
+
+    # Load metrics
+    triples_loaded = Column(Integer, default=0)
+    load_duration_ms = Column(Integer)
+    load_succeeded = Column(Boolean, nullable=False)
+
+    # Quality metrics
+    ontology_aligned = Column(Boolean, default=True)
+    has_offchain_metadata = Column(Boolean, default=False)
+
+    # ETL context
+    batch_number = Column(Integer)
+    graph_uri = Column(String(500))
+
+    created_at = Column(DateTime, server_default=text("NOW()"), index=True)
+
+    __table_args__ = (
+        Index('idx_kg_metrics_entity_date', 'entity_type', 'created_at'),
+    )
+
+
+class DashboardMetrics(Base):
+    __tablename__ = "dashboard_metrics"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False, index=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboard.id"), nullable=False)
+
+    action_type = Column(String(50), nullable=False)  # created, item_added, item_removed
+    artifact_type = Column(String(50), nullable=True)  # table, bar_chart, etc.
+
+    # State at time of action
+    total_items = Column(Integer, default=0)
+    unique_artifact_types = Column(Integer, default=0)
+
+    created_at = Column(DateTime, server_default=text("NOW()"), index=True)
+
+    __table_args__ = (
+        Index('idx_dashboard_metrics_user_date', 'user_id', 'created_at'),
+    )
+
+
+class AdminSetting(Base):
+    __tablename__ = "admin_setting"
+
+    key = Column(String(64), primary_key=True)
+    value = Column(JSON, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at = Column(DateTime, server_default=text("NOW()"))
+    updated_at = Column(
+        DateTime,
+        server_default=text("NOW()"),
+        onupdate=text("NOW()"),
+    )

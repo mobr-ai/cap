@@ -142,3 +142,31 @@ def on_wallet_login(
       - wallet_address (str)
     """
     _send("wallet_login", to, language, ctx={"wallet_address": wallet_address})
+
+def on_admin_user_created(
+    to: Iterable[str] | str,
+    language: str | None = "en",
+    new_user_email: str | None = "",
+    new_user_username: str | None = "",
+    source: str | None = "password",
+) -> None:
+    """
+    Notify admins that a new user account has been created.
+
+    Template: admin_user_created
+    Vars:
+      - new_user_email (str)
+      - new_user_username (str)
+      - source (str)  # 'password', 'google', 'cardano', etc.
+    """
+    _send(
+        template="admin_user_created",
+        to=to,
+        language=language,
+        ctx={
+            "new_user_email": new_user_email or "",
+            "new_user_username": new_user_username or "",
+            "source": source or "password",
+            "app_url": _app_url(),
+        },
+    )

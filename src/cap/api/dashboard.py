@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from cap.database.session import get_db
+from cap.services.metrics_service import MetricsService
 from cap.database.model import Dashboard, DashboardItem
 from cap.core.auth_dependencies import get_current_user
 
@@ -140,6 +141,17 @@ def create_dashboard(
     db.add(d)
     db.commit()
     db.refresh(d)
+
+    # Record metrics
+    MetricsService.record_dashboard_metrics(
+        db=db,
+        user_id=user.user_id,
+        dashboard_id=d.id,
+        action_type='created',
+        total_items=0,
+        unique_artifact_types=0
+    )
+
     return d
 
 
@@ -217,6 +229,27 @@ def add_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # Calculate unique artifact types
+    unique_types = db.query(DashboardItem.artifact_type).filter(
+        DashboardItem.dashboard_id == dashboard_id
+    ).distinct().count()
+
+    total_items = db.query(DashboardItem).filter(
+        DashboardItem.dashboard_id == dashboard_id
+    ).count()
+
+    # Record metrics
+    MetricsService.record_dashboard_metrics(
+        db=db,
+        user_id=user.user_id,
+        dashboard_id=dashboard_id,
+        action_type='item_added',
+        artifact_type=payload.artifact_type,
+        total_items=total_items,
+        unique_artifact_types=unique_types
+    )
+
     return item
 
 

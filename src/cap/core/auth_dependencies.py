@@ -47,9 +47,6 @@ def _decode(token: str) -> Dict[str, Any]:
     if _decode_token:
         return _decode_token(token)
 
-    if _verify_token:
-        return _verify_token(token)
-
     # If neither helper exists, raise a helpful error
     raise HTTPException(
         status_code=500,
@@ -116,3 +113,18 @@ get_current_user = _current_user_factory(require_confirmed=True)
 
 # Allow unconfirmed users (useful for flows that must see their own data pre-confirmation)
 get_current_user_unconfirmed = _current_user_factory(require_confirmed=False)
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Require a confirmed user who is also an admin.
+
+    Uses the normal get_current_user dependency (which already validates
+    JWT, loads the DB user, and checks confirmation), then enforces is_admin.
+    """
+    if not getattr(current_user, "is_admin", False):
+        # frontend expects "adminOnly"
+        raise HTTPException(status_code=403, detail="adminOnly")
+
+    return current_user

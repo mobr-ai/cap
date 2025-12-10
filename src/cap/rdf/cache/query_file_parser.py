@@ -7,6 +7,8 @@ import re
 from typing import Tuple
 from opentelemetry import trace
 
+from cap.util.sparql_util import ensure_validity
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -31,7 +33,7 @@ class QueryFileParser:
             if line.strip().startswith('MESSAGE user'):
                 if current_nl_query and current_sparql_lines:
                     sparql_query = '\n'.join(current_sparql_lines).strip()
-                    sparql_query = QueryFileParser._clean_sparql(sparql_query)
+                    sparql_query = QueryFileParser._extract_sparql(sparql_query, current_nl_query)
                     queries.append((current_nl_query, sparql_query))
 
                 current_nl_query = line.strip().replace('MESSAGE user', '').strip()
@@ -64,13 +66,13 @@ class QueryFileParser:
 
         if current_nl_query and current_sparql_lines:
             sparql_query = '\n'.join(current_sparql_lines).strip()
-            sparql_query = QueryFileParser._clean_sparql(sparql_query)
+            sparql_query = QueryFileParser._extract_sparql(sparql_query, current_nl_query)
             queries.append((current_nl_query, sparql_query))
 
         return queries
 
     @staticmethod
-    def _clean_sparql(sparql: str) -> str:
+    def _extract_sparql(sparql: str, nl_query) -> str:
         """Clean and normalize SPARQL from file."""
         sparql = sparql.strip()
 
@@ -95,4 +97,4 @@ class QueryFileParser:
 
             return json.dumps(queries)
 
-        return sparql
+        return ensure_validity(sparql, nl_query)

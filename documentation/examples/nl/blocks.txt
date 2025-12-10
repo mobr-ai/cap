@@ -1,0 +1,7 @@
+List the latest 5 blocks.
+List the first 5 blocks.
+How many blocks do you have in your database?
+How many blocks has cap processed?
+What is the date of your last block?
+Show me the first block ever
+Show me the block with the first transaction in the history

@@ -1,6 +1,6 @@
 # cap/src/cap/api/user.py
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Header
@@ -14,7 +14,7 @@ from cap.core.auth_dependencies import get_current_user
 router = APIRouter(prefix="/api/v1/user", tags=["user"])
 
 # -----------------------------
-# User endpoints 
+# User endpoints
 # -----------------------------
 ALLOWED_MIME = {"image/png", "image/jpeg", "image/webp"}
 MAX_BYTES = 2 * 1024 * 1024  # 2 MB
@@ -102,7 +102,7 @@ def delete_avatar(
 def _generate_anonymous_username(user_id: int) -> str:
     # Unique, stable-ish placeholder that satisfies your USERNAME_REGEX
     # e.g. deleted_12345_20251031
-    ts = datetime.utcnow().strftime("%Y%m%d")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"deleted_{user_id}_{ts}"
 
 @router.delete("/{user_id}")

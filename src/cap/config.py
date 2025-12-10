@@ -3,12 +3,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     # Virtuoso settings
-    VIRTUOSO_HOST: str
-    VIRTUOSO_PORT: int
-    VIRTUOSO_USER: str
-    VIRTUOSO_PASSWORD: str
-    VIRTUOSO_TIMEOUT: str
-    VIRTUOSO_ENDPOINT: str
+    TRIPLESTORE_HOST: str
+    TRIPLESTORE_PORT: int
+    TRIPLESTORE_USER: str
+    TRIPLESTORE_PASSWORD: str
+    TRIPLESTORE_TIMEOUT: str
+    TRIPLESTORE_ENDPOINT: str
     CARDANO_GRAPH: str
 
     # PostgreSQL settings for cardano-db-sync

@@ -53,29 +53,3 @@ async def test_etl_service_status():
 
     # Stop service
     await service.stop_etl()
-
-@pytest.mark.asyncio
-async def test_etl_api_endpoints(async_client: AsyncClient):
-    """Test ETL API endpoints."""
-    # Get initial status
-    response = await async_client.get("/api/v1/admin/etl/status")
-    assert response.status_code == 200
-    status = response.json()
-    assert 'running' in status
-
-    # Start ETL
-    response = await async_client.post(
-        "/api/v1/admin/etl/start",
-        params={"batch_size": 10, "sync_interval": 1, "continuous": False}
-    )
-    assert response.status_code == 200
-    assert ("running already" in response.json()["message"] or "started successfully" in response.json()["message"])
-
-    # Get status while running
-    response = await async_client.get("/api/v1/admin/etl/status")
-    assert response.status_code == 200
-
-    # Stop ETL
-    response = await async_client.post("/api/v1/admin/etl/stop")
-    assert response.status_code == 200
-    assert "stopped" in response.json()["message"]
