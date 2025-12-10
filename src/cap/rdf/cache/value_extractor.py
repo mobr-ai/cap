@@ -55,25 +55,8 @@ class ValueExtractor:
             "temporal_periods": [],
             "years": [],
             "months": [],
-            "orderings": [],
-            "chart_types": []
+            "orderings": []
         }
-
-        # Extract chart types
-        chart_names = (
-            PatternRegistry.BAR_CHART_TERMS +
-            PatternRegistry.PIE_CHART_TERMS +
-            PatternRegistry.LINE_CHART_TERMS +
-            PatternRegistry.TABLE_TERMS
-        )
-
-        str_chart_names = '|'.join(re.escape(m) for m in chart_names)
-        str_chart_sf_names = '|'.join(re.escape(m) for m in PatternRegistry.CHART_SUFFIXES)
-        chart_pattern = rf'\b({str_chart_names})\s+({str_chart_sf_names})\b'
-        for match in re.finditer(chart_pattern, nl_query, re.IGNORECASE):
-            chart_type = match.group(1).lower()
-            if chart_type not in values["chart_types"]:
-                values["chart_types"].append(chart_type)
 
         # Extract currency/token URIs (add this new section)
         # Look for ADA references
