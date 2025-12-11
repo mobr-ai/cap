@@ -171,7 +171,7 @@ class PatternRegistry:
         'dataset', 'row', 'column'
     ]
     CHART_SUFFIXES = [
-        'chart', 'graph', 'plot', 'draw', 'display', 'paint', 'compose'
+        'chart', 'graph', 'plot', 'draw', 'display', 'paint', 'compose', 'trace'
     ]
 
     DEFINITION_TERMS = [

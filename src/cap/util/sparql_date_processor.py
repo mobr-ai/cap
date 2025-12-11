@@ -52,6 +52,17 @@ class SparqlDateProcessor:
         r'\^\^xsd:dateTime'
     )
 
+    FILTER_PATTERN = re.compile(
+        r'FILTER\s*\('  # FILTER (
+        r'([^)]*?)'  # capture everything inside, non-greedy
+        r'(NOW\(\s*\)|(?:"[^"]+"\^\^xsd:dateTime))'  # NOW() or dateTime literal
+        r'\s*([+\-])\s*'  # operator + or -
+        r'"([^"]+)"\^\^xsd:(dayTimeDuration|duration|yearMonthDuration)'  # duration
+        r'([^)]*?)'  # capture rest of expression
+        r'\)',  # )
+        re.IGNORECASE | re.MULTILINE
+    )
+
     def __init__(self, reference_time: Optional[datetime] = None):
         """
         Initialize the processor.
@@ -203,6 +214,65 @@ class SparqlDateProcessor:
         else:
             return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
+    def _replace_filter(self, match: re.Match) -> str:
+        """
+        Replace date arithmetic within a FILTER statement.
+
+        Args:
+            match: Regex match object
+
+        Returns:
+            Replacement FILTER statement
+        """
+        try:
+            prefix = match.group(1)  # Everything before the date expression
+            datetime_expr = match.group(2)  # NOW() or dateTime literal
+            operator = match.group(3)  # '+' or '-'
+            duration_str = match.group(4)  # e.g., "P7D"
+            duration_type = match.group(5)  # dayTimeDuration, duration, etc.
+            suffix = match.group(6)  # Everything after the duration
+
+            # Determine base datetime
+            if datetime_expr.strip().upper().startswith('NOW'):
+                base_dt = self._get_now()
+            else:
+                # Extract datetime from literal
+                dt_match = self.DATETIME_LITERAL_PATTERN.search(datetime_expr)
+                if dt_match:
+                    base_dt = self._parse_datetime_literal(dt_match.group(1))
+                else:
+                    logger.warning(f"Could not extract datetime from: {datetime_expr}")
+                    return match.group(0)
+
+            # Parse the duration
+            duration = self._parse_duration(duration_str)
+
+            # Apply the operation
+            if operator == '-':
+                result_dt = base_dt - duration
+            else:  # operator == '+'
+                result_dt = base_dt + duration
+
+            # Format as xsd:dateTime
+            formatted_date = self._format_datetime(result_dt)
+
+            # Return the replacement FILTER statement
+            replacement = f'FILTER({prefix}"{formatted_date}"^^xsd:dateTime{suffix})'
+
+            logger.debug(f"Replaced: {match.group(0)}")
+            logger.debug(f"With: {replacement}")
+
+            return replacement
+
+        except (DurationParseError, ValueError) as e:
+            logger.error(f"Error processing FILTER statement: {e}")
+            logger.error(f"Original: {match.group(0)}")
+            return match.group(0)
+        except Exception as e:
+            logger.error(f"Unexpected error processing FILTER statement: {e}")
+            logger.error(f"Original: {match.group(0)}")
+            return match.group(0)
+
     def _replace_bind(self, match: re.Match) -> str:
         """
         Replace a single BIND statement with calculated date.
@@ -264,7 +334,7 @@ class SparqlDateProcessor:
 
     def process(self, query: str) -> Tuple[str, int]:
         """
-        Process a SPARQL query and resolve all date arithmetic in BIND statements.
+        Process a SPARQL query and resolve all date arithmetic in BIND and FILTER statements.
 
         Args:
             query: The SPARQL query string
@@ -272,19 +342,36 @@ class SparqlDateProcessor:
         Returns:
             Tuple of (processed_query, number_of_replacements)
         """
-        if not query or not isinstance(query, str) or "bind" not in query.lower():
+        if not query or not isinstance(query, str):
+            return query, 0
+
+        has_bind = "bind" in query.lower()
+        has_filter = "filter" in query.lower()
+
+        if not has_bind and not has_filter:
             return query, 0
 
         # Count replacements
         replacement_count = 0
 
-        def count_and_replace(match):
+        def count_and_replace_bind(match):
             nonlocal replacement_count
             replacement_count += 1
             return self._replace_bind(match)
 
+        def count_and_replace_filter(match):
+            nonlocal replacement_count
+            replacement_count += 1
+            return self._replace_filter(match)
+
         # Replace all matching BIND statements
-        processed_query = self.BIND_PATTERN.sub(count_and_replace, query)
+        processed_query = query
+        if has_bind:
+            processed_query = self.BIND_PATTERN.sub(count_and_replace_bind, processed_query)
+
+        # Replace all matching FILTER statements
+        if has_filter:
+            processed_query = self.FILTER_PATTERN.sub(count_and_replace_filter, processed_query)
 
         if replacement_count > 0:
             logger.info(f"Processed {replacement_count} date arithmetic expression(s)")

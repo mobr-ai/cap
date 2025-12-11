@@ -77,6 +77,7 @@ if __name__ == "__main__":
             BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?pastWeek)
             BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?pastDay)
             BIND (NOW() + "P7D"^^xsd:duration as ?futureWeek)
+            FILTER(?timestamp >= NOW() - "P7D"^^xsd:dayTimeDuration)
         }
     '''
     result4, count4 = processor.process(query4)
@@ -95,6 +96,7 @@ if __name__ == "__main__":
         SELECT ?future
         WHERE {
             BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime + "P30D"^^xsd:duration as ?future)
+            FILTER(?timestamp >= NOW() - "P30D"^^xsd:dayTimeDuration)
         }
     '''
     result5, count5 = processor.process(query5)
