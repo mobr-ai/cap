@@ -297,6 +297,24 @@ class VegaUtil:
         return line_chart
 
     @staticmethod
+    def _convert_url_to_link(value: str) -> str:
+        """Convert URL strings to HTML link format for Vega rendering."""
+        value_str = str(value).strip()
+
+        # Check if it's an IPFS URL
+        if value_str.startswith('ipfs://'):
+            ipfs_id = value_str[7:]  # Remove 'ipfs://' prefix
+            href = f"https://ipfs.io/ipfs/{ipfs_id}"
+            return f'<a href="{href}" target="_blank">{value_str}</a>'
+
+        # Check if it's already an HTTPS URL
+        elif value_str.startswith('https://') or value_str.startswith('http://'):
+            return f'<a href="{value_str}" target="_blank">{value_str}</a>'
+
+        # Not a URL, return as-is
+        return value_str
+
+    @staticmethod
     def _convert_table(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to table format."""
 
@@ -337,6 +355,9 @@ class VegaUtil:
                     else:
                         # Fallback: try to get meaningful representation
                         value = str(value)
+
+                # Convert URLs to clickable links
+                value = VegaUtil._convert_url_to_link(value)
                 col_values.append(value)
 
             columns.append({
