@@ -248,7 +248,7 @@ class QueryNormalizer:
                 normalized
             )
 
-        # temporal patterns
+        # temporal aggregation patterns
         pattern = f"\\b({'|'.join(PatternRegistry.TEMPORAL_PREPOSITIONS)})?\\s*\\d{{4}}\\b"
         normalized = re.sub(rf'{pattern}', ' <<YEAR>> ', normalized)
         month_year_pattern = PatternRegistry.build_pattern(PatternRegistry.MONTH_NAMES + PatternRegistry.MONTH_ABBREV) + r'\s*\d{4}\b'
@@ -289,6 +289,12 @@ class QueryNormalizer:
             else:
                 # Explicit patterns already have number handling
                 normalized = re.sub(pattern, replacement, normalized)
+
+
+        # Normalize duration expressions to <<DURATION>>
+        duration_pattern = r'\b(last|past|previous)\s+(\d+\s+)?(day|days|week|weeks|month|months|year|years)\b'
+        normalized = re.sub(
+            duration_pattern, '<<DURATION>>', normalized, flags=re.IGNORECASE)
 
         # numeric patterns
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)

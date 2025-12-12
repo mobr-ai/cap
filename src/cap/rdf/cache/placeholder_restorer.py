@@ -273,6 +273,16 @@ class PlaceholderRestorer:
 
             sparql = sparql.replace(placeholder, replacement)
 
+        # Restore duration literals (P7D, P30D, etc.)
+        if current_values.get("durations"):
+            duration = current_values["durations"][0]
+            # Replace any duration pattern in the SPARQL
+            sparql = re.sub(
+                r'"P\d+[DWMY]"(?:\^\^xsd:(?:dayTimeDuration|duration))?',
+                f'"{duration}"^^xsd:dayTimeDuration',
+                sparql
+            )
+
         return sparql
 
     @staticmethod

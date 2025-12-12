@@ -55,7 +55,8 @@ class ValueExtractor:
             "temporal_periods": [],
             "years": [],
             "months": [],
-            "orderings": []
+            "orderings": [],
+            "durations": []
         }
 
         # Extract currency/token URIs (add this new section)
@@ -108,6 +109,8 @@ class ValueExtractor:
         ValueExtractor._extract_limits(nl_query, values)
         ValueExtractor._extract_tokens(nl_query, values)
         ValueExtractor._extract_numbers(nl_query, values)
+        ValueExtractor._extract_durations(nl_query, values)
+
 
         logger.info(f"Extracted values from '{nl_query}': {values}")
         return values
@@ -175,6 +178,49 @@ class ValueExtractor:
             token = (match.group(1) or match.group(2)).upper()
             if token not in values["tokens"] and token not in excluded_words:
                 values["tokens"].append(token)
+
+    @staticmethod
+    def _extract_durations(nl_query: str, values: dict[str, list[str]]) -> None:
+        """Extract duration expressions and convert to XSD duration format."""
+
+        # Map units to XSD duration codes
+        unit_to_code = {
+            'day': ('D', 1), 'days': ('D', 1),
+            'week': ('W', 7), 'weeks': ('W', 7),  # Store as days for consistency
+            'month': ('M', 30), 'months': ('M', 30),
+            'year': ('Y', 365), 'years': ('Y', 365)
+        }
+
+        # Pattern: "last N days/weeks/months/years"
+        for match in re.finditer(
+            r'\b(last|past|previous)\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b',
+            nl_query,
+            re.IGNORECASE
+        ):
+            num = int(match.group(2))
+            unit = match.group(3).lower()
+
+            if unit in unit_to_code:
+                code, multiplier = unit_to_code[unit]
+                # Convert everything to days for consistent comparison
+                total_days = num * multiplier
+                duration = f"P{total_days}D"
+                if duration not in values["durations"]:
+                    values["durations"].append(duration)
+
+        # Pattern: "last week/month/year" (implicit 1)
+        for match in re.finditer(
+            r'\b(last|past|previous)\s+(day|week|month|year)\b',
+            nl_query,
+            re.IGNORECASE
+        ):
+            unit = match.group(2).lower()
+
+            if unit in unit_to_code:
+                code, multiplier = unit_to_code[unit]
+                duration = f"P{multiplier}D"
+                if duration not in values["durations"]:
+                    values["durations"].append(duration)
 
     @staticmethod
     def _extract_numbers(nl_query: str, values: dict[str, list[str]]) -> None:
