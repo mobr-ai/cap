@@ -47,6 +47,81 @@ class User(Base):
     # URL kept for compatibility
     avatar         = Column(String, nullable=True)
 
+class Conversation(Base):
+    __tablename__ = "conversation"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), index=True, nullable=False)
+    title = Column(String(255), nullable=True)
+    created_at = Column(DateTime, server_default=text("NOW()"))
+    updated_at = Column(DateTime, server_default=text("NOW()"), onupdate=text("NOW()"))
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_message"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversation.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id = Column(Integer, ForeignKey("user.user_id"), index=True, nullable=True)
+    role = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    nl_query_id = Column(Integer, ForeignKey("query_metrics.id"), index=True, nullable=True)
+    created_at = Column(DateTime, server_default=text("NOW()"))
+
+
+class ConversationArtifact(Base):
+    __tablename__ = "conversation_artifact"
+
+    id = Column(Integer, primary_key=True)
+
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversation.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+
+    # Optional linkage to the query metrics record that produced it
+    nl_query_id = Column(
+        Integer,
+        ForeignKey("query_metrics.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    # Optional linkage to a message (if you later want)
+    conversation_message_id = Column(
+        Integer,
+        ForeignKey("conversation_message.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    # "chart" | "table"
+    artifact_type = Column(String(50), nullable=False)
+
+    # e.g. "bar" | "pie" | "line" | "table" (optional)
+    kv_type = Column(String(50), nullable=True)
+
+    # config/spec payload (vegaSpec or kv table payload)
+    config = Column(JSON, nullable=False)
+
+    # stable dedupe key calculated by backend (unique per conversation)
+    artifact_hash = Column(String(128), nullable=False)
+
+    created_at = Column(DateTime, server_default=text("NOW()"), index=True)
+
+    __table_args__ = (
+        Index("idx_conversation_artifact_convo_created", "conversation_id", "created_at"),
+        Index("uq_conversation_artifact_convo_hash", "conversation_id", "artifact_hash", unique=True),
+    )
+
+
 # -----------------------------
 # Dashboards
 # -----------------------------
@@ -78,6 +153,12 @@ class DashboardItem(Base):
         index=True,
         nullable=False,
     )
+    conversation_message_id = Column(
+        Integer,
+        ForeignKey("conversation_message.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # "table", "chart" (extend later e.g. "metric", "text", etc.)
     artifact_type = Column(String(50), nullable=False)
@@ -95,6 +176,10 @@ class DashboardItem(Base):
 
     created_at    = Column(DateTime, server_default=text("NOW()"))
 
+
+# -----------------------------
+# Metrics and Settings
+# -----------------------------
 
 class QueryMetrics(Base):
     __tablename__ = "query_metrics"
