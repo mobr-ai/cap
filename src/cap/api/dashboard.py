@@ -40,6 +40,10 @@ class DashboardItemBase(BaseModel):
     title: str = Field(..., max_length=150)
     source_query: Optional[str] = Field(None, max_length=1000)
     config: dict
+    conversation_message_id: Optional[int] = Field(
+        None,
+        description="Originating conversation message id",
+    )
 
 
 class DashboardItemOut(DashboardItemBase):
@@ -225,6 +229,7 @@ def add_item(
         source_query=payload.source_query,
         config=payload.config,
         position=next_pos,
+        conversation_message_id=payload.conversation_message_id,
     )
     db.add(item)
     db.commit()
@@ -293,6 +298,7 @@ def pin_artifact(
         source_query=payload.source_query,
         config=payload.config,
         position=next_pos,
+        conversation_message_id=payload.conversation_message_id,
     )
     db.add(item)
     db.commit()
