@@ -119,7 +119,7 @@ class PatternRegistry:
         'smaller than', '<', 'at most'
     ]
     EQUALS_TERMS =  [
-        'equals', 'equal to', 'exactly', 'same as', 'is', 'match',
+        'equals', 'equal to', 'exactly', 'same as', 'match',
         'matches', 'identical to', '=', 'precisely'
     ]
 

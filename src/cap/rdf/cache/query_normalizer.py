@@ -164,6 +164,12 @@ class QueryNormalizer:
             normalized
         )
 
+        normalized = re.sub(
+            r'\b(how many)\s+([a-zA-Z]+)\b',  # Match "how many" followed by an entity (like "accounts")
+            r'<<QUANT_0>> \2',  # Normalize "how many accounts" to the same pattern
+            normalized
+        )
+
         # Normalize definition requests to a standard form
         definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
         normalized = re.sub(
