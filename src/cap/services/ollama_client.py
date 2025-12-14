@@ -288,14 +288,24 @@ class OllamaClient:
         system_prompt: str = None,
         conversation_history: Optional[list[dict]] = None
     ) -> AsyncIterator[str]:
-        """Generate contextualized answer using chat endpoint with conversation history."""
+        """
+        Generate contextualized answer based on SPARQL results.
 
+        Args:
+            user_query: Original natural language query
+            sparql_query: SPARQL query that was executed
+            sparql_results: Results from SPARQL execution (formatted string or raw dict)
+            system_prompt: System prompt for answer generation
+
+        Yields:
+            Chunks of contextualized answer
+        """
         with tracer.start_as_current_span("contextualized answer") as span:
             # Stream kv_results first if present
             result_type = ""
             if kv_results:
                 try:
-                    result_type = kv_results.get("result_type", "")
+                    result_type = kv_results["result_type"]
                     result_type = OllamaClient._categorize_query(user_query, result_type)
                     if result_type != "":
                         kv_results["result_type"] = result_type
@@ -337,70 +347,78 @@ class OllamaClient:
 
                 yield f"_kv_results_end_\n\n"
 
-            # Prepare context results
             context_res = ""
             try:
+                # If results are already formatted as string, use directly
                 if isinstance(sparql_results, str):
                     context_res = sparql_results
                     span.set_attribute("format", "string")
+                # Otherwise, serialize dict to JSON
                 elif sparql_results:
                     context_res = json.dumps(sparql_results, indent=2)
                     span.set_attribute("format", "dict")
                 else:
                     context_res = ""
                     span.set_attribute("format", "empty")
+
             except Exception as e:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
-            # Build system message based on what data we have
             current_date = datetime.now(timezone.utc).date()
-            system_content = f"Today is {current_date}.\n"
+            known_info = ""
             temperature = 0.1
-
             if "chart" in result_type or "table" in result_type:
-                # Chart/table analysis mode
-                system_content += f"{self.chart_prompt}\n"
-                system_content += "The system is showing an artifact to the user using the visualization data provided. "
-                system_content += "Always write a SHORT insight about the data shown in the visualization."
+                known_info = f"""
+                Today is {current_date}.
+                {self.chart_prompt}
+                The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
+                {kv_results}
+                """
 
-            elif context_res:
-                # Normal query with SPARQL results
-                system_content += self.contextualize_prompt
+            elif context_res != "":
+                known_info = f"""
+                Today is {current_date}.
+                This is the current value you MUST consider in your answer:
+                {context_res}
+
+                {self.contextualize_prompt}
+                """
 
             else:
-                # No results available
-                system_content += "If you do not know how to answer the user's question, say you do not know the answer. "
-                system_content += "NEVER explain how to get results for the question. "
-                system_content += "NEVER answer with a SPARQL query."
+                known_info = f"""
+                If you do not know how to answer User's question, say you do not know the answer.
+                NEVER explain how to get results for the question.
+                NEVER answer with a SPARQL query.
+                """
+
+            # Format the prompt with query and results
+            prompt = f"""
+                User Question: {user_query}
+
+                {known_info}
+            """
 
             # Prepare messages with history and all context
-            messages = self._prepare_chat_messages(
-                user_query=user_query,
-                sparql_results=context_res,
-                kv_results=kv_results,  # Pass kv_results here
+            prompt = self._add_history(
+                prompt=prompt,
                 conversation_history=conversation_history,
-                system_content=system_content
             )
 
-            logger.debug(f"Chat messages prepared with {len(messages)} total messages")
-
-            # Use chat endpoint instead of generate
-            async for chunk in self.chat_stream(
-                messages=messages,
+            logger.debug(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
+            async for chunk in self.generate_stream(
+                prompt=prompt,
                 model=self.llm_model,
+                system_prompt=system_prompt,
                 temperature=temperature
             ):
                 yield chunk
 
 
-    def _prepare_chat_messages(
+    def _add_history(
         self,
-        user_query: str,
-        sparql_results: str,
-        kv_results: dict[str, Any],
-        conversation_history: Optional[list[dict]] = None,
-        system_content: str = ""
+        prompt: str,
+        conversation_history: Optional[list[dict]] = None
     ) -> list[dict]:
         """
         Prepare messages for chat API with 40K token limit.
@@ -408,34 +426,13 @@ class OllamaClient:
         """
         MAX_CONTEXT_CHARS = 160_000  # Conservative estimate for 40K tokens
 
-        messages = []
-
-        # System message (if provided)
-        if system_content:
-            messages.append({"role": "system", "content": system_content})
-
-        # Build current message with all context
-        current_message_parts = [user_query]
-
-        # Add kv_results if present (important for chart/table analysis)
-        if kv_results:
-            try:
-                kv_formatted = json.dumps(kv_results, indent=2)
-                current_message_parts.append(f"\n\nVisualization Data:\n{kv_formatted}")
-            except Exception as e:
-                logger.warning(f"Failed to format kv_results: {e}")
-
-        # Add SPARQL results if present
-        if sparql_results:
-            current_message_parts.append(f"\n\nKnowledge Graph Context:\n{sparql_results}")
-
-        current_message = "\n".join(current_message_parts)
+        history = []
 
         # Add conversation history (most recent first after reversing)
         if conversation_history:
             reversed_history = list(reversed(conversation_history))
             kept_history = []
-            current_size = len(system_content) + len(current_message)
+            current_size = len(prompt)
 
             for msg in reversed_history:
                 msg_size = len(msg.get("content", ""))
@@ -447,11 +444,9 @@ class OllamaClient:
                     break
 
             # Reverse back to chronological order
-            messages.extend(reversed(kept_history))
+            history.extend(reversed(kept_history))
 
-        messages.append({"role": "user", "content": current_message})
-
-        return messages
+        return f"{prompt}\nPrevious messages: {'\n'.join(history)}"
 
 
     async def chat_stream(
