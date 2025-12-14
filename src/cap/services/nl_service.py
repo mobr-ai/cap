@@ -95,6 +95,9 @@ async def query_with_stream_response(
 
         user_query = query
         if context:
+            logger.info("Querying with context.")
+            logger.info(f"User query: {user_query}")
+            logger.info(f"Context: {context}")
             user_query = f"{context}\n\n{query}"
 
         normalized = QueryNormalizer.normalize(user_query)

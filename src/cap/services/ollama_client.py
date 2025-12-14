@@ -16,6 +16,13 @@ from cap.rdf.cache.semantic_matcher import SemanticMatcher
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
+def matches_keyword(low_uq: str, keywords):
+    return any(
+        form in low_uq
+        for keyword in keywords
+        for form in (keyword, f"{keyword}s", f"{keyword}es", f"{keyword}ies")
+    )
+
 class OllamaClient:
     """Client for interacting with Ollama LLM service."""
 
@@ -241,6 +248,7 @@ class OllamaClient:
                 span.set_attribute("sparql_length", len(content))
                 return content
 
+
     def _categorize_query(user_query: str, result_type: str) -> str:
         """
         Categorizes a natural language query into result types:
@@ -256,15 +264,15 @@ class OllamaClient:
 
         # Chart-related queries
         new_type = ""
-        if result_type == "multiple" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["bar"])):
+        if result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bar"]):
             new_type = "bar_chart"
-        elif result_type == "single" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["pie"])):
+        elif result_type == "single" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["pie"]):
             new_type = "pie_chart"
-        elif result_type == "multiple" and (any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["line"])):
+        elif result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["line"]):
             new_type = "line_chart"
 
         # Tabular or list queries
-        elif any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["table"]):
+        elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type
