@@ -20,7 +20,7 @@ def matches_keyword(low_uq: str, keywords):
     return any(
         form in low_uq
         for keyword in keywords
-        for form in (keyword, f"{keyword}s", f"{keyword}es", f"{keyword}ies")
+        for form in (keyword, f"{keyword}s", f"{keyword}es", f"{keyword}ies", f"{keyword}ing")
     )
 
 class OllamaClient:
@@ -333,7 +333,7 @@ class OllamaClient:
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)
-                            logger.debug(f"output_data: \n {kv_formatted}")
+                            logger.info(f"output_data: \n {kv_formatted}")
                         else:
                             kv_formatted = json.dumps(kv_results, indent=2)
                     else:

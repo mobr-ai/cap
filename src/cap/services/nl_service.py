@@ -214,7 +214,6 @@ async def query_with_stream_response(
                 kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query_str)
                 formatted_results = format_for_llm(kv_results, max_items=10000)
 
-            logger.info(f"Contextualizing data with kvr: \n   {kv_results}")
             context_stream = ollama.contextualize_answer(
                 user_query=user_query,
                 sparql_query=sparql_query_str,
