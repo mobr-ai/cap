@@ -25,6 +25,7 @@ from cap.database.model import Base
 
 from cap.api.auth import router as auth_router
 from cap.api.waitlist import router as wait_router
+from cap.api.waitlist_admin import router as wait_admin_router
 from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
@@ -223,6 +224,7 @@ def create_application() -> FastAPI:
     app.include_router(user_router)
     app.include_router(user_admin_router)
     app.include_router(wait_router)
+    app.include_router(wait_admin_router)
     app.include_router(cache_router)
     app.include_router(etl_router)
     app.include_router(dashboard_router)
