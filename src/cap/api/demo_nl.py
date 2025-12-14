@@ -101,6 +101,65 @@ DEMO_SCENES = {
             "generated from on-chain block headers and enriched with derived fields."
         ),
     },
+    "last_5_proposals": {
+        "match": "show the last 5 proposals",
+        "kv": {
+            "result_type": "table",
+            "data": {
+                "values": [
+                    {
+                        "key": "proposalTxHash",
+                        "values": [
+                            "f8393f1ff814d3d52336a97712361fed933d9ef9e8d0909e1d31536a549fd22f",
+                            "d16dffbae9d86a73cb343506e6712d79c278096dc25e8ba6900eb24522726bba",
+                            "8f54d021c6e6fcdd5a4908f10a7b092fa31cd94db2e809f2e06d7ffa4d78773d",
+                            "3285b7fd0da16d21e0b8f8910c37f77e17a57cfff8f513df4baf692954801088",
+                            "03f671791fd97011f30e4d6b76c9a91f4f6bcfb60ee37e5399b9545bb3f2757a",
+                        ],
+                    },
+                    {
+                        "key": "proposalUrl",
+                        "values": [
+                            "<a href=\"https://ipfs.io/ipfs/bafkreiecqskxkmakkrzrs2xs2olh5jcwbuz5qr5gesp6merwcaydcaojiq\" target=\"_blank\">ipfs://bafkreiecqskxkmakkrzrs2xs2olh5jcwbuz5qr5gesp6merwcaydcaojiq</a>",
+                            "<a href=\"https://ipfs.io/ipfs/Qmeme8EWugVPQeVghpqB53nvG5U4VT9zy3Ta545fEJPnqL\" target=\"_blank\">ipfs://Qmeme8EWugVPQeVghpqB53nvG5U4VT9zy3Ta545fEJPnqL</a>",
+                            "<a href=\"https://ipfs.io/ipfs/bafkreicbxui5lbdrgcpjwhlti3rqkxfnd3vveiinkcu2zak5bny435w4yq\" target=\"_blank\">ipfs://bafkreicbxui5lbdrgcpjwhlti3rqkxfnd3vveiinkcu2zak5bny435w4yq</a>",
+                            "<a href=\"https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR7khTUdWyQFdNvyXDsuyZLUNsdfm7Ejo9wKfKdRE3ReG\" target=\"_blank\">https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR7khTUdWyQFdNvyXDsuyZLUNsdfm7Ejo9wKfKdRE3ReG</a>",
+                            "<a href=\"https://ipfs.io/ipfs/bafkreidl43ghacdpczaims63glq5kepaa63d63cr5mrpznv56jdm7e2eny\" target=\"_blank\">ipfs://bafkreidl43ghacdpczaims63glq5kepaa63d63cr5mrpznv56jdm7e2eny</a>",
+                        ],
+                    },
+                    {"key": "voteCount", "values": ["27", "144", "276", "217", "226"]},
+                    {"key": "yesCount", "values": ["26", "140", "259", "186", "160"]},
+                    {"key": "noCount", "values": ["1", "4", "10", "16", "42"]},
+                    {"key": "abstainCount", "values": ["0", "0", "7", "15", "24"]},
+                    {
+                        "key": "proposalTimestamp",
+                        "values": [
+                            "2025-12-08T22:34:44Z",
+                            "2025-11-30T20:13:21Z",
+                            "2025-11-27T19:50:18Z",
+                            "2025-10-24T07:07:56Z",
+                            "2025-10-23T15:59:15Z",
+                        ],
+                    },
+                ]
+            },
+            "metadata": {
+                "count": 5,
+                "columns": [
+                    "proposalTxHash",
+                    "proposalUrl",
+                    "voteCount",
+                    "yesCount",
+                    "noCount",
+                    "abstainCount",
+                    "proposalTimestamp",
+                ],
+            },
+        },
+        "assistant_text": (
+            "Here are the last 5 governance proposals (demo dataset) including their IPFS URLs."
+        ),
+    },
     "monthly_multiassets_2021": {
         "match": "monthly multi assets created in 2021",
         "kv": {

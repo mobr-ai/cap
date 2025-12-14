@@ -170,3 +170,32 @@ def on_admin_user_created(
             "app_url": _app_url(),
         },
     )
+
+def on_admin_waitlist_created(
+    to: Iterable[str] | str,
+    language: str | None = "en",
+    waitlist_email: str | None = "",
+    waitlist_ref: str | None = "",
+    source: str | None = "waitlist",
+) -> None:
+    """
+    Notify admins that a new waitlist entry has been created.
+
+    Template: admin_waitlist_created
+    Vars:
+      - waitlist_email (str)
+      - waitlist_ref (str)
+      - source (str)  # 'waitlist', 'admin-test', etc.
+      - app_url (str)
+    """
+    _send(
+        template="admin_waitlist_created",
+        to=to,
+        language=language,
+        ctx={
+            "waitlist_email": waitlist_email or "",
+            "waitlist_ref": waitlist_ref or "",
+            "source": source or "waitlist",
+            "app_url": _app_url(),
+        },
+    )
