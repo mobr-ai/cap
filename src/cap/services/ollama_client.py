@@ -446,7 +446,8 @@ class OllamaClient:
             # Reverse back to chronological order
             history.extend(reversed(kept_history))
 
-        return f"{prompt}\nPrevious messages: {'\n'.join(history)}"
+        str_history = "\n".join(history)
+        return f"{prompt}\nPrevious messages:\n {str_history}"
 
 
     async def chat_stream(
