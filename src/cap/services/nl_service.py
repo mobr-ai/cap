@@ -75,7 +75,7 @@ class StatusMessage:
         return f"Error: {message}\n"
 
 async def query_with_stream_response(
-        query, context, db=None, user=None):
+    query, context, db=None, user=None, conversation_history=None):
 
     # Metrics collection variables
     start_time = time.time()
@@ -220,7 +220,8 @@ async def query_with_stream_response(
                 sparql_query=sparql_query_str,
                 sparql_results=formatted_results,
                 kv_results=kv_results,
-                system_prompt=""
+                system_prompt="",
+                conversation_history=conversation_history
             )
 
             async for chunk in stream_with_timeout_messages(context_stream, timeout_seconds=300.0):

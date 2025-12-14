@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from opentelemetry import trace
 
 from cap.database.session import get_db
-from cap.database.model import User
+from cap.database.model import User, ConversationMessage
 from cap.core.auth_dependencies import get_current_user_unconfirmed
 from cap.services.nl_service import query_with_stream_response
 from cap.services.ollama_client import get_ollama_client
@@ -102,9 +102,27 @@ async def natural_language_query(
                 query=request.query,
                 nl_query_id=None,
             )
-            
+
         conversation_id = convo.id if convo else None
         user_message_id = user_msg.id if user_msg else None
+
+        conversation_history = []
+        if convo:
+            # Get messages ordered by creation time
+            messages = (
+                db.query(ConversationMessage)
+                .filter(ConversationMessage.conversation_id == convo.id)
+                .order_by(ConversationMessage.created_at.asc())
+                .all()
+            )
+
+            # Build history, excluding the just-added user message
+            for msg in messages:
+                if msg.id != user_message_id:  # Don't include the current message
+                    conversation_history.append({
+                        "role": msg.role,
+                        "content": msg.content
+                    })
 
         # -----------------------------------------------------------------
         # 2) Stream + persist artifacts + assistant message
@@ -120,6 +138,7 @@ async def natural_language_query(
                 request.context,
                 db,
                 current_user,
+                conversation_history=conversation_history,
             ):
                 # Forward chunk to client verbatim
                 yield chunk
