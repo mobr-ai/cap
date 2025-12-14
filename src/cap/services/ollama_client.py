@@ -444,10 +444,15 @@ class OllamaClient:
                     break
 
             # Reverse back to chronological order
-            history.extend(reversed(kept_history))
+            history = list(reversed(kept_history))
 
-        str_history = "\n".join(history)
-        return f"{prompt}\nPrevious messages:\n {str_history}"
+        # Format each message as "role: content"
+        str_history = "\n".join([
+            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+            for msg in history
+        ])
+
+        return f"{prompt}\nPrevious messages:\n{str_history}" if str_history else prompt
 
 
     async def chat_stream(

@@ -186,10 +186,10 @@ class PatternRegistry:
     # Filler words (shared across normalizers)
     FILLER_WORDS = [
         'please', 'could', 'can', 'you', 'me', 'the',
-        'is', 'are', 'was', 'were', 'your', 'my',
-        'a', 'an', 'of', 'in', 'on', 'yours', 'to',
-        'do', 'does', 'ever', 'with', 'having', 'from',
-    ] + BAR_CHART_TERMS + LINE_CHART_TERMS + PIE_CHART_TERMS + TABLE_TERMS + CHART_SUFFIXES
+        'is', 'are', 'was', 'were', 'your', 'my', 'exist',
+        'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
+        'do', 'does', 'ever', 'with', 'having', 'from', 'there'
+    ] + BAR_CHART_TERMS + LINE_CHART_TERMS + PIE_CHART_TERMS + TABLE_TERMS + CHART_SUFFIXES + POSSESSION_TERMS
 
     QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']
 
