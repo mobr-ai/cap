@@ -56,7 +56,9 @@ class ValueExtractor:
             "years": [],
             "months": [],
             "orderings": [],
-            "durations": []
+            "durations": [],
+            "definitions": [],
+            "quantifiers": []
         }
 
         # Extract currency/token URIs (add this new section)
@@ -111,6 +113,19 @@ class ValueExtractor:
         ValueExtractor._extract_numbers(nl_query, values)
         ValueExtractor._extract_durations(nl_query, values)
 
+        # Extract definition terms
+        for pattern in PatternRegistry.DEFINITION_TERMS:
+            if re.search(r'\b' + re.escape(pattern) + r'\b', nl_query, re.IGNORECASE):
+                if pattern not in values["definitions"]:
+                    values["definitions"].append(pattern)
+                    break  # Only need one
+
+        # Extract quantification terms
+        for pattern in PatternRegistry.COUNT_TERMS:
+            if re.search(r'\b' + re.escape(pattern) + r'\b', nl_query, re.IGNORECASE):
+                if pattern not in values["quantifiers"]:
+                    values["quantifiers"].append(pattern)
+                    break  # Only need one
 
         logger.info(f"Extracted values from '{nl_query}': {values}")
         return values

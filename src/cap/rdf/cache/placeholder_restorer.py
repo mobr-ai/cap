@@ -78,6 +78,10 @@ class PlaceholderRestorer:
             return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<URI_"):
             return cached_value
+        elif placeholder.startswith("<<DEF_"):
+            return PlaceholderRestorer._restore_definition(placeholder, cached_value, current_values)
+        elif placeholder.startswith("<<QUANT_"):
+            return PlaceholderRestorer._restore_quantifier(placeholder, cached_value, current_values)
 
         return None
 
@@ -305,3 +309,27 @@ class PlaceholderRestorer:
             sparql = re.sub(pattern, replacement, sparql)
 
         return sparql
+
+    @staticmethod
+    def _restore_definition(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore definition placeholder."""
+        definitions = current_values.get("definitions", [])
+        if definitions:
+            return definitions[0]
+        return cached_value or "what"
+
+    @staticmethod
+    def _restore_quantifier(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore quantification placeholder."""
+        quantifiers = current_values.get("quantifiers", [])
+        if quantifiers:
+            return quantifiers[0]
+        return cached_value or "how many"

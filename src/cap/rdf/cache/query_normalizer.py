@@ -156,17 +156,25 @@ class QueryNormalizer:
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
 
+        # Normalize quantification expressions FIRST (before definitions)
+        quantifier_pattern = PatternRegistry.build_pattern(PatternRegistry.COUNT_TERMS)
+        normalized = re.sub(
+            quantifier_pattern + r'\s+(of\s+)?',
+            '<<QUANT_0>> ',
+            normalized
+        )
+
         # Normalize definition requests to a standard form
         definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
         normalized = re.sub(
             definition_pattern + r's?\s+(an?|the)?\s*',
-            'what ',
+            '<<DEF_0>> ',
             normalized
         )
         # Also handle "what is/are" variations
         normalized = re.sub(
             r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
-            'what ',
+            '<<DEF_0>> ',
             normalized
         )
 

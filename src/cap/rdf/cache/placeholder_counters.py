@@ -22,6 +22,8 @@ class PlaceholderCounters:
     day: int = 0
     period: int = 0
     order: int = 0
+    definition: int = 0
+    quantifier: int = 0
 
     def update_from_placeholder(self, placeholder) -> None:
         """Update counter based on placeholder type."""
@@ -50,5 +52,11 @@ class PlaceholderCounters:
             elif placeholder.startswith("<<CUR_"):
                 idx = int(placeholder.replace('<<CUR_', '').replace('>>', ''))
                 self.cur = max(self.cur, idx + 1)
+            elif placeholder.startswith("<<DEF_"):
+                idx = int(placeholder.replace('<<DEF_', '').replace('>>', ''))
+                self.definition = max(self.definition, idx + 1)
+            elif placeholder.startswith("<<QUANT_"):
+                idx = int(placeholder.replace('<<QUANT_', '').replace('>>', ''))
+                self.quantifier = max(self.quantifier, idx + 1)
         except (AttributeError, ValueError) as e:
             logger.warning(f"Failed to parse index from {placeholder}: {e}")
