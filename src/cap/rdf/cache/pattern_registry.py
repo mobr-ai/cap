@@ -186,7 +186,7 @@ class PatternRegistry:
     # Filler words (shared across normalizers)
     FILLER_WORDS = [
         'please', 'could', 'can', 'you', 'me', 'the',
-        'is', 'are', 'was', 'were', 'your', 'my', 'exist',
+        'is', 'are', 'was', 'were', 'your', 'my', 'exist', 'at',
         'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
         'do', 'does', 'ever', 'with', 'having', 'from', 'there'
     ] + BAR_CHART_TERMS + LINE_CHART_TERMS + PIE_CHART_TERMS + TABLE_TERMS + CHART_SUFFIXES + POSSESSION_TERMS

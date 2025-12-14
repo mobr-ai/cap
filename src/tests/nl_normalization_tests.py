@@ -6,11 +6,10 @@ Not for pytest
 import logging
 import asyncio
 import argparse
-import httpx
-import json
 import time
 from pathlib import Path
 
+from cap.services.ollama_client import OllamaClient
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,8 @@ class NLNormalizationTester:
             if expected:
                 assert normalized == expected
 
-            print(f"{query} normalizes to '{normalized}'")
+            query_category = OllamaClient._categorize_query(query, "multiple")
+            print(f"{query} normalizes to '{normalized}' on category {query_category}")
             return True
 
         except Exception as e:

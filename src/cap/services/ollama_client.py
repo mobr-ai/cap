@@ -339,6 +339,8 @@ class OllamaClient:
                     else:
                         kv_formatted = json.dumps(kv_results, indent=2)
 
+                    logger.info(f"Sending data to feed widget: \n   {kv_formatted}")
+
                     yield f"kv_results:{kv_formatted}\n\n"
 
                 except Exception as e:
@@ -405,7 +407,7 @@ class OllamaClient:
                 conversation_history=conversation_history,
             )
 
-            logger.debug(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
+            logger.info(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
