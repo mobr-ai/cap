@@ -2,13 +2,30 @@
 
 from __future__ import annotations
 import hashlib
-import json
+import json, re
 from datetime import datetime
 from typing import Optional, Tuple, Any, Dict, List
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from cap.database.model import Conversation, ConversationMessage, User, ConversationArtifact
+
+_WS_RE = re.compile(r"\s+")
+_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
+_DIGIT_SPACES_RE = re.compile(r"(\d)\s+(?=\d)")
+_ORDINAL_RE = re.compile(r"(\d)\s+(st|nd|rd|th)\b", re.IGNORECASE)
+_SUFFIX_RE = re.compile(r"\b([A-Za-z]{3,})\s+(ed|ing|ly|er|ers|est|s|es)\b")
+_HYPHEN_RE = re.compile(r"\b(\w+)\s*-\s*(\w+)\b")
+
+_CAPS_SPLIT_RE = re.compile(r"\b([A-Z])\s+([A-Z]{2,16})\b")
+_CAMEL_SPLIT_RE = re.compile(r"\b([A-Z][a-z]{1,3})\s+([A-Z][a-z]{1,3})\b")
+_LOWER_UPPER_RE = re.compile(r"\b([a-z])\s+([A-Z][a-z]{2,})\b")
+_PAREN_OPEN_RE = re.compile(r"\(\s+")
+_PAREN_CLOSE_RE = re.compile(r"\s+\)")
+_COMMA_IN_NUMBER_RE = re.compile(r"(\d)\s*,\s*(\d)")
+_DECIMAL_RE = re.compile(r"(\d)\s*\.\s*(\d)")
+_ACRONYM_PLURAL_RE = re.compile(r"\b([A-Z]{2,10})\s+(s|es)\b")
+_ACRONYM_DESPACE_RE = re.compile(r"\b([A-Z])\s+(?=[A-Z])")
 
 
 def _artifact_hash(payload: Dict[str, Any]) -> str:
@@ -109,6 +126,7 @@ def persist_conversation_artifact(
         "artifact_type": artifact_type,
         "kv_type": kv_type,
         "config": config,
+        "conversation_message_id": conversation_message_id,  # <- important
     }
     h = _artifact_hash(payload_for_hash)
 
@@ -163,6 +181,72 @@ def _title_from_query(query: str) -> Optional[str]:
     if len(title) > 80:
         title = title[:77] + "..."
     return title
+
+
+def normalize_assistant_content(text: str) -> str:
+    if not text:
+        return ""
+
+    t = str(text)
+
+    # collapse whitespace early
+    t = _WS_RE.sub(" ", t).strip()
+
+    # remove spaces before punctuation
+    t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
+
+    # fix parentheses spacing: "( 1, 271 )" -> "(1, 271)"
+    t = _PAREN_OPEN_RE.sub("(", t)
+    t = _PAREN_CLOSE_RE.sub(")", t)
+
+    # join digit runs: "2 0 2 5" -> "2025"
+    t = _DIGIT_SPACES_RE.sub(r"\1", t)
+
+    # ordinal join: "11 th" -> "11th"
+    t = _ORDINAL_RE.sub(r"\1\2", t)
+
+    # comma/decimal inside numbers: "1, 271" -> "1,271" ; "3 . 14" -> "3.14"
+    t = _COMMA_IN_NUMBER_RE.sub(r"\1,\2", t)
+    t = _DECIMAL_RE.sub(r"\1.\2", t)
+
+    # suffix join: "mint ed" -> "minted"
+    t = _SUFFIX_RE.sub(r"\1\2", t)
+
+    # join consecutive spaced capitals: "N FTs" -> "NFTs", "N F T s" -> "NFT s" (then plural rule fixes)
+    t = _ACRONYM_DESPACE_RE.sub(r"\1", t)
+
+    # acronym plural: "NFT s" -> "NFTs"
+    t = _ACRONYM_PLURAL_RE.sub(r"\1\2", t)
+
+    # normalize hyphen spacing: "early -stage" -> "early-stage"
+    t = _HYPHEN_RE.sub(r"\1-\2", t)
+
+    # join common split patterns; multiple passes helps
+    stop_left = {
+        "The", "This", "That", "These", "Those",
+        "A", "An",
+        "In", "On", "At", "As", "For", "From", "To", "By", "Of", "With",
+        "And", "Or", "But", "So", "Yet",
+        "It", "Its", "Is", "Are", "Was", "Were",
+        "However", "While", "When", "Where", "What", "Why", "How",
+    }
+
+    for _ in range(2):
+        t = _ACRONYM_DESPACE_RE.sub(r"\1", t)
+        t = _CAPS_SPLIT_RE.sub(r"\1\2", t)     # "N IGHT" -> "NIGHT"
+        t = _CAMEL_SPLIT_RE.sub(r"\1\2", t)    # "De Fi" -> "DeFi"
+        t = _LOWER_UPPER_RE.sub(r"\1\2", t)    # "d Apps" -> "dApps"
+
+        # Safer "Card ano" join:
+        # only join when the right chunk is a small suffix (2-5 chars)
+        # and the left chunk is not a common stopword like "The".
+        t = re.sub(
+            r"\b([A-Z][a-z]{2,10})\s+([a-z]{2,5})\b",
+            lambda m: (m.group(1) + m.group(2)) if (m.group(1) not in stop_left) else m.group(0),
+            t,
+        )
+
+    return t.strip()
 
 
 def get_or_create_conversation(
@@ -221,7 +305,7 @@ def persist_assistant_message_and_touch(
     content: str,
     nl_query_id: Optional[int] = None,
 ) -> Optional[ConversationMessage]:
-    text = (content or "").strip()
+    text = normalize_assistant_content((content or "").strip())
     if not text:
         return None
 
