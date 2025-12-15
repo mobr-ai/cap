@@ -189,6 +189,17 @@ class SPARQLNormalizer:
             self.placeholder_map[placeholder] = match.group(0)
             text = text[:match.start()] + placeholder + text[match.end():]
 
+        # Extract duration literals with placeholders
+        duration_pattern = r'"P\d+[DWMY]"(?:\^\^xsd:(?:dayTimeDuration|duration))?'
+        matches = list(re.finditer(duration_pattern, text))
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+            placeholder = f"<<DURATION_{self.counters.duration}>>"
+            self.counters.duration += 1
+            self.placeholder_map[placeholder] = match.group(0)
+            text = text[:match.start()] + placeholder + text[match.end():]
+
         return text
 
     def _extract_order_clauses(self, text: str) -> str:

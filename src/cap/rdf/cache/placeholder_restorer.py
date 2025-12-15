@@ -277,15 +277,20 @@ class PlaceholderRestorer:
 
             sparql = sparql.replace(placeholder, replacement)
 
-        # Restore duration literals (P7D, P30D, etc.)
-        if current_values.get("durations"):
-            duration = current_values["durations"][0]
-            # Replace any duration pattern in the SPARQL
-            sparql = re.sub(
-                r'"P\d+[DWMY]"(?:\^\^xsd:(?:dayTimeDuration|duration))?',
-                f'"{duration}"^^xsd:dayTimeDuration',
-                sparql
-            )
+        # Restore duration placeholders (indexed, not global)
+        for placeholder in sorted([k for k in placeholder_map.keys() if k.startswith("<<DURATION_")]):
+            if placeholder not in sparql:
+                continue
+
+            if current_values.get("durations"):
+                idx = int(placeholder.replace('<<DURATION_', '').replace('>>', ''))
+                cycle_idx = idx % len(current_values["durations"])
+                duration = current_values["durations"][cycle_idx]
+                replacement = f'"{duration}"^^xsd:dayTimeDuration'
+            else:
+                replacement = placeholder_map[placeholder]
+
+            sparql = sparql.replace(placeholder, replacement)
 
         return sparql
 
