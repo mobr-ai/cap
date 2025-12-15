@@ -1,20 +1,50 @@
+# demo_nl.py
 import json
-from typing import AsyncGenerator
+import logging
+import re
+from typing import AsyncGenerator, Optional, Iterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from cap.database.session import get_db
+from cap.database.model import User
+from cap.core.auth_dependencies import (
+    bearer_scheme,
+    _extract_token,
+    _decode,
+    _extract_user_id,
+)
+from cap.services.conversation_persistence import (
+    start_conversation_and_persist_user,
+    persist_assistant_message_and_touch,
+    persist_conversation_artifact_from_raw_kv,
+)
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/demo", tags=["demo"])
+
+
+# ---------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------
 
 class DemoQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
+    conversation_id: Optional[int] = None
 
-# --- Static demo artifacts ---------------------------------------------------
-# Keep these minimal; they just need to exercise kv_results + charts/tables.
 
+# ---------------------------------------------------------------------------
+# Demo scenes (UNCHANGED)
+# ---------------------------------------------------------------------------
+# IMPORTANT: These payloads MUST match what the frontend expects:
+# - Tables: kv.data.values = [{ "key": <colName>, "values": [...] }, ...]
+# - Charts: kv.metadata.columns = [xField, yField, (optional) cField]
+#          kv.data.values = [{ [xField]: ..., [yField]: ..., [cField]: ... }, ...]
 DEMO_SCENES = {
-    # 1) Latest 5 blocks → table
     "latest_5_blocks": {
         "match": "list the latest 5 blocks",
         "kv": {
@@ -22,19 +52,16 @@ DEMO_SCENES = {
             "data": {
                 "values": [
                     {
-                        "col1": "blockNumber",
+                        "key": "blockNumber",
                         "values": ["5979789", "5979788", "5979787", "5979786", "5979785"],
                     },
                     {
-                        "col2": "slotNumber",
+                        "key": "slotNumber",
                         "values": ["34724642", "34724623", "34724618", "34724610", "34724609"],
                     },
+                    {"key": "epochNumber", "values": ["80", "80", "80", "80", "80"]},
                     {
-                        "col3": "epochNumber",
-                        "values": ["80", "80", "80", "80", "80"],
-                    },
-                    {
-                        "col4": "timestamp",
+                        "key": "timestamp",
                         "values": [
                             "2021-07-14T19:28:53Z",
                             "2021-07-14T19:28:34Z",
@@ -43,12 +70,9 @@ DEMO_SCENES = {
                             "2021-07-14T19:28:20Z",
                         ],
                     },
+                    {"key": "blockSize", "values": ["2518", "1197", "573", "3", "18899"]},
                     {
-                        "col5": "blockSize",
-                        "values": ["2518", "1197", "573", "3", "18899"],
-                    },
-                    {
-                        "col6": "hash",
+                        "key": "hash",
                         "values": [
                             "7ebff2ab745f908ff0d06cea3830c1b1c6020045c4a751e1f223e9a091fd881b",
                             "7b607fdbc570eb0375d3928a945b92bf25fa7ff38cc14a4545c2086238431f47",
@@ -57,10 +81,7 @@ DEMO_SCENES = {
                             "b223bdabc24fa85b94c33db9c6ac382f022ff06a40851da0ced5c1a430301854",
                         ],
                     },
-                    {
-                        "col7": "transactionCount",
-                        "values": ["7", "1", "2", "0", "27"],
-                    },
+                    {"key": "transactionCount", "values": ["7", "1", "2", "0", "27"]},
                 ]
             },
             "metadata": {
@@ -76,217 +97,381 @@ DEMO_SCENES = {
                 ],
             },
         },
-        "text": (
-            "The latest 5 blocks all belong to epoch 80 and show varying activity. "
-            "Block 5979785 (27 transactions, 18.9KB) is the largest, while block 5979786 "
-            "has 0 transactions, suggesting a system-only block. Most others have low tx counts."
+        "assistant_text": (
+            "Here are the latest 5 blocks. In a production deployment, this table would be "
+            "generated from on-chain block headers and enriched with derived fields."
         ),
     },
-
-    # 2) Bar chart: monthly multi assets in 2021
-    "multi_assets_2021_bar": {
-        "match": "bar chart showing monthly multi assets created in 2021",
-        "kv": {
-            "result_type": "bar_chart",
-            "data": {
-                "values": [
-                    {"category": "2021-03", "amount": 11370.0},
-                    {"category": "2021-04", "amount": 94539.0},
-                    {"category": "2021-05", "amount": 123611.0},
-                    {"category": "2021-06", "amount": 49138.0},
-                ]
-            },
-            "metadata": {
-                "count": 4,
-                "columns": ["yearMonth", "deployments"],
-            },
-        },
-        "text": (
-            "The bar chart shows a sharp rise in new multi-asset deployments peaking in May 2021 "
-            "(123,611), followed by a strong drop in June. This reflects the intense burst of "
-            "adoption around the Alonzo-era native asset capabilities before stabilization."
+    "current_trends_spacing_regression": {
+        "match": "current trends",
+        "assistant_text": (
+            "The data shows a peak in activity on December 11th, with the highest number of NFTs minted "
+            "(1,271) and accounts created (6,473). However, all metrics sharply declined afterward, with "
+            "scripts deployed dropping to 5 on December 15th and multi-assets created falling to 1."
         ),
-    },
-
-    # 3) Pie chart: top 1% ADA holders share
-    "top1_percent_pie": {
-        "match": "pie chart to show how much the top 1% ada holders represent",
-        "kv": {
-            "result_type": "pie_chart",
-            "data": {
-                "values": [
-                    {"category": "topHolders", "value": 56.9259},
-                    {"category": "otherHolders", "value": 43.0741},
-                ]
-            },
-            "metadata": {
-                "count": 0,
-                "columns": [],
-            },
-        },
-        "text": (
-            "The pie chart indicates that the top 1% of ADA holders control about 56.93% of the "
-            "total supply, while the remaining 43.07% is held by all other addresses, showing a "
-            "high concentration of holdings among a small set of accounts."
-        ),
-    },
-
-    # 4) Line chart: monthly txs & outputs
-    "tx_outputs_line": {
-        "match": "line chart showing monthly number of transactions and outputs",
         "kv": {
             "result_type": "line_chart",
             "data": {
                 "values": [
-                    # (keeping your exact payload)
-                    {"x": "2017-09", "y": 5071.0, "c": 0},
-                    {"x": "2017-09", "y": 6465.0, "c": 1},
-                    {"x": "2017-10", "y": 25599.0, "c": 0},
-                    {"x": "2017-10", "y": 44255.0, "c": 1},
-                    {"x": "2017-11", "y": 20041.0, "c": 0},
-                    {"x": "2017-11", "y": 38873.0, "c": 1},
-                    {"x": "2017-12", "y": 145536.0, "c": 0},
-                    {"x": "2017-12", "y": 288657.0, "c": 1},
-                    {"x": "2018-01", "y": 116508.0, "c": 0},
-                    {"x": "2018-01", "y": 246615.0, "c": 1},
-                    {"x": "2018-02", "y": 67663.0, "c": 0},
-                    {"x": "2018-02", "y": 165597.0, "c": 1},
-                    {"x": "2018-03", "y": 78380.0, "c": 0},
-                    {"x": "2018-03", "y": 183756.0, "c": 1},
-                    {"x": "2018-04", "y": 78243.0, "c": 0},
-                    {"x": "2018-04", "y": 183385.0, "c": 1},
-                    {"x": "2018-05", "y": 62922.0, "c": 0},
-                    {"x": "2018-05", "y": 148707.0, "c": 1},
-                    {"x": "2018-06", "y": 43838.0, "c": 0},
-                    {"x": "2018-06", "y": 100913.0, "c": 1},
-                    {"x": "2018-07", "y": 44536.0, "c": 0},
-                    {"x": "2018-07", "y": 100381.0, "c": 1},
-                    {"x": "2018-08", "y": 38428.0, "c": 0},
-                    {"x": "2018-08", "y": 88388.0, "c": 1},
-                    {"x": "2018-09", "y": 43476.0, "c": 0},
-                    {"x": "2018-09", "y": 101993.0, "c": 1},
-                    {"x": "2018-10", "y": 38528.0, "c": 0},
-                    {"x": "2018-10", "y": 88483.0, "c": 1},
-                    {"x": "2018-11", "y": 35955.0, "c": 0},
-                    {"x": "2018-11", "y": 83833.0, "c": 1},
-                    {"x": "2018-12", "y": 47002.0, "c": 0},
-                    {"x": "2018-12", "y": 108255.0, "c": 1},
-                    {"x": "2019-01", "y": 49173.0, "c": 0},
-                    {"x": "2019-01", "y": 109823.0, "c": 1},
-                    {"x": "2019-02", "y": 39680.0, "c": 0},
-                    {"x": "2019-02", "y": 90224.0, "c": 1},
-                    {"x": "2019-03", "y": 71119.0, "c": 0},
-                    {"x": "2019-03", "y": 183265.0, "c": 1},
-                    {"x": "2019-04", "y": 82981.0, "c": 0},
-                    {"x": "2019-04", "y": 207822.0, "c": 1},
-                    {"x": "2019-05", "y": 102160.0, "c": 0},
-                    {"x": "2019-05", "y": 248418.0, "c": 1},
-                    {"x": "2019-06", "y": 99432.0, "c": 0},
-                    {"x": "2019-06", "y": 252409.0, "c": 1},
-                    {"x": "2019-07", "y": 81275.0, "c": 0},
-                    {"x": "2019-07", "y": 185170.0, "c": 1},
-                    {"x": "2019-08", "y": 60474.0, "c": 0},
-                    {"x": "2019-08", "y": 138715.0, "c": 1},
-                    {"x": "2019-09", "y": 50620.0, "c": 0},
-                    {"x": "2019-09", "y": 119971.0, "c": 1},
-                    {"x": "2019-10", "y": 51736.0, "c": 0},
-                    {"x": "2019-10", "y": 112742.0, "c": 1},
-                    {"x": "2019-11", "y": 65652.0, "c": 0},
-                    {"x": "2019-11", "y": 151067.0, "c": 1},
-                    {"x": "2019-12", "y": 43199.0, "c": 0},
-                    {"x": "2019-12", "y": 91939.0, "c": 1},
-                    {"x": "2020-01", "y": 56101.0, "c": 0},
-                    {"x": "2020-01", "y": 125170.0, "c": 1},
-                    {"x": "2020-02", "y": 89682.0, "c": 0},
-                    {"x": "2020-02", "y": 206725.0, "c": 1},
-                    {"x": "2020-03", "y": 91968.0, "c": 0},
-                    {"x": "2020-03", "y": 219591.0, "c": 1},
-                    {"x": "2020-04", "y": 80766.0, "c": 0},
-                    {"x": "2020-04", "y": 245499.0, "c": 1},
-                    {"x": "2020-05", "y": 112588.0, "c": 0},
-                    {"x": "2020-05", "y": 356756.0, "c": 1},
-                    {"x": "2020-06", "y": 128583.0, "c": 0},
-                    {"x": "2020-06", "y": 404635.0, "c": 1},
-                    {"x": "2020-07", "y": 183817.0, "c": 0},
-                    {"x": "2020-07", "y": 577813.0, "c": 1},
-                    {"x": "2020-08", "y": 196480.0, "c": 0},
-                    {"x": "2020-08", "y": 410480.0, "c": 1},
-                    {"x": "2020-09", "y": 142330.0, "c": 0},
-                    {"x": "2020-09", "y": 284790.0, "c": 1},
-                    {"x": "2020-10", "y": 111464.0, "c": 0},
-                    {"x": "2020-10", "y": 219460.0, "c": 1},
-                    {"x": "2020-11", "y": 196231.0, "c": 0},
-                    {"x": "2020-11", "y": 384403.0, "c": 1},
-                    {"x": "2020-12", "y": 234838.0, "c": 0},
-                    {"x": "2020-12", "y": 508828.0, "c": 1},
-                    {"x": "2021-01", "y": 418899.0, "c": 0},
-                    {"x": "2021-01", "y": 1055117.0, "c": 1},
-                    {"x": "2021-02", "y": 892566.0, "c": 0},
-                    {"x": "2021-02", "y": 2198616.0, "c": 1},
-                    {"x": "2021-03", "y": 981809.0, "c": 0},
-                    {"x": "2021-03", "y": 2471629.0, "c": 1},
-                    {"x": "2021-04", "y": 1147245.0, "c": 0},
-                    {"x": "2021-04", "y": 2715161.0, "c": 1},
-                    {"x": "2021-05", "y": 1616505.0, "c": 0},
-                    {"x": "2021-05", "y": 3780275.0, "c": 1},
-                    {"x": "2021-06", "y": 720326.0, "c": 0},
-                    {"x": "2021-06", "y": 1560860.0, "c": 1},
+                    {"x": "2025-12-09", "y": "95", "c": 0},
+                    {"x": "2025-12-09", "y": "84", "c": 1},
+                    {"x": "2025-12-09", "y": "438", "c": 2},
+                    {"x": "2025-12-09", "y": "7161", "c": 3},
+                    {"x": "2025-12-10", "y": "51", "c": 0},
+                    {"x": "2025-12-10", "y": "24", "c": 1},
+                    {"x": "2025-12-10", "y": "609", "c": 2},
+                    {"x": "2025-12-10", "y": "5806", "c": 3},
+                    {"x": "2025-12-11", "y": "24", "c": 0},
+                    {"x": "2025-12-11", "y": "17", "c": 1},
+                    {"x": "2025-12-11", "y": "1271", "c": 2},
+                    {"x": "2025-12-11", "y": "6473", "c": 3},
+                    {"x": "2025-12-12", "y": "27", "c": 0},
+                    {"x": "2025-12-12", "y": "37", "c": 1},
+                    {"x": "2025-12-12", "y": "1385", "c": 2},
+                    {"x": "2025-12-12", "y": "3965", "c": 3},
+                    {"x": "2025-12-13", "y": "22", "c": 0},
+                    {"x": "2025-12-13", "y": "36", "c": 1},
+                    {"x": "2025-12-13", "y": "543", "c": 2},
+                    {"x": "2025-12-13", "y": "3199", "c": 3},
+                    {"x": "2025-12-14", "y": "41", "c": 0},
+                    {"x": "2025-12-14", "y": "38", "c": 1},
+                    {"x": "2025-12-14", "y": "453", "c": 2},
+                    {"x": "2025-12-14", "y": "3759", "c": 3},
+                    {"x": "2025-12-15", "y": "5", "c": 0},
+                    {"x": "2025-12-15", "y": "1", "c": 1},
+                    {"x": "2025-12-15", "y": "40", "c": 2},
+                    {"x": "2025-12-15", "y": "288", "c": 3},
                 ]
             },
             "metadata": {
-                "count": 46,
-                "columns": ["yearMonth", "txCount", "outputCount"],
+                "count": 7,
+                "columns": [
+                    "date",
+                    "scriptsDeployed",
+                    "multiAssetsCreated",
+                    "nftsMinted",
+                    "accountsCreated",
+                ],
             },
         },
-        "text": (
-            "The line chart shows strong growth in both monthly transactions and outputs from "
-            "2017 through mid-2021, with a steep surge in 2020–2021. Outputs consistently "
-            "outpace transactions, reflecting richer transaction structures and growing "
-            "on-chain activity on Cardano."
+        "kv_type": "line",
+        "artifact_type": "chart",
+    },
+    "last_5_proposals": {
+        "match": "show the last 5 proposals",
+        "kv": {
+            "result_type": "table",
+            "data": {
+                "values": [
+                    {
+                        "key": "proposalTxHash",
+                        "values": [
+                            "f8393f1ff814d3d52336a97712361fed933d9ef9e8d0909e1d31536a549fd22f",
+                            "d16dffbae9d86a73cb343506e6712d79c278096dc25e8ba6900eb24522726bba",
+                            "8f54d021c6e6fcdd5a4908f10a7b092fa31cd94db2e809f2e06d7ffa4d78773d",
+                            "3285b7fd0da16d21e0b8f8910c37f77e17a57cfff8f513df4baf692954801088",
+                            "03f671791fd97011f30e4d6b76c9a91f4f6bcfb60ee37e5399b9545bb3f2757a",
+                        ],
+                    },
+                    {
+                        "key": "proposalUrl",
+                        "values": [
+                            "<a href=\"https://ipfs.io/ipfs/bafkreiecqskxkmakkrzrs2xs2olh5jcwbuz5qr5gesp6merwcaydcaojiq\" target=\"_blank\">ipfs://bafkreiecqskxkmakkrzrs2xs2olh5jcwbuz5qr5gesp6merwcaydcaojiq</a>",
+                            "<a href=\"https://ipfs.io/ipfs/Qmeme8EWugVPQeVghpqB53nvG5U4VT9zy3Ta545fEJPnqL\" target=\"_blank\">ipfs://Qmeme8EWugVPQeVghpqB53nvG5U4VT9zy3Ta545fEJPnqL</a>",
+                            "<a href=\"https://ipfs.io/ipfs/bafkreicbxui5lbdrgcpjwhlti3rqkxfnd3vveiinkcu2zak5bny435w4yq\" target=\"_blank\">ipfs://bafkreicbxui5lbdrgcpjwhlti3rqkxfnd3vveiinkcu2zak5bny435w4yq</a>",
+                            "<a href=\"https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR7khTUdWyQFdNvyXDsuyZLUNsdfm7Ejo9wKfKdRE3ReG\" target=\"_blank\">https://most-brass-sun.quicknode-ipfs.com/ipfs/QmR7khTUdWyQFdNvyXDsuyZLUNsdfm7Ejo9wKfKdRE3ReG</a>",
+                            "<a href=\"https://ipfs.io/ipfs/bafkreidl43ghacdpczaims63glq5kepaa63d63cr5mrpznv56jdm7e2eny\" target=\"_blank\">ipfs://bafkreidl43ghacdpczaims63glq5kepaa63d63cr5mrpznv56jdm7e2eny</a>",
+                        ],
+                    },
+                    {"key": "voteCount", "values": ["27", "144", "276", "217", "226"]},
+                    {"key": "yesCount", "values": ["26", "140", "259", "186", "160"]},
+                    {"key": "noCount", "values": ["1", "4", "10", "16", "42"]},
+                    {"key": "abstainCount", "values": ["0", "0", "7", "15", "24"]},
+                    {
+                        "key": "proposalTimestamp",
+                        "values": [
+                            "2025-12-08T22:34:44Z",
+                            "2025-11-30T20:13:21Z",
+                            "2025-11-27T19:50:18Z",
+                            "2025-10-24T07:07:56Z",
+                            "2025-10-23T15:59:15Z",
+                        ],
+                    },
+                ]
+            },
+            "metadata": {
+                "count": 5,
+                "columns": [
+                    "proposalTxHash",
+                    "proposalUrl",
+                    "voteCount",
+                    "yesCount",
+                    "noCount",
+                    "abstainCount",
+                    "proposalTimestamp",
+                ],
+            },
+        },
+        "assistant_text": (
+            "Here are the last 5 governance proposals (demo dataset) including their IPFS URLs."
+        ),
+    },
+    "monthly_multiassets_2021": {
+        "match": "monthly multi assets created in 2021",
+        "kv": {
+            "result_type": "bar_chart",
+            "metadata": {"columns": ["yearMonth", "deployments"]},
+            "data": {
+                "values": [
+                    {"yearMonth": "2021-01", "deployments": 120},
+                    {"yearMonth": "2021-02", "deployments": 220},
+                    {"yearMonth": "2021-03", "deployments": 540},
+                    {"yearMonth": "2021-04", "deployments": 610},
+                    {"yearMonth": "2021-05", "deployments": 430},
+                    {"yearMonth": "2021-06", "deployments": 720},
+                    {"yearMonth": "2021-07", "deployments": 980},
+                    {"yearMonth": "2021-08", "deployments": 860},
+                    {"yearMonth": "2021-09", "deployments": 650},
+                    {"yearMonth": "2021-10", "deployments": 770},
+                    {"yearMonth": "2021-11", "deployments": 690},
+                    {"yearMonth": "2021-12", "deployments": 910},
+                ]
+            },
+        },
+        "assistant_text": (
+            "This bar chart shows a demo monthly count of native assets created in 2021. "
+            "In production, this would be computed from minting policies and asset creation events."
         ),
     },
 }
 
 
-def _pick_scene(query: str):
-    q = query.lower().strip()
+def pick_scene(query: str):
+    q = (query or "").strip().lower()
     for scene in DEMO_SCENES.values():
         if scene["match"] in q:
             return scene
     return None
 
 
-async def _demo_stream(scene) -> AsyncGenerator[str, None]:
-    # Minimal SSE-compatible stream; matches useLLMStream expectations.
-    yield "status: Processing your query\n"
-    yield "status: Fetching contextual data from knowledge graph\n"
-    yield "status: Analyzing context and preparing answer\n"
+# ---------------------------------------------------------------------
+# Authentication (best-effort)
+# ---------------------------------------------------------------------
 
-    kv_json = json.dumps(scene["kv"])
-    yield f"kv_results:{kv_json}\n"
-    yield "_kv_results_end_\n"
+def get_optional_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[User]:
+    token = _extract_token(request, creds)
+    if not token:
+        return None
 
-    # Plain markdown explanation
-    yield scene["text"] + "\n"
-    yield "data: [DONE]\n"
+    try:
+        payload = _decode(token)
+        user_id = _extract_user_id(payload)
+        return db.get(User, user_id)
+    except Exception:
+        return None
 
 
-@router.post("/query")
-async def demo_query(req: DemoQueryRequest):
-    scene = _pick_scene(req.query)
-    if not scene:
-        # For unmatched queries, either 400 or trivial answer.
-        raise HTTPException(
-            status_code=400,
-            detail="Demo endpoint only supports the predefined showcase queries.",
+# ---------------------------------------------------------------------
+# Storage normalization (NO wordlists, NO morphology suffix hacks)
+# ---------------------------------------------------------------------
+
+_WS_RE = re.compile(r"[ \t]+")
+_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
+_SPACE_AROUND_PARENS_RE = [
+    (re.compile(r"\(\s+"), "("),
+    (re.compile(r"\s+\)"), ")"),
+]
+
+def normalize_for_storage(s: str) -> str:
+    if not s:
+        return ""
+    t = str(s).replace("\r", "")
+    # collapse spaces/tabs (keep newlines)
+    t = "\n".join(_WS_RE.sub(" ", line).strip() for line in t.split("\n"))
+    # remove spaces before punctuation
+    t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
+    # parens spacing
+    for rex, rep in _SPACE_AROUND_PARENS_RE:
+        t = rex.sub(rep, t)
+    # collapse multiple blank lines
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
+# ---------------------------------------------------------------------
+# Streaming chunker safe with frontend sanitizeChunk (which trims trailing spaces)
+# ---------------------------------------------------------------------
+
+def iter_sse_safe_text_chunks(text: str, max_len: int = 96) -> Iterator[str]:
+    """
+    Yield chunks that:
+    - never end with space/tab (because frontend sanitizeChunk trims trailing spaces)
+    - preserve original spacing by carrying whitespace forward to the next chunk
+    - avoid splitting mid-word when possible
+    """
+    if not text:
+        return
+
+    max_len = max(16, int(max_len))
+
+    # Tokenize into either runs of non-whitespace or runs of whitespace
+    tokens = re.findall(r"\S+|\s+", text)
+
+    buf = ""
+    carry_ws = ""  # whitespace that must prefix the next emitted chunk
+
+    def emit(s: str):
+        # Ensure no trailing space/tab
+        return s.rstrip(" \t")
+
+    for tok in tokens:
+        if tok.isspace():
+            # keep whitespace, but do not risk ending a chunk with it
+            carry_ws += tok
+            continue
+
+        # tok is non-whitespace
+        piece = carry_ws + tok
+        carry_ws = ""
+
+        # If adding would exceed, flush current buffer first
+        if buf and (len(buf) + len(piece) > max_len):
+            out = emit(buf)
+            if out:
+                yield out
+            # If buf ended with whitespace, it was already stripped into out; we must keep it.
+            # But by construction we never append whitespace to buf; whitespace lives in carry_ws.
+            buf = ""
+
+        # If a single token is huge, hard split it (rare)
+        if len(piece) > max_len:
+            # flush buf first
+            out = emit(buf)
+            if out:
+                yield out
+            buf = ""
+            for i in range(0, len(piece), max_len):
+                part = piece[i : i + max_len]
+                outp = emit(part)
+                if outp:
+                    yield outp
+            continue
+
+        buf += piece
+
+    # If we still have carry whitespace at end, keep it by attaching to buf (but don't emit trailing)
+    # In practice, assistant_text shouldn't end with spaces; still safe:
+    if carry_ws:
+        buf += carry_ws
+
+    out = emit(buf)
+    if out:
+        yield out
+
+
+# ---------------------------------------------------------------------
+# Demo NL endpoint
+# ---------------------------------------------------------------------
+
+@router.post("/nl/query")
+async def demo_nl_query(
+    req: DemoQueryRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_optional_user),
+):
+    scene = pick_scene(req.query)
+
+    # 1) Conversation + user message (only if authenticated)
+    conversation = None
+    user_msg = None
+    persist = user is not None
+
+    if persist:
+        conversation, user_msg = start_conversation_and_persist_user(
+            db=db,
+            user=user,
+            conversation_id=req.conversation_id,
+            query=req.query,
+            nl_query_id=None,
         )
 
+    conversation_id = conversation.id if conversation else None
+    user_message_id = user_msg.id if user_msg else None
+
+    assistant_text = (scene or {}).get("assistant_text") or (
+        "This is a demo response. Try: "
+        "'List the latest 5 blocks.' or "
+        "'Show the last 5 proposals.' or "
+        "'Monthly multi assets created in 2021.'"
+    )
+
+    async def stream_demo() -> AsyncGenerator[bytes, None]:
+        yield b"status: Planning...\n"
+        yield b"status: Querying knowledge graph...\n"
+
+        # KV block
+        if scene and scene.get("kv"):
+            yield b"kv_results:\n"
+            raw_kv = json.dumps(scene["kv"])
+            yield (raw_kv + "\n").encode("utf-8")
+            yield b"_kv_results_end_\n"
+
+            if persist and conversation is not None:
+                try:
+                    persist_conversation_artifact_from_raw_kv(
+                        db=db,
+                        conversation=conversation,
+                        conversation_message_id=user_message_id,
+                        nl_query_id=None,
+                        raw_kv_payload=raw_kv,
+                    )
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to persist demo artifact: {e}")
+
+        yield b"status: Writing answer...\n"
+
+        # Stream text with SSE-safe chunking:
+        # - never end a "data:" payload with trailing spaces (frontend trims them)
+        raw = assistant_text or ""
+        for chunk in iter_sse_safe_text_chunks(raw, max_len=96):
+            yield f"data: {chunk}\n".encode("utf-8")
+
+        # Persist assistant message BEFORE done
+        if persist and conversation is not None:
+            try:
+                to_persist = normalize_for_storage(assistant_text or "")
+                persist_assistant_message_and_touch(
+                    db=db,
+                    conversation=conversation,
+                    content=to_persist,
+                    nl_query_id=None,
+                )
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to persist demo assistant message: {e}")
+
+        yield b"data: [DONE]\n"
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Access-Control-Expose-Headers": "X-Conversation-Id, X-User-Message-Id",
+    }
+    if conversation_id is not None:
+        headers["X-Conversation-Id"] = str(conversation_id)
+    if user_message_id is not None:
+        headers["X-User-Message-Id"] = str(user_message_id)
+
     return StreamingResponse(
-        _demo_stream(scene),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        stream_demo(),
+        media_type="text/event-stream; charset=utf-8",
+        headers=headers,
     )
