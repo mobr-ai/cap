@@ -16,6 +16,13 @@ from cap.rdf.cache.semantic_matcher import SemanticMatcher
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
+def matches_keyword(low_uq: str, keywords):
+    return any(
+        form in low_uq
+        for keyword in keywords
+        for form in (keyword, f"{keyword}s", f"{keyword}es", f"{keyword}ies", f"{keyword}ing")
+    )
+
 class OllamaClient:
     """Client for interacting with Ollama LLM service."""
 
@@ -149,6 +156,7 @@ class OllamaClient:
                 logger.error(f"Ollama streaming error: {e}")
                 raise
 
+
     async def generate_complete(
         self,
         prompt: str,
@@ -241,6 +249,7 @@ class OllamaClient:
                 span.set_attribute("sparql_length", len(content))
                 return content
 
+
     def _categorize_query(user_query: str, result_type: str) -> str:
         """
         Categorizes a natural language query into result types:
@@ -256,18 +265,19 @@ class OllamaClient:
 
         # Chart-related queries
         new_type = ""
-        if result_type == "multiple" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["bar"])):
+        if result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bar"]):
             new_type = "bar_chart"
-        elif result_type == "single" and (any(keyword in low_uq for keyword in SemanticMatcher.CHART_GROUPS["pie"])):
+        elif result_type == "single" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["pie"]):
             new_type = "pie_chart"
-        elif result_type == "multiple" and (any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["line"])):
+        elif result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["line"]):
             new_type = "line_chart"
 
         # Tabular or list queries
-        elif any(keyword in low_uq for keyword in  SemanticMatcher.CHART_GROUPS["table"]):
+        elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type
+
 
     async def contextualize_answer(
         self,
@@ -275,7 +285,8 @@ class OllamaClient:
         sparql_query: str,
         sparql_results: Union[str, dict[str, Any]],
         kv_results: dict[str, Any],
-        system_prompt: str = None
+        system_prompt: str = None,
+        conversation_history: Optional[list[dict]] = None
     ) -> AsyncIterator[str]:
         """
         Generate contextualized answer based on SPARQL results.
@@ -322,11 +333,13 @@ class OllamaClient:
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)
-                            logger.debug(f"output_data: \n {kv_formatted}")
+                            logger.info(f"output_data: \n {kv_formatted}")
                         else:
                             kv_formatted = json.dumps(kv_results, indent=2)
                     else:
                         kv_formatted = json.dumps(kv_results, indent=2)
+
+                    logger.info(f"Sending data to feed widget: \n   {kv_formatted}")
 
                     yield f"kv_results:{kv_formatted}\n\n"
 
@@ -388,7 +401,13 @@ class OllamaClient:
                 {known_info}
             """
 
-            logger.debug(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
+            # Prepare messages with history and all context
+            prompt = self._add_history(
+                prompt=prompt,
+                conversation_history=conversation_history,
+            )
+
+            logger.info(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
@@ -396,6 +415,116 @@ class OllamaClient:
                 temperature=temperature
             ):
                 yield chunk
+
+
+    def _add_history(
+        self,
+        prompt: str,
+        conversation_history: Optional[list[dict]] = None
+    ) -> list[dict]:
+        """
+        Prepare messages for chat API with 40K token limit.
+        Estimates ~4 chars per token and caps at ~160K characters (40K tokens).
+        """
+        MAX_CONTEXT_CHARS = 160_000  # Conservative estimate for 40K tokens
+
+        history = []
+
+        # Add conversation history (most recent first after reversing)
+        if conversation_history:
+            reversed_history = list(reversed(conversation_history))
+            kept_history = []
+            current_size = len(prompt)
+
+            for msg in reversed_history:
+                msg_size = len(msg.get("content", ""))
+                if current_size + msg_size < MAX_CONTEXT_CHARS:
+                    kept_history.append(msg)
+                    current_size += msg_size
+                else:
+                    logger.info(f"Truncated conversation history at {len(kept_history)} messages due to context limit")
+                    break
+
+            # Reverse back to chronological order
+            history = list(reversed(kept_history))
+
+        # Format each message as "role: content"
+        str_history = "\n".join([
+            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+            for msg in history
+        ])
+
+        return f"{prompt}\nPrevious messages:\n{str_history}" if str_history else prompt
+
+
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.1
+    ) -> AsyncIterator[str]:
+        """
+        Generate streaming response using Ollama chat endpoint.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            model: Model name to use
+            temperature: Sampling temperature
+
+        Yields:
+            Chunks of generated text
+        """
+        with tracer.start_as_current_span("ollama_chat_stream") as span:
+            client = await self._get_nl_client()
+
+            if messages and len(messages) > 1:
+                logger.info(f"Query with context:\n   {messages}")
+            else:
+                logger.info(f"Query without context:\n   {messages}")
+
+            request_data = {
+                "model": model,
+                "messages": messages,
+                "stream": True,
+                "options": {
+                    "temperature": temperature
+                }
+            }
+
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    json=request_data,
+                    timeout=None
+                ) as response:
+                    response.raise_for_status()
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+
+                        try:
+                            chunk = json.loads(line)
+
+                            # Chat endpoint uses 'message' instead of 'response'
+                            if "message" in chunk and "content" in chunk["message"]:
+                                yield chunk["message"]["content"]
+
+                            if chunk.get("done", False):
+                                break
+
+                        except json.JSONDecodeError:
+                            logger.warning(f"Failed to decode JSON: {line}")
+                            continue
+
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Ollama HTTP error: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Ollama streaming error: {e}")
+                raise
+
 
     async def health_check(self) -> bool:
         """

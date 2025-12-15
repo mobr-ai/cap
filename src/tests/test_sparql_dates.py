@@ -115,6 +115,7 @@ if __name__ == "__main__":
         SELECT ?test
         WHERE {
             bind (  NOW(  )  -  "P7D"^^xsd:dayTimeDuration  AS  ?test  )
+            BIND(NOW() - "P6M"^^xsd:dayTimeDuration AS ?startDate)
         }
     '''
     result6, count6 = processor.process(query6)

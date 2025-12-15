@@ -18,15 +18,15 @@ def _read_content_nl_file(path: str | Path) -> str:
 class SPARQLGenerationTester:
     """Test SPARQL generation pipeline."""
 
-    def __init__(self, txt_folder:str):
-        self.txt_folder = txt_folder
+    def __init__(self, input:str):
+        self.input = input
         self.oc = OllamaClient()
 
     async def run_all_tests(self):
-        if self.txt_folder.endswith(".txt"):
-            txt_files = [self.txt_folder]
+        if self.input.endswith(".txt"):
+            txt_files = [self.input]
         else:
-            nl_dir = Path(self.txt_folder)
+            nl_dir = Path(self.input)
             txt_files = sorted(nl_dir.rglob("*.txt"))
 
         for txt_file in txt_files:
@@ -57,13 +57,13 @@ async def main():
 
     parser = argparse.ArgumentParser(description="Run SPARQL test suite.")
     parser.add_argument(
-        "--txt-folder",
+        "--input",
         default="documentation/examples/nl",
         help="Folder containing .txt text files with nl query examples (default: documentation/examples/nl) or a txt file"
     )
     args = parser.parse_args()
 
-    tester = SPARQLGenerationTester(txt_folder=args.txt_folder)
+    tester = SPARQLGenerationTester(input=args.input)
     await tester.run_all_tests()
 
     print("✓✓✓ All tests passed ✓✓✓")
@@ -72,7 +72,7 @@ async def main():
 # Usage:
 # python sparql_generation_tests.py
 # or
-# python sparql_generation_tests.py --txt-folder path_to_folder_with_txt_files_or_txt_file
+# python sparql_generation_tests.py --input path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""

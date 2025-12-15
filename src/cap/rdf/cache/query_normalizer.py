@@ -6,6 +6,7 @@ import re
 import unicodedata
 from opentelemetry import trace
 
+from cap.util.nlp_util import lemmatize_text
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
 from cap.rdf.cache.pattern_registry import PatternRegistry
 
@@ -31,13 +32,13 @@ class QueryNormalizer:
         """Generate ordering patterns from registry."""
         return {
             # Explicit number patterns (more specific, checked first)
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+\b': '<<ORDER_TOP>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
             # Implicit limit patterns (no number = limit 1)
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): '<<ORDER_START>>',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): '<<ORDER_END>>',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS): '<<ORDER_START>>',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS): '<<ORDER_END>>',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): '<<ORDER_TOP>>',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): '<<ORDER_BOTTOM>>',
             # Max/Min patterns (unchanged)
@@ -58,7 +59,7 @@ class QueryNormalizer:
             r'\b(drep (registration|update|retirement))s?\b': 'ENTITY_DREP_CERT',
             r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
             PatternRegistry.build_entity_pattern(PatternRegistry.GOVERNANCE_PROPOSAL_TERMS): 'ENTITY_PROPOSAL',
-            PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING_ANCHOR',
+            PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING',
             PatternRegistry.build_entity_pattern(PatternRegistry.COMMITTEE_TERMS): 'ENTITY_COMMITTEE',
             r'\b(committee (member|credential))s?\b': 'ENTITY_COMMITTEE_MEMBER',
             r'\b((cold|hot) credential)s?\b': 'ENTITY_CREDENTIAL',
@@ -135,7 +136,7 @@ class QueryNormalizer:
         normalized = re.sub(r'\s+', ' ', normalized).strip()
 
         # Remove possessive 's
-        normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
+        normalized = re.sub(r"'s\b", '', normalized)
 
         # Normalize plurals to singular for ALL entity terms, not just preserved expressions
         all_entity_terms = (
@@ -156,19 +157,57 @@ class QueryNormalizer:
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
 
+        normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
+
+        # Normalize visualization terms to <<VIZ>> placeholder
+        viz_terms = (PatternRegistry.BAR_CHART_TERMS +
+            PatternRegistry.LINE_CHART_TERMS +
+            PatternRegistry.PIE_CHART_TERMS +
+            PatternRegistry.TABLE_TERMS +
+            PatternRegistry.CHART_SUFFIXES)
+        viz_pattern = PatternRegistry.build_entity_pattern(viz_terms)
+        # Check if any visualization terms exist
+        if re.search(viz_pattern, normalized):
+            # Replace all visualization terms with a single placeholder
+            normalized = re.sub(viz_pattern, '', normalized)
+            normalized = re.sub(r'\s+', ' ', normalized).strip()
+            normalized += ' <<VIZ>>'
+
+        # Check if this is a visualization query
+        has_viz = '<<VIZ>>' in normalized
+
+        # Remove temporal state terms if VIZ is present (they're redundant for viz queries)
+        if has_viz:
+            temporal_state_pattern = PatternRegistry.build_pattern(PatternRegistry.TEMPORAL_STATE_TERMS)
+            normalized = re.sub(temporal_state_pattern + r'\s+', '', normalized)
+
+        # Normalize quantification expressions before definitions
+        quantifier_pattern = PatternRegistry.build_pattern(PatternRegistry.COUNT_TERMS)
+        # Check if any quantifier terms exist
+        has_quantifier = bool(re.search(quantifier_pattern, normalized))
+        if has_quantifier:
+            # Remove all quantifier terms
+            normalized = re.sub(quantifier_pattern + r'\s+(of\s+)?', ' ', normalized)
+            normalized = re.sub(r'\b(how many)\s+', ' ', normalized)
+            normalized = re.sub(r'\s+', ' ', normalized).strip()
+            # Add single placeholder at the end
+            normalized += ' <<QUANT_0>>'
+
         # Normalize definition requests to a standard form
-        definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
-        normalized = re.sub(
-            definition_pattern + r's?\s+(an?|the)?\s*',
-            'what ',
-            normalized
-        )
-        # Also handle "what is/are" variations
-        normalized = re.sub(
-            r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
-            'what ',
-            normalized
-        )
+        # BUT NOT for visualization queries - those are showing/creating, not defining
+        if not has_viz:
+            definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
+            normalized = re.sub(
+                definition_pattern + r's?\s+(an?|the)?\s*',
+                '<<DEF_0>> ',
+                normalized
+            )
+            # Also handle "what is/are" variations
+            normalized = re.sub(
+                r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
+                '<<DEF_0>> ',
+                normalized
+            )
 
         normalized = QueryNormalizer._normalize_aggregation_terms(normalized)
 
@@ -190,13 +229,13 @@ class QueryNormalizer:
         # Normalize limit patterns - handle both explicit and implicit limits
         limit_entities = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions(), word_boundary=False)
         normalized = re.sub(
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
             r'\1 <<N>> \2',
             normalized
         )
         # Handle queries without explicit number (implied limit of 1)
         normalized = re.sub(
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+' + limit_entities + r'(?!s)\b',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+' + limit_entities + r'(?!s)\b',
             r'\1 <<N>> \2',
             normalized
         )
@@ -264,10 +303,11 @@ class QueryNormalizer:
         time_context = PatternRegistry.build_pattern(PatternRegistry.TEMPORAL_PREPOSITIONS)
         normalized = re.sub(
             time_context + r'\s+(<<MONTH>>|<<YEAR>>)\b',
-            'in <<TIME>>',
+            '<<TIME>>',
             normalized
         )
         normalized = re.sub(r'\b\d{4}-\d{2}\b', '<<MONTH>>', normalized)
+        normalized = re.sub(r'\b\d{2}-\d{4}\b', '<<MONTH>>', normalized)
         normalized = re.sub(r'\bweek\s+of\s+<<YEAR>>\b', 'week of <<YEAR>>', normalized)
         normalized = re.sub(r'\bweek\s+\d+\b', 'week <<N>>', normalized)
         normalized = re.sub(r'\s+', ' ', normalized).strip()
@@ -279,22 +319,26 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_comparison_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
+        # Normalize duration expressions to <<DURATION>>
+        latest_words = '|'.join(PatternRegistry.LATEST_TERMS)
+        time_units = '|'.join(PatternRegistry.TIME_PERIOD_UNITS)
+        # Match: (past_word) (number or <<N>>) (time_unit)
+        duration_pattern = rf'\b({latest_words})\s+(\d+|N)\s+({time_units})s?\b'
+        normalized = re.sub(
+            duration_pattern, '<<DURATION>>', normalized, flags=re.IGNORECASE)
+
+        # ALSO handle implicit numbers (no number specified = singular unit)
+        duration_pattern_implicit = rf'\b({latest_words})\s+({time_units})\b'
+        normalized = re.sub(
+            duration_pattern_implicit, '<<DURATION>>', normalized, flags=re.IGNORECASE)
+
         # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
         for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
-            # Check if this is an implicit pattern (no \d+ in the pattern)
             if r'\d+' not in pattern:
-                # For implicit patterns, add <<N>> to the replacement
                 replacement_with_limit = replacement + ' <<N>>'
                 normalized = re.sub(pattern, replacement_with_limit, normalized)
             else:
-                # Explicit patterns already have number handling
                 normalized = re.sub(pattern, replacement, normalized)
-
-
-        # Normalize duration expressions to <<DURATION>>
-        duration_pattern = r'\b(last|past|previous)\s+(\d+\s+)?(day|days|week|weeks|month|months|year|years)\b'
-        normalized = re.sub(
-            duration_pattern, '<<DURATION>>', normalized, flags=re.IGNORECASE)
 
         # numeric patterns
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
@@ -370,7 +414,7 @@ class QueryNormalizer:
             result = ' '.join(question_words_found + content_words).strip()
 
         # Validate minimum content
-        if not result or len(result) < 3:
+        if not result or len(result) < 1:
             logger.warning(f"Normalization produced too short result for: {query}")
             # Fallback: just lowercase and remove punctuation
             fallback = query.lower()

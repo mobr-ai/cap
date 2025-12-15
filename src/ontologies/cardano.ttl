@@ -379,10 +379,6 @@ c:PotTransfer a owl:Class ;
     rdfs:label "Pot Transfer" ;
     rdfs:comment "Transfer between treasury and reserves" .
 
-c:ETLProgress a owl:Class ;
-    rdfs:label "ETL Progress" ;
-    rdfs:comment "Metadata about ETL pipeline progress" .
-
 c:NetworkMetric a owl:Class ;
     rdfs:label "Network Metric" ;
     rdfs:comment "Aggregated metrics about the network" .

@@ -84,9 +84,11 @@ class PatternRegistry:
     # Ordering terms
     MAX_TERMS = ['largest', 'biggest', 'highest', 'greatest', 'maximum', 'max']
     MIN_TERMS = ['smallest', 'lowest', 'least', 'minimum', 'min']
-    LAST_TERMS = ['latest', 'most recent', 'newest', 'last', 'current',
-                    'recent', 'recently', 'fresh', 'up to date', 'updated']
-    FIRST_TERMS = ['oldest', 'older', 'past', 'first', 'earliest',
+    TEMPORAL_STATE_TERMS = ['current', 'present', 'now', 'today']
+    LATEST_TERMS = ['latest', 'most recent', 'newest', 'last', 'past',
+                'recent', 'recently', 'fresh', 'up to date',
+                'updated'] + TEMPORAL_STATE_TERMS
+    EARLIEST_TERMS = ['oldest', 'older', 'first', 'earliest',
                     'long ago', 'initial', 'beginning', 'original']
     COUNT_TERMS = ['how many', 'number of', 'count', 'amount of',
                     'quantity', 'how much']
@@ -119,7 +121,7 @@ class PatternRegistry:
         'smaller than', '<', 'at most'
     ]
     EQUALS_TERMS =  [
-        'equals', 'equal to', 'exactly', 'same as', 'is', 'match',
+        'equals', 'equal to', 'exactly', 'same as', 'match',
         'matches', 'identical to', '=', 'precisely'
     ]
 
@@ -135,7 +137,7 @@ class PatternRegistry:
     BLOCK_TERMS = ['block']
     EPOCH_TERMS = ['epoch']
     TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
-    GOVERNANCE_PROPOSAL_TERMS = ['governance', 'proposal', 'action', 'drep', 'vote', 'constitution']
+    GOVERNANCE_PROPOSAL_TERMS = ['governance', 'proposal', 'action']
     VOTING_TERMS = ['vote', 'voting', 'voting anchor']
     COMMITTEE_TERMS = ['committee']
     DREP_TERMS = ['drep', 'delegate representative']
@@ -185,11 +187,10 @@ class PatternRegistry:
 
     # Filler words (shared across normalizers)
     FILLER_WORDS = [
-        'please', 'could', 'can', 'you', 'me', 'the',
-        'is', 'are', 'was', 'were', 'your', 'my',
-        'a', 'an', 'of', 'in', 'on', 'yours', 'to',
-        'do', 'does', 'ever', 'with', 'having', 'from',
-    ] + BAR_CHART_TERMS + LINE_CHART_TERMS + PIE_CHART_TERMS + TABLE_TERMS + CHART_SUFFIXES
+        'please', 'can', 'the', 'i', 'be',
+        'exist', 'at', 'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
+        'do', 'ever', 'from', 'there'
+    ]
 
     QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']
 
@@ -232,7 +233,7 @@ class PatternRegistry:
         return f'({pattern})'
 
     @staticmethod
-    def build_entity_pattern(base_terms: list[str], plural: bool = False) -> str:
+    def build_entity_pattern(base_terms: list[str], plural: bool = True) -> str:
         """Build entity pattern with optional plural."""
         suffix = 's?' if plural else ''
         return PatternRegistry.build_pattern(base_terms) + suffix

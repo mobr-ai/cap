@@ -75,7 +75,7 @@ class StatusMessage:
         return f"Error: {message}\n"
 
 async def query_with_stream_response(
-        query, context, db=None, user=None):
+    query, context, db=None, user=None, conversation_history=None):
 
     # Metrics collection variables
     start_time = time.time()
@@ -95,6 +95,9 @@ async def query_with_stream_response(
 
         user_query = query
         if context:
+            logger.info("Querying with context.")
+            logger.info(f"User query: {user_query}")
+            logger.info(f"Context: {context}")
             user_query = f"{context}\n\n{query}"
 
         normalized = QueryNormalizer.normalize(user_query)
@@ -108,7 +111,7 @@ async def query_with_stream_response(
         logger.info("Stage 1: convert NL to SPARQL")
 
         if cached_data:
-            logger.info(f"Cache HIT for {user_query}")
+            logger.info(f"Cache HIT for {user_query} -> {normalized}")
             cached_sparql = cached_data["sparql_query"]
             is_sequential = cached_data.get("is_sequential", False)
 
@@ -123,7 +126,7 @@ async def query_with_stream_response(
                 sparql_query = cached_sparql
                 sparql_valid = True
         else:
-            logger.info(f"Cache MISS for {user_query}")
+            logger.info(f"Cache MISS for {user_query} -> {normalized}")
             yield StatusMessage.generating_sparql()
 
             try:
@@ -211,13 +214,13 @@ async def query_with_stream_response(
                 kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query_str)
                 formatted_results = format_for_llm(kv_results, max_items=10000)
 
-            logger.info(f"Contextualizing data with kvr: \n   {kv_results}")
             context_stream = ollama.contextualize_answer(
                 user_query=user_query,
                 sparql_query=sparql_query_str,
                 sparql_results=formatted_results,
                 kv_results=kv_results,
-                system_prompt=""
+                system_prompt="",
+                conversation_history=conversation_history
             )
 
             async for chunk in stream_with_timeout_messages(context_stream, timeout_seconds=300.0):

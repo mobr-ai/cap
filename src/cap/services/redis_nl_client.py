@@ -16,7 +16,6 @@ from cap.rdf.cache.query_normalizer import QueryNormalizer
 from cap.rdf.cache.query_file_parser import QueryFileParser
 from cap.rdf.cache.sparql_normalizer import SPARQLNormalizer
 from cap.rdf.cache.value_extractor import ValueExtractor
-from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
