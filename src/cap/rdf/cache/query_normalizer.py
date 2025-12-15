@@ -6,6 +6,7 @@ import re
 import unicodedata
 from opentelemetry import trace
 
+from cap.util.nlp_util import lemmatize_text
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
 from cap.rdf.cache.pattern_registry import PatternRegistry
 
@@ -58,7 +59,7 @@ class QueryNormalizer:
             r'\b(drep (registration|update|retirement))s?\b': 'ENTITY_DREP_CERT',
             r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
             PatternRegistry.build_entity_pattern(PatternRegistry.GOVERNANCE_PROPOSAL_TERMS): 'ENTITY_PROPOSAL',
-            PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING_ANCHOR',
+            PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING',
             PatternRegistry.build_entity_pattern(PatternRegistry.COMMITTEE_TERMS): 'ENTITY_COMMITTEE',
             r'\b(committee (member|credential))s?\b': 'ENTITY_COMMITTEE_MEMBER',
             r'\b((cold|hot) credential)s?\b': 'ENTITY_CREDENTIAL',
@@ -135,7 +136,7 @@ class QueryNormalizer:
         normalized = re.sub(r'\s+', ' ', normalized).strip()
 
         # Remove possessive 's
-        normalized = re.sub(r'\b(\w+)\'s\b', r'\1', normalized)
+        normalized = re.sub(r"'s\b", '', normalized)
 
         # Normalize plurals to singular for ALL entity terms, not just preserved expressions
         all_entity_terms = (
@@ -147,6 +148,7 @@ class QueryNormalizer:
         )
         entity_plural_pattern = r'\b(' + '|'.join([re.escape(term) for term in all_entity_terms]) + r')s\b'
         normalized = re.sub(entity_plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
+        normalized = lemmatize_text(normalized)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
@@ -156,7 +158,24 @@ class QueryNormalizer:
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
 
-        # Normalize quantification expressions FIRST (before definitions)
+        # Normalize visualization terms to <<VIZ>> placeholder
+        viz_terms = (PatternRegistry.BAR_CHART_TERMS +
+            PatternRegistry.LINE_CHART_TERMS +
+            PatternRegistry.PIE_CHART_TERMS +
+            PatternRegistry.TABLE_TERMS +
+            PatternRegistry.CHART_SUFFIXES)
+        viz_pattern = PatternRegistry.build_entity_pattern(viz_terms)
+        normalized = re.sub(viz_pattern, '<<VIZ>>', normalized)
+
+        # Check if this is a visualization query
+        has_viz = '<<VIZ>>' in normalized
+
+        # Remove temporal state terms if VIZ is present (they're redundant for viz queries)
+        if has_viz:
+            temporal_state_pattern = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS)
+            normalized = re.sub(temporal_state_pattern + r'\s+', '', normalized)
+
+        # Normalize quantification expressions before definitions
         quantifier_pattern = PatternRegistry.build_pattern(PatternRegistry.COUNT_TERMS)
         normalized = re.sub(
             quantifier_pattern + r'\s+(of\s+)?',
@@ -171,18 +190,20 @@ class QueryNormalizer:
         )
 
         # Normalize definition requests to a standard form
-        definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
-        normalized = re.sub(
-            definition_pattern + r's?\s+(an?|the)?\s*',
-            '<<DEF_0>> ',
-            normalized
-        )
-        # Also handle "what is/are" variations
-        normalized = re.sub(
-            r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
-            '<<DEF_0>> ',
-            normalized
-        )
+        # BUT NOT for visualization queries - those are showing/creating, not defining
+        if not has_viz:
+            definition_pattern = PatternRegistry.build_pattern(PatternRegistry.DEFINITION_TERMS)
+            normalized = re.sub(
+                definition_pattern + r's?\s+(an?|the)?\s*',
+                '<<DEF_0>> ',
+                normalized
+            )
+            # Also handle "what is/are" variations
+            normalized = re.sub(
+                r'\bwhat\s+(is|are|was|were)\s+(an?|the)?\s*',
+                '<<DEF_0>> ',
+                normalized
+            )
 
         normalized = QueryNormalizer._normalize_aggregation_terms(normalized)
 
@@ -295,15 +316,25 @@ class QueryNormalizer:
 
         # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
         for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
-            # Check if this is an implicit pattern (no \d+ in the pattern)
-            if r'\d+' not in pattern:
-                # For implicit patterns, add <<N>> to the replacement
-                replacement_with_limit = replacement + ' <<N>>'
-                normalized = re.sub(pattern, replacement_with_limit, normalized)
+            if '<<VIZ>>' in normalized:
+                # In viz queries, only apply ordering if followed by entity token
+                if r'\d+' in pattern:
+                    # Has explicit number - check it's an ordering context
+                    matches = list(re.finditer(pattern, normalized))
+                    for match in reversed(matches):  # reverse to preserve positions
+                        # Check if this is followed by ENTITY_ or preceded by query structure
+                        before = normalized[:match.start()]
+                        after = normalized[match.end():]
+                        if 'ENTITY_' in after or re.match(r'^\s+ENTITY_', after):
+                            normalized = normalized[:match.start()] + replacement + normalized[match.end():]
+                # Skip implicit ordering patterns in viz queries
             else:
-                # Explicit patterns already have number handling
-                normalized = re.sub(pattern, replacement, normalized)
-
+                # Non-viz queries
+                if r'\d+' not in pattern:
+                    replacement_with_limit = replacement + ' <<N>>'
+                    normalized = re.sub(pattern, replacement_with_limit, normalized)
+                else:
+                    normalized = re.sub(pattern, replacement, normalized)
 
         # Normalize duration expressions to <<DURATION>>
         duration_pattern = r'\b(last|past|previous)\s+(\d+\s+)?(day|days|week|weeks|month|months|year|years)\b'
