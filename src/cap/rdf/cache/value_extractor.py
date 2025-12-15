@@ -29,13 +29,13 @@ class ValueExtractor:
         """Build ordering patterns from registry."""
         return {
             # Patterns with explicit numbers
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+': 'ordering:ASC',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+': 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS) + r'\s+\d+': 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+\d+': 'ordering:DESC',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+': 'ordering:DESC',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+': 'ordering:ASC',
             # Patterns without numbers (implicit limit)
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): 'ordering:ASC',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): 'ordering:DESC',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS): 'ordering:ASC',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS): 'ordering:DESC',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): 'ordering:DESC',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): 'ordering:ASC',
             PatternRegistry.build_pattern(PatternRegistry.MAX_TERMS): 'ordering:DESC',
@@ -170,14 +170,14 @@ class ValueExtractor:
                 values["limits"].append(limit)
 
         # Explicit limits (latest N, first N, etc.)
-        limit_terms = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
+        limit_terms = PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS + PatternRegistry.EARLIEST_TERMS)
         for match in re.finditer(limit_terms + r'\s+(\d+)(?!\s*(?:hour|day|week|month|year|epoch)s?)\b', nl_query, re.IGNORECASE):
             limit = match.group(2)
             if limit not in values["limits"]:
                 values["limits"].append(limit)
 
         # Implicit limit of 1 for singular nouns without a number
-        limit_pattern = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS + PatternRegistry.FIRST_TERMS)
+        limit_pattern = PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS + PatternRegistry.EARLIEST_TERMS)
         entity_pattern = PatternRegistry.build_pattern(PatternRegistry.get_entities(), word_boundary=False)
         if re.search(limit_pattern + r'\s+' + entity_pattern + r'\b(?!s)', nl_query, re.IGNORECASE):
             if "1" not in values["limits"]:

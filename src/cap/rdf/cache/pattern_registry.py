@@ -85,10 +85,10 @@ class PatternRegistry:
     MAX_TERMS = ['largest', 'biggest', 'highest', 'greatest', 'maximum', 'max']
     MIN_TERMS = ['smallest', 'lowest', 'least', 'minimum', 'min']
     TEMPORAL_STATE_TERMS = ['current', 'present', 'now', 'today']
-    LAST_TERMS = ['latest', 'most recent', 'newest', 'last',
+    LATEST_TERMS = ['latest', 'most recent', 'newest', 'last', 'past',
                 'recent', 'recently', 'fresh', 'up to date',
                 'updated'] + TEMPORAL_STATE_TERMS
-    FIRST_TERMS = ['oldest', 'older', 'past', 'first', 'earliest',
+    EARLIEST_TERMS = ['oldest', 'older', 'first', 'earliest',
                     'long ago', 'initial', 'beginning', 'original']
     COUNT_TERMS = ['how many', 'number of', 'count', 'amount of',
                     'quantity', 'how much']
@@ -187,10 +187,9 @@ class PatternRegistry:
 
     # Filler words (shared across normalizers)
     FILLER_WORDS = [
-        'please', 'could', 'can', 'you', 'me', 'the', 'i', 'be',
-        'is', 'are', 'was', 'were', 'your', 'my', 'exist', 'at',
-        'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
-        'do', 'does', 'ever', 'with', 'having', 'from', 'there'
+        'please', 'can', 'the', 'i', 'be',
+        'exist', 'at', 'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
+        'do', 'ever', 'from', 'there'
     ]
 
     QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']

@@ -75,30 +75,31 @@ class NLNormalizationTester:
         print(f"Testing normalization of: {query}")
         print("="*60)
 
-        try:
-            normalized = QueryNormalizer.normalize(query)
-            # Store the query pair
-            self.query_pairs.append((query, normalized))
+#        try:
+        normalized = QueryNormalizer.normalize(query)
+        # Store the query pair
+        self.query_pairs.append((query, normalized))
 
-            if expected:
-                assert normalized == expected
+        if expected:
+            assert normalized == expected
 
-            query_category = OllamaClient._categorize_query(query, "multiple")
-            print(f"{query} normalizes to '{normalized}' on category {query_category}")
-            return True
+        query_category = OllamaClient._categorize_query(query, "multiple")
+        print(f"{query} normalizes to '{normalized}' on category {query_category}")
+        return True
 
-        except Exception as e:
-            execution_time = time.time() - start_time
-            print(f"\nx Query failed: {e}")
-            print(f"Time before failure: {execution_time:.2f} seconds")
+#        except Exception as e:
+        execution_time = time.time() - start_time
+        print(f"\nx Query failed: {e}")
+        print(f"Time before failure: {execution_time:.2f} seconds")
 
-            self.metrics.append({
-                'query': query,
-                'execution_time': execution_time,
-                'status': 'failed',
-                'error': str(e)
-            })
-            return False
+        self.metrics.append({
+            'query': query,
+            'execution_time': execution_time,
+            'status': 'failed',
+            'error': str(e)
+        })
+
+        return False
 
 
     async def run_all_tests(self):
@@ -119,14 +120,7 @@ class NLNormalizationTester:
             nl_queries = txt_content.split("\n")
             for query in nl_queries:
                 if query.strip() and not query.strip().startswith("#"):
-                    try:
-                        result = await self.test_query(query)
-
-                    except Exception as e:
-                        print(f"Test failed!")
-                        print(f"    exception: {e}")
-                        exit()
-
+                    result = await self.test_query(query)
                     assert result, f"Query failed"
 
                     print(f"✓ Test passed for query\n    {query}")
@@ -196,9 +190,4 @@ if __name__ == "__main__":
     Press Ctrl+C to cancel
     """)
 
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n\nTest cancelled by user")
-    except Exception as e:
-        print(f"\n\nTest suite error: {e}")
+    asyncio.run(main())

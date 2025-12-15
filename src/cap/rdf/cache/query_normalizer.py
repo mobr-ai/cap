@@ -32,13 +32,13 @@ class QueryNormalizer:
         """Generate ordering patterns from registry."""
         return {
             # Explicit number patterns (more specific, checked first)
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS) + r'\s+\d+\b': '<<ORDER_START>> <<N>>',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+\d+\b': '<<ORDER_END>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS) + r'\s+\d+\b': '<<ORDER_TOP>> <<N>>',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS) + r'\s+\d+\b': '<<ORDER_BOTTOM>> <<N>>',
             # Implicit limit patterns (no number = limit 1)
-            PatternRegistry.build_pattern(PatternRegistry.FIRST_TERMS): '<<ORDER_START>>',
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS): '<<ORDER_END>>',
+            PatternRegistry.build_pattern(PatternRegistry.EARLIEST_TERMS): '<<ORDER_START>>',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS): '<<ORDER_END>>',
             PatternRegistry.build_pattern(PatternRegistry.TOP_TERMS): '<<ORDER_TOP>>',
             PatternRegistry.build_pattern(PatternRegistry.BOTTOM_TERMS): '<<ORDER_BOTTOM>>',
             # Max/Min patterns (unchanged)
@@ -148,7 +148,6 @@ class QueryNormalizer:
         )
         entity_plural_pattern = r'\b(' + '|'.join([re.escape(term) for term in all_entity_terms]) + r')s\b'
         normalized = re.sub(entity_plural_pattern, r'\1', normalized, flags=re.IGNORECASE)
-        normalized = lemmatize_text(normalized)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
@@ -157,6 +156,8 @@ class QueryNormalizer:
                 placeholder = f'__EXPR{i}__'
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
+
+        normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
 
         # Normalize visualization terms to <<VIZ>> placeholder
         viz_terms = (PatternRegistry.BAR_CHART_TERMS +
@@ -177,7 +178,7 @@ class QueryNormalizer:
 
         # Remove temporal state terms if VIZ is present (they're redundant for viz queries)
         if has_viz:
-            temporal_state_pattern = PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS)
+            temporal_state_pattern = PatternRegistry.build_pattern(PatternRegistry.TEMPORAL_STATE_TERMS)
             normalized = re.sub(temporal_state_pattern + r'\s+', '', normalized)
 
         # Normalize quantification expressions before definitions
@@ -228,13 +229,13 @@ class QueryNormalizer:
         # Normalize limit patterns - handle both explicit and implicit limits
         limit_entities = PatternRegistry.build_pattern(PatternRegistry.get_preserved_expressions(), word_boundary=False)
         normalized = re.sub(
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+(\d+)\s+' + limit_entities,
             r'\1 <<N>> \2',
             normalized
         )
         # Handle queries without explicit number (implied limit of 1)
         normalized = re.sub(
-            PatternRegistry.build_pattern(PatternRegistry.LAST_TERMS) + r'\s+' + limit_entities + r'(?!s)\b',
+            PatternRegistry.build_pattern(PatternRegistry.LATEST_TERMS) + r'\s+' + limit_entities + r'(?!s)\b',
             r'\1 <<N>> \2',
             normalized
         )
@@ -302,10 +303,11 @@ class QueryNormalizer:
         time_context = PatternRegistry.build_pattern(PatternRegistry.TEMPORAL_PREPOSITIONS)
         normalized = re.sub(
             time_context + r'\s+(<<MONTH>>|<<YEAR>>)\b',
-            'in <<TIME>>',
+            '<<TIME>>',
             normalized
         )
         normalized = re.sub(r'\b\d{4}-\d{2}\b', '<<MONTH>>', normalized)
+        normalized = re.sub(r'\b\d{2}-\d{4}\b', '<<MONTH>>', normalized)
         normalized = re.sub(r'\bweek\s+of\s+<<YEAR>>\b', 'week of <<YEAR>>', normalized)
         normalized = re.sub(r'\bweek\s+\d+\b', 'week <<N>>', normalized)
         normalized = re.sub(r'\s+', ' ', normalized).strip()
@@ -317,32 +319,26 @@ class QueryNormalizer:
         for pattern, replacement in QueryNormalizer.get_comparison_patterns().items():
             normalized = re.sub(pattern, replacement, normalized)
 
-        # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
-        for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
-            if '<<VIZ>>' in normalized:
-                # In viz queries, only apply ordering if followed by entity token
-                if r'\d+' in pattern:
-                    # Has explicit number - check it's an ordering context
-                    matches = list(re.finditer(pattern, normalized))
-                    for match in reversed(matches):  # reverse to preserve positions
-                        # Check if this is followed by ENTITY_ or preceded by query structure
-                        before = normalized[:match.start()]
-                        after = normalized[match.end():]
-                        if 'ENTITY_' in after or re.match(r'^\s+ENTITY_', after):
-                            normalized = normalized[:match.start()] + replacement + normalized[match.end():]
-                # Skip implicit ordering patterns in viz queries
-            else:
-                # Non-viz queries
-                if r'\d+' not in pattern:
-                    replacement_with_limit = replacement + ' <<N>>'
-                    normalized = re.sub(pattern, replacement_with_limit, normalized)
-                else:
-                    normalized = re.sub(pattern, replacement, normalized)
-
         # Normalize duration expressions to <<DURATION>>
-        duration_pattern = r'\b(last|past|previous)\s+(\d+\s+)?(day|days|week|weeks|month|months|year|years)\b'
+        latest_words = '|'.join(PatternRegistry.LATEST_TERMS)
+        time_units = '|'.join(PatternRegistry.TIME_PERIOD_UNITS)
+        # Match: (past_word) (number or <<N>>) (time_unit)
+        duration_pattern = rf'\b({latest_words})\s+(\d+|N)\s+({time_units})s?\b'
         normalized = re.sub(
             duration_pattern, '<<DURATION>>', normalized, flags=re.IGNORECASE)
+
+        # ALSO handle implicit numbers (no number specified = singular unit)
+        duration_pattern_implicit = rf'\b({latest_words})\s+({time_units})\b'
+        normalized = re.sub(
+            duration_pattern_implicit, '<<DURATION>>', normalized, flags=re.IGNORECASE)
+
+        # Apply ordering patterns - handle implicit numbers by adding <<N>> placeholder
+        for pattern, replacement in QueryNormalizer.get_ordering_patterns().items():
+            if r'\d+' not in pattern:
+                replacement_with_limit = replacement + ' <<N>>'
+                normalized = re.sub(pattern, replacement_with_limit, normalized)
+            else:
+                normalized = re.sub(pattern, replacement, normalized)
 
         # numeric patterns
         normalized = re.sub(r'\btop\s+\d+\b', 'top __N__', normalized)
@@ -418,7 +414,7 @@ class QueryNormalizer:
             result = ' '.join(question_words_found + content_words).strip()
 
         # Validate minimum content
-        if not result or len(result) < 3:
+        if not result or len(result) < 1:
             logger.warning(f"Normalization produced too short result for: {query}")
             # Fallback: just lowercase and remove punctuation
             fallback = query.lower()

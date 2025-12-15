@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 @staticmethod
-def lemmatize_text(text: str, lang: str = 'en') -> str:
+def lemmatize_text(text: str, lang: str = 'en', filler_words: list[str] = None) -> str:
     """
     Convert all words to their base form (lemma) using simplemma.
     Handles plurals, verb conjugations, and morphological variations.
@@ -31,6 +31,9 @@ def lemmatize_text(text: str, lang: str = 'en') -> str:
         else:
             # Lemmatize regular words using simplemma
             lemma = simplemma.lemmatize(word, lang=lang)
+            if filler_words and lemma in filler_words:
+                continue
+
             lemmatized_words.append(lemma)
 
     return ' '.join(lemmatized_words)

@@ -9,8 +9,8 @@ class SemanticMatcher:
     """Match queries based on semantic similarity, not just exact normalization."""
 
     SEMANTIC_GROUPS = {
-        'latest': PatternRegistry.LAST_TERMS,
-        'oldest': PatternRegistry.FIRST_TERMS,
+        'latest': PatternRegistry.LATEST_TERMS,
+        'oldest': PatternRegistry.EARLIEST_TERMS,
         'count': PatternRegistry.COUNT_TERMS,
         'sum': PatternRegistry.SUM_TERMS,
         'aggregate_time': PatternRegistry.AGGREGATE_TIME_TERMS,
@@ -57,10 +57,11 @@ class SemanticMatcher:
         2. Handling word variations (has/have/hold)
         """
         result = normalized_query
+        words = normalized_query.split()
 
         dicts = SemanticMatcher.get_semantic_dicts()
 
-        # Normalize to canonical form
+        # Normalize to semantic canonical form
         for d in dicts:
             for canonical, variants in d.items():
                 for variant in variants:
@@ -69,6 +70,9 @@ class SemanticMatcher:
 
         # Remove redundant words that don't change nl meaning after normalization
         reduntant_words = SemanticMatcher.SEMANTIC_SUGAR + PatternRegistry.FILLER_WORDS
+        if len(words) > 1:
+            reduntant_words.append("VIZ")
+
         pattern = '|'.join(reduntant_words)
         result = re.sub(rf'\b({pattern})\b', '', result, flags=re.IGNORECASE)
 
