@@ -29,9 +29,9 @@ class NLQueryTester:
     """Test harness for NL query pipeline."""
 
 
-    def __init__(self, base_url: str, txt_folder: str):
+    def __init__(self, base_url: str, input: str):
         self.oc = OllamaClient()
-        self.txt_folder: str = txt_folder
+        self.input: str = input
         self.base_url: str = base_url.rstrip("/")
         self.metrics = []
 
@@ -177,10 +177,10 @@ class NLQueryTester:
         print("\n✓ Health check passed")
 
         # Test 2: Simple query
-        if self.txt_folder.endswith(".txt"):
-            txt_files = [self.txt_folder]
+        if self.input.endswith(".txt"):
+            txt_files = [self.input]
         else:
-            nl_dir = Path(self.txt_folder)
+            nl_dir = Path(self.input)
             txt_files = sorted(nl_dir.rglob("*.txt"))
 
         for txt_file in txt_files:
@@ -215,7 +215,7 @@ async def main():
         help="Base URL of the NL endpoint (default: http://localhost:8000)"
     )
     parser.add_argument(
-        "--txt-folder",
+        "--input",
         default="documentation/examples/nl",
         help="Folder containing .txt files with NL queries (default: documentation/examples/nl) or a txt file"
     )
@@ -223,7 +223,7 @@ async def main():
 
     tester = NLQueryTester(
         base_url=args.base_url,
-        txt_folder=args.txt_folder
+        input=args.input
     )
     await tester.run_all_tests()
     print("✓✓✓ All tests passed ✓✓✓")
@@ -233,7 +233,7 @@ async def main():
 # or
 # python nl_query_tests.py --base-url http://your-server:8000
 # or
-# python nl_query_tests.py --base-url http://your-server:8000 --txt-folder path_to_folder_with_txt_files_or_txt_file
+# python nl_query_tests.py --base-url http://your-server:8000 --input path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""

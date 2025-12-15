@@ -693,8 +693,8 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
             )
             ada_vars.update(value_vars)
 
-    # Step 2: Propagate through aggregations (iteratively until no new vars found)
-    # This handles multi-level aggregations like SUM(SUM(?value))
+    # Step 2: Propagate through aliases and aggregations (iteratively)
+    # This handles cases like: (?fee AS ?avgFee), (SUM(?fee) AS ?total), etc.
     max_iterations = 10  # Prevent infinite loops
     iteration = 0
 
@@ -702,35 +702,59 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
         iteration += 1
         previous_count = len(ada_vars)
 
-        # Find all aggregate patterns: AGG(?source_var) AS ?result_var
-        # Handles both simple and nested patterns
+        # Pattern 1: Simple aliases (?sourceVar AS ?aliasVar)
+        alias_matches = re.findall(
+            r'\(\s*\?(\w+)\s+AS\s+\?(\w+)\s*\)',
+            query_text,
+            re.IGNORECASE
+        )
+        for source_var, alias_var in alias_matches:
+            if source_var in ada_vars and alias_var not in ada_vars:
+                ada_vars.add(alias_var)
+                logger.info(f"Added ADA alias variable: {alias_var} (from {source_var})")
+
+        # Pattern 2: Aggregations with ADA variables
+        # Handles: (AGG(?adaVar) AS ?result), (AGG(COALESCE(?adaVar, 0)) AS ?result)
         agg_patterns = [
-            # Pattern 1: SUM(xsd:decimal(?value)) AS ?balance
-            r'(?:SUM|AVG|MIN|MAX|COUNT)\s*\(\s*(?:xsd:\w+\s*\(\s*)?\?(\w+)\s*\)?\s*\)\s+AS\s+\?(\w+)',
-            # Pattern 2: (SUM(?balance) AS ?total)
-            r'\(\s*(?:SUM|AVG|MIN|MAX|COUNT)\s*\(\s*\?(\w+)\s*\)\s+AS\s+\?(\w+)\s*\)',
+            # Simple aggregation: SUM(?fee) AS ?total
+            r'(?:SUM|AVG|MIN|MAX)\s*\(\s*\?(\w+)\s*\)\s+AS\s+\?(\w+)',
+            # With COALESCE: SUM(COALESCE(?fee, 0)) AS ?total
+            r'(?:SUM|AVG|MIN|MAX)\s*\(\s*COALESCE\s*\(\s*\?(\w+)\s*,',
+            # Division/arithmetic with aggregation: (SUM(?fee) / COUNT(?tx)) AS ?avg
+            r'(?:SUM|AVG|MIN|MAX)\s*\(\s*(?:COALESCE\s*\(\s*)?\?(\w+)',
         ]
 
         for pattern in agg_patterns:
             matches = re.findall(pattern, query_text, re.IGNORECASE)
-            for source_var, result_var in matches:
-                # If source is ADA variable, result is also ADA variable
-                if source_var in ada_vars and result_var not in ada_vars:
-                    ada_vars.add(result_var)
-                    logger.info(f"Added aggregate result variable: {result_var} (from {source_var})")
+            for match in matches:
+                source_var = match[0] if isinstance(match, tuple) else match
+                if source_var in ada_vars:
+                    # Find the result variable (AS ?resultVar)
+                    # Look for the AS clause after this aggregation
+                    context_start = query_text.find(f'?{source_var}')
+                    if context_start != -1:
+                        context = query_text[context_start:context_start+200]
+                        as_match = re.search(r'\)\s+AS\s+\?(\w+)', context, re.IGNORECASE)
+                        if as_match:
+                            result_var = as_match.group(1)
+                            if result_var not in ada_vars:
+                                ada_vars.add(result_var)
+                                logger.info(f"Added ADA aggregate variable: {result_var} (from {source_var})")
 
-        # Also handle simple aliases: (?var AS ?alias)
-        alias_matches = re.findall(r'\(\s*\?(\w+)\s+AS\s+\?(\w+)\s*\)', query_text, re.IGNORECASE)
-        for source_var, alias_var in alias_matches:
-            if source_var in ada_vars and alias_var not in ada_vars:
-                ada_vars.add(alias_var)
-                logger.info(f"Added aliased variable: {alias_var} (from {source_var})")
+        # Pattern 3: Direct variable binding in aggregations
+        # Handles: ((SUM(?fee) / COUNT(?tx)) AS ?avgFee)
+        complex_agg_pattern = r'\(\s*\(\s*(?:SUM|AVG|MIN|MAX)\s*\([^)]*\?(\w+)[^)]*\)[^)]*\)\s+AS\s+\?(\w+)\s*\)'
+        complex_matches = re.findall(complex_agg_pattern, query_text, re.IGNORECASE)
+        for source_var, result_var in complex_matches:
+            if source_var in ada_vars and result_var not in ada_vars:
+                ada_vars.add(result_var)
+                logger.info(f"Added ADA complex aggregate variable: {result_var} (from {source_var})")
 
         # Stop if no new variables were added
         if len(ada_vars) == previous_count:
             break
 
-    logger.info(f"Detected ADA variables: {ada_vars}")
+    logger.info(f"Final detected ADA variables after propagation: {ada_vars}")
     return ada_vars
 
 
@@ -794,7 +818,7 @@ def _detect_token_name_variables(sparql_query: str) -> set[str]:
 def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
     """
     Convert a lovelace amount to ADA and return formatted information
-    without any decimal part in the string representation.
+    with proper decimal representation.
 
     Args:
         lovelace_value: String representation of lovelace amount
@@ -805,32 +829,12 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
     try:
         # Convert to Decimal safely
         lovelace_num = Decimal(lovelace_value)
-        ada_num = lovelace_num / LOVELACE_TO_ADA
-
-        # Remove decimal information by converting to int first
-        lovelace_str = lovelace_value.split('.')[0] if isinstance(lovelace_value, str) else str(lovelace_value)
-        ada_int = int(ada_num)
-        ada_str = str(ada_int)
-
-        # Human-readable format for large amounts
-        str_large = ""
-        if ada_int >= 1_000_000_000:
-            # Billions
-            billions = ada_int / 1_000_000_000
-            str_large = f"{billions:.2f} billions ADA"
-        elif ada_int >= 1_000_000:
-            # Millions
-            millions = ada_int / 1_000_000
-            str_large = f"{millions:.2f} millions ADA"
+        ada_value = lovelace_num / LOVELACE_TO_ADA
 
         result = {
-            'lovelace': lovelace_str,
-            'ada': ada_str,
-            'unit': 'lovelace'
+            'lovelace': lovelace_value,
+            'ada': str(ada_value),
         }
-
-        if str_large != "":
-            result['approximately'] = str_large
 
         return result
 
@@ -839,8 +843,7 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
         # Also ensure no decimal part is shown in fallback
         clean_value = lovelace_value.split('.')[0] if isinstance(lovelace_value, str) else str(lovelace_value)
         return {
-            'lovelace': clean_value,
-            'unit': 'lovelace'
+            'lovelace': clean_value
         }
 
 

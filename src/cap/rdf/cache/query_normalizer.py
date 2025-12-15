@@ -165,7 +165,12 @@ class QueryNormalizer:
             PatternRegistry.TABLE_TERMS +
             PatternRegistry.CHART_SUFFIXES)
         viz_pattern = PatternRegistry.build_entity_pattern(viz_terms)
-        normalized = re.sub(viz_pattern, '<<VIZ>>', normalized)
+        # Check if any visualization terms exist
+        if re.search(viz_pattern, normalized):
+            # Replace all visualization terms with a single placeholder
+            normalized = re.sub(viz_pattern, '', normalized)
+            normalized = re.sub(r'\s+', ' ', normalized).strip()
+            normalized += ' <<VIZ>>'
 
         # Check if this is a visualization query
         has_viz = '<<VIZ>>' in normalized
@@ -177,17 +182,15 @@ class QueryNormalizer:
 
         # Normalize quantification expressions before definitions
         quantifier_pattern = PatternRegistry.build_pattern(PatternRegistry.COUNT_TERMS)
-        normalized = re.sub(
-            quantifier_pattern + r'\s+(of\s+)?',
-            '<<QUANT_0>> ',
-            normalized
-        )
-
-        normalized = re.sub(
-            r'\b(how many)\s+([a-zA-Z]+)\b',  # Match "how many" followed by an entity (like "accounts")
-            r'<<QUANT_0>> \2',  # Normalize "how many accounts" to the same pattern
-            normalized
-        )
+        # Check if any quantifier terms exist
+        has_quantifier = bool(re.search(quantifier_pattern, normalized))
+        if has_quantifier:
+            # Remove all quantifier terms
+            normalized = re.sub(quantifier_pattern + r'\s+(of\s+)?', ' ', normalized)
+            normalized = re.sub(r'\b(how many)\s+', ' ', normalized)
+            normalized = re.sub(r'\s+', ' ', normalized).strip()
+            # Add single placeholder at the end
+            normalized += ' <<QUANT_0>>'
 
         # Normalize definition requests to a standard form
         # BUT NOT for visualization queries - those are showing/creating, not defining

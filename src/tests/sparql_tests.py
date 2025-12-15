@@ -9,6 +9,7 @@ import httpx
 from pathlib import Path
 from pprint import pprint
 
+from cap.util.sparql_util import convert_sparql_to_kv, _detect_ada_variables
 from cap.rdf.triplestore import TriplestoreClient
 
 def _read_content_sparql_file(path: str | Path) -> str:
@@ -23,11 +24,11 @@ class SPARQLQueryTester:
     def __init__(
         self,
         base_url: str,
-        sparql_folder: str,
+        input: str,
         use_api: bool = False
     ):
         self.base_url = base_url.rstrip("/")
-        self.sparql_folder = sparql_folder
+        self.input = input
         self.use_api = use_api
         self.tc = TriplestoreClient() if not use_api else None
         self._http_client = None
@@ -66,10 +67,10 @@ class SPARQLQueryTester:
         return resp.json()
 
     async def run_all_tests(self):
-        if self.sparql_folder.endswith(".rq"):
-            sparql_files = [self.sparql_folder]
+        if self.input.endswith(".rq"):
+            sparql_files = [self.input]
         else:
-            sparql_dir = Path(self.sparql_folder)
+            sparql_dir = Path(self.input)
             sparql_files = sorted(sparql_dir.rglob("*.rq"))
 
         for sparql_file in sparql_files:
@@ -78,12 +79,8 @@ class SPARQLQueryTester:
 
             try:
                 resp = await self.execute(query)
-
-                # API returns:
-                #   {"results": {...}}
-                # Virtuoso returns:
-                #   {"results": {...}}
-                bindings = resp.get("results", {})
+                kvr = convert_sparql_to_kv(resp, query)
+                ada_vars = _detect_ada_variables(query)
 
             except Exception as e:
                 print(f"Test: {sparql_file} failed!")
@@ -91,12 +88,12 @@ class SPARQLQueryTester:
                 print(f"    exception: {e}")
                 exit()
 
-            assert bindings is not None, f"Bindings is None for {sparql_file}"
-            assert len(bindings) > 0, f"No results returned for {sparql_file}"
+            assert kvr is not None, f"Bindings is None for {sparql_file}"
+            assert len(kvr) > 0, f"No results returned for {sparql_file}"
 
-            print(f"✓ Test passed for {sparql_file} ({len(bindings)} bindings)")
+            print(f"✓ Test passed for {sparql_file} ({len(kvr)} kvrs and {ada_vars} ada variables)")
             pprint(f"   SPARQL: {query}")
-            pprint(f"   Bindings: {bindings}")
+            pprint(f"   Bindings: {kvr}")
 
 
 async def main():
@@ -109,7 +106,7 @@ async def main():
         help="Base URL of the SPARQL endpoint (default: http://localhost:8000)"
     )
     parser.add_argument(
-        "--sparql-folder",
+        "--input",
         default="documentation/examples/sparql",
         help="Folder containing .rq SPARQL files (default: documentation/examples/sparql)"
     )
@@ -122,7 +119,7 @@ async def main():
 
     tester = SPARQLQueryTester(
         base_url=args.base_url,
-        sparql_folder=args.sparql_folder,
+        input=args.input,
         use_api=args.use_api
     )
 
