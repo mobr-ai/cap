@@ -9,7 +9,7 @@ import argparse
 import time
 from pathlib import Path
 
-from cap.services.ollama_client import OllamaClient
+from cap.services.redis_nl_client import RedisNLClient
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class NLNormalizationTester:
 
     def __init__(self, base_url: str, txt_folder: str):
         self.qn = QueryNormalizer()
+        self.redis_client = RedisNLClient()
         self.txt_folder: str = txt_folder
         self.metrics = []
         self.query_pairs = []
@@ -72,19 +73,24 @@ class NLNormalizationTester:
         """Test a natural language query."""
         start_time = time.time()
         print("\n" + "="*60)
-        print(f"Testing normalization of: {query}")
+        print(f"Testing caching of: {query}")
         print("="*60)
 
         try:
             normalized = QueryNormalizer.normalize(query)
+            cached_data = await self.redis_client.get_cached_query_with_original(normalized, query)
+
+            if cached_data:
+                cached_data = cached_data["sparql_query"]
+
             # Store the query pair
-            self.query_pairs.append((query, normalized))
+            self.query_pairs.append((normalized, cached_data))
 
             if expected:
                 assert normalized == expected
 
-            query_category = OllamaClient._categorize_query(query, "multiple")
-            print(f"{query} normalizes to '{normalized}' on category {query_category}")
+            print(f"{query} normalizes to '{normalized}'")
+            print(f"caches to '{cached_data}'")
             return True
 
         except Exception as e:
@@ -140,19 +146,19 @@ class NLNormalizationTester:
             return
 
         print("\n" + "="*60)
-        print("QUERY NORMALIZATION PAIRS")
+        print("QUERY CACHING PAIRS")
         print("="*60)
 
         # Sort by original query, then by normalized query
         sorted_pairs = sorted(self.query_pairs, key=lambda x: (x[0].lower(), x[1].lower()))
 
-        print(f"\n Pairs by query: {len(sorted_pairs)}\n")
+        print(f"\nTotal pairs: {len(sorted_pairs)}\n")
         for original, normalized in sorted_pairs:
             print(f"'{original}' -> '{normalized}'")
 
         # Sort by normalized query, then by original query
         sorted_pairs = sorted(self.query_pairs, key=lambda x: (x[1].lower(), x[0].lower()))
-        print(f"\n\n Pairs by normalization: {len(sorted_pairs)}\n")
+        print(f"\n\nTotal pairs: {len(sorted_pairs)}\n")
         for original, normalized in sorted_pairs:
             print(f"'{original}' -> '{normalized}'")
 

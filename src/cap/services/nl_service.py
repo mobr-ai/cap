@@ -111,7 +111,7 @@ async def query_with_stream_response(
         logger.info("Stage 1: convert NL to SPARQL")
 
         if cached_data:
-            logger.info(f"Cache HIT for {user_query}")
+            logger.info(f"Cache HIT for {user_query} -> {normalized}")
             cached_sparql = cached_data["sparql_query"]
             is_sequential = cached_data.get("is_sequential", False)
 
@@ -126,7 +126,7 @@ async def query_with_stream_response(
                 sparql_query = cached_sparql
                 sparql_valid = True
         else:
-            logger.info(f"Cache MISS for {user_query}")
+            logger.info(f"Cache MISS for {user_query} -> {normalized}")
             yield StatusMessage.generating_sparql()
 
             try:
