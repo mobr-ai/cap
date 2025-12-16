@@ -27,6 +27,7 @@ from cap.services.conversation_persistence import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/demo", tags=["demo"])
 
+NL_TOKEN = "__NL__"
 
 # ---------------------------------------------------------------------
 # Schemas
@@ -157,6 +158,41 @@ DEMO_SCENES = {
         "kv_type": "line",
         "artifact_type": "chart",
     },
+    "markdown_only_formatting": {
+        "match": "markdown formatting test",
+        "assistant_text": (
+            "# Markdown formatting smoke test\n\n"
+            "This response has **no kv artifact** — it is *pure markdown text*.\n\n"
+            "## Links\n"
+            "- External: https://cardano.org\n"
+            "- Explorer example: https://cardanoscan.io/\n\n"
+            "## Lists\n"
+            "1. Ordered item one\n"
+            "2. Ordered item two\n"
+            "   - Nested bullet A\n"
+            "   - Nested bullet B\n\n"
+            "## Code block\n"
+            "```bash\n"
+            "curl -s http://localhost:8000/api/v1/demo/nl/query \\\n"
+            "  -H \"Authorization: Bearer <TOKEN>\" \\\n"
+            "  -H \"Content-Type: application/json\" \\\n"
+            "  -d '{\"query\":\"markdown formatting test\"}'\n"
+            "```\n\n"
+            "Inline code: `SELECT 1;`\n\n"
+            "## Math\n"
+            "Inline: $E=mc^2$  \n"
+            "Display:\n"
+            "$$\n"
+            "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n"
+            "$$\n\n"
+            "## Table\n"
+            "| Metric | Value |\n"
+            "| --- | ---: |\n"
+            "| blocks | 5 |\n"
+            "| txs | 27 |\n\n"
+            "> Blockquote: this should render as a quote.\n"
+        ),
+    },
     "last_5_proposals": {
         "match": "show the last 5 proposals",
         "kv": {
@@ -276,101 +312,63 @@ def get_optional_user(
 
 
 # ---------------------------------------------------------------------
-# Storage normalization (NO wordlists, NO morphology suffix hacks)
+# SSE-safe text streaming helpers
 # ---------------------------------------------------------------------
 
-_WS_RE = re.compile(r"[ \t]+")
-_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
-_SPACE_AROUND_PARENS_RE = [
-    (re.compile(r"\(\s+"), "("),
-    (re.compile(r"\s+\)"), ")"),
-]
-
-def normalize_for_storage(s: str) -> str:
-    if not s:
-        return ""
-    t = str(s).replace("\r", "")
-    # collapse spaces/tabs (keep newlines)
-    t = "\n".join(_WS_RE.sub(" ", line).strip() for line in t.split("\n"))
-    # remove spaces before punctuation
-    t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
-    # parens spacing
-    for rex, rep in _SPACE_AROUND_PARENS_RE:
-        t = rex.sub(rep, t)
-    # collapse multiple blank lines
-    t = re.sub(r"\n{3,}", "\n\n", t)
-    return t.strip()
-
-
-# ---------------------------------------------------------------------
-# Streaming chunker safe with frontend sanitizeChunk (which trims trailing spaces)
-# ---------------------------------------------------------------------
-
-def iter_sse_safe_text_chunks(text: str, max_len: int = 96) -> Iterator[str]:
+def _iter_safe_line_chunks(line: str, max_len: int = 96) -> Iterator[str]:
     """
-    Yield chunks that:
-    - never end with space/tab (because frontend sanitizeChunk trims trailing spaces)
-    - preserve original spacing by carrying whitespace forward to the next chunk
-    - avoid splitting mid-word when possible
+    Chunk a single line (NO '\n' inside) into <= max_len pieces.
+    Avoid emitting chunks ending in space/tab (frontend trims them).
+    """
+    if line is None:
+        return
+    s = str(line)
+    if s == "":
+        return
+    max_len = max(16, int(max_len))
+
+    i = 0
+    carry = ""
+    while i < len(s):
+        take = s[i : i + max_len]
+        i += max_len
+
+        take = carry + take
+        carry = ""
+
+        # move trailing spaces/tabs to carry so they aren't lost by frontend trim
+        m = re.search(r"[ \t]+$", take)
+        if m:
+            ws = m.group(0)
+            take = take[: -len(ws)]
+            carry = ws + carry
+
+        if take:
+            yield take
+
+    # if we only have carry left at the end, drop it (frontend would drop anyway)
+
+
+def iter_sse_markdown_events(text: str, max_len: int = 96) -> Iterator[str]:
+    """
+    Produce a stream of 'data:' payload strings.
+    We emit NL_TOKEN as its own payload for every newline in the original text.
     """
     if not text:
         return
+    raw = str(text).replace("\r\n", "\n").replace("\r", "\n")
 
-    max_len = max(16, int(max_len))
+    # split keeping line boundaries
+    lines = raw.split("\n")
 
-    # Tokenize into either runs of non-whitespace or runs of whitespace
-    tokens = re.findall(r"\S+|\s+", text)
+    for idx, line in enumerate(lines):
+        # emit the line content (may be empty)
+        for chunk in _iter_safe_line_chunks(line, max_len=max_len):
+            yield chunk
 
-    buf = ""
-    carry_ws = ""  # whitespace that must prefix the next emitted chunk
-
-    def emit(s: str):
-        # Ensure no trailing space/tab
-        return s.rstrip(" \t")
-
-    for tok in tokens:
-        if tok.isspace():
-            # keep whitespace, but do not risk ending a chunk with it
-            carry_ws += tok
-            continue
-
-        # tok is non-whitespace
-        piece = carry_ws + tok
-        carry_ws = ""
-
-        # If adding would exceed, flush current buffer first
-        if buf and (len(buf) + len(piece) > max_len):
-            out = emit(buf)
-            if out:
-                yield out
-            # If buf ended with whitespace, it was already stripped into out; we must keep it.
-            # But by construction we never append whitespace to buf; whitespace lives in carry_ws.
-            buf = ""
-
-        # If a single token is huge, hard split it (rare)
-        if len(piece) > max_len:
-            # flush buf first
-            out = emit(buf)
-            if out:
-                yield out
-            buf = ""
-            for i in range(0, len(piece), max_len):
-                part = piece[i : i + max_len]
-                outp = emit(part)
-                if outp:
-                    yield outp
-            continue
-
-        buf += piece
-
-    # If we still have carry whitespace at end, keep it by attaching to buf (but don't emit trailing)
-    # In practice, assistant_text shouldn't end with spaces; still safe:
-    if carry_ws:
-        buf += carry_ws
-
-    out = emit(buf)
-    if out:
-        yield out
+        # after every line except the last, emit newline token (including blank lines)
+        if idx < len(lines) - 1:
+            yield NL_TOKEN
 
 
 # ---------------------------------------------------------------------
@@ -386,7 +384,6 @@ async def demo_nl_query(
 ):
     scene = pick_scene(req.query)
 
-    # 1) Conversation + user message (only if authenticated)
     conversation = None
     user_msg = None
     persist = user is not None
@@ -436,20 +433,17 @@ async def demo_nl_query(
 
         yield b"status: Writing answer...\n"
 
-        # Stream text with SSE-safe chunking:
-        # - never end a "data:" payload with trailing spaces (frontend trims them)
-        raw = assistant_text or ""
-        for chunk in iter_sse_safe_text_chunks(raw, max_len=96):
-            yield f"data: {chunk}\n".encode("utf-8")
+        # Stream markdown as SSE events, using NL_TOKEN for newlines
+        for payload in iter_sse_markdown_events(assistant_text or "", max_len=96):
+            yield f"data: {payload}\n".encode("utf-8")
 
         # Persist assistant message BEFORE done
         if persist and conversation is not None:
             try:
-                to_persist = normalize_for_storage(assistant_text or "")
                 persist_assistant_message_and_touch(
                     db=db,
                     conversation=conversation,
-                    content=to_persist,
+                    content=assistant_text or "",
                     nl_query_id=None,
                 )
                 db.commit()

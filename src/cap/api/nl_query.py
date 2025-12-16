@@ -44,33 +44,6 @@ class NLQueryRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------
-# Storage normalization (NO wordlists, NO morphology suffix hacks)
-# ---------------------------------------------------------------------
-
-_WS_RE = re.compile(r"[ \t]+")
-_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
-_SPACE_AROUND_PARENS_RE = [
-    (re.compile(r"\(\s+"), "("),
-    (re.compile(r"\s+\)"), ")"),
-]
-
-def normalize_for_storage(s: str) -> str:
-    if not s:
-        return ""
-    t = str(s).replace("\r", "")
-    # collapse spaces/tabs (keep newlines)
-    t = "\n".join(_WS_RE.sub(" ", line).strip() for line in t.split("\n"))
-    # remove spaces before punctuation
-    t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
-    # parens spacing
-    for rex, rep in _SPACE_AROUND_PARENS_RE:
-        t = rex.sub(rep, t)
-    # collapse multiple blank lines
-    t = re.sub(r"\n{3,}", "\n\n", t)
-    return t.strip()
-
-
-# ---------------------------------------------------------------------
 # Streaming helpers (NO mid-word splits, NO whitespace "help")
 # ---------------------------------------------------------------------
 
@@ -379,7 +352,6 @@ async def natural_language_query(
             # 3) Persist assistant message (normalize once, at end)
             if persist and convo is not None:
                 assistant_text = "".join(assistant_buf)
-                assistant_text = normalize_for_storage(assistant_text)
                 if assistant_text:
                     try:
                         persist_assistant_message_and_touch(
