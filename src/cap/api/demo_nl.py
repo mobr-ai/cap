@@ -349,7 +349,7 @@ def _iter_safe_line_chunks(line: str, max_len: int = 96) -> Iterator[str]:
     # if we only have carry left at the end, drop it (frontend would drop anyway)
 
 
-def iter_sse_markdown_events(text: str, max_len: int = 96) -> Iterator[str]:
+def iter_sse_markdown_events(text: str, max_len: int = 32) -> Iterator[str]:
     """
     Produce a stream of 'data:' payload strings.
     We emit NL_TOKEN as its own payload for every newline in the original text.
