@@ -132,7 +132,8 @@ class PatternRegistry:
     # Entities
     # Entity terms (words only, patterns generated dynamically)
     TRANSACTION_TERMS = ['transaction', 'tx']
-    TRANSACTION_DETAIL_TERMS = ['script', 'json', 'metadata', 'datum', 'redeemer']
+    TRANSACTION_DETAIL_TERMS = ['script', 'json', 'datum', 'redeemer']
+    METADATA_TERMS = ['metadata', 'meta', 'rationale', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
     POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data']
     BLOCK_TERMS = ['block']
     EPOCH_TERMS = ['epoch']

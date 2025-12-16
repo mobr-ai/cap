@@ -60,6 +60,7 @@ class QueryNormalizer:
             r'\b(stake pool retirement)s?\b': 'ENTITY_POOL_RETIREMENT',
             PatternRegistry.build_entity_pattern(PatternRegistry.GOVERNANCE_PROPOSAL_TERMS): 'ENTITY_PROPOSAL',
             PatternRegistry.build_entity_pattern(PatternRegistry.VOTING_TERMS): 'ENTITY_VOTING',
+            PatternRegistry.build_entity_pattern(PatternRegistry.METADATA_TERMS): 'ENTITY_METADATA',
             PatternRegistry.build_entity_pattern(PatternRegistry.COMMITTEE_TERMS): 'ENTITY_COMMITTEE',
             r'\b(committee (member|credential))s?\b': 'ENTITY_COMMITTEE_MEMBER',
             r'\b((cold|hot) credential)s?\b': 'ENTITY_CREDENTIAL',
