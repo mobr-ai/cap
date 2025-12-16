@@ -10,22 +10,10 @@ from sqlalchemy.orm import Session
 
 from cap.database.model import Conversation, ConversationMessage, User, ConversationArtifact
 
-_WS_RE = re.compile(r"\s+")
-_SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
-_DIGIT_SPACES_RE = re.compile(r"(\d)\s+(?=\d)")
-_ORDINAL_RE = re.compile(r"(\d)\s+(st|nd|rd|th)\b", re.IGNORECASE)
-_SUFFIX_RE = re.compile(r"\b([A-Za-z]{3,})\s+(ed|ing|ly|er|ers|est|s|es)\b")
-_HYPHEN_RE = re.compile(r"\b(\w+)\s*-\s*(\w+)\b")
-
-_CAPS_SPLIT_RE = re.compile(r"\b([A-Z])\s+([A-Z]{2,16})\b")
-_CAMEL_SPLIT_RE = re.compile(r"\b([A-Z][a-z]{1,3})\s+([A-Z][a-z]{1,3})\b")
-_LOWER_UPPER_RE = re.compile(r"\b([a-z])\s+([A-Z][a-z]{2,})\b")
-_PAREN_OPEN_RE = re.compile(r"\(\s+")
-_PAREN_CLOSE_RE = re.compile(r"\s+\)")
-_COMMA_IN_NUMBER_RE = re.compile(r"(\d)\s*,\s*(\d)")
-_DECIMAL_RE = re.compile(r"(\d)\s*\.\s*(\d)")
-_ACRONYM_PLURAL_RE = re.compile(r"\b([A-Z]{2,10})\s+(s|es)\b")
-_ACRONYM_DESPACE_RE = re.compile(r"\b([A-Z])\s+(?=[A-Z])")
+_WS_RE = re.compile(r"[ \t]+")
+_SPACE_BEFORE_PUNCT_RE = re.compile(r"[ \t]+([,.;:!?])")
+# do NOT touch markdown-required leading indentation for code blocks/quotes/lists
+_MARKDOWN_PREFIX_RE = re.compile(r"^(\s{0,3}(?:```|~~~|>|\* |- |\d+\. ))")
 
 
 def _artifact_hash(payload: Dict[str, Any]) -> str:
@@ -184,69 +172,38 @@ def _title_from_query(query: str) -> Optional[str]:
 
 
 def normalize_assistant_content(text: str) -> str:
+    """
+    Markdown-safe normalization for storage:
+      - preserves newlines
+      - collapses runs of spaces/tabs *within a line* (except markdown-indented lines)
+      - removes spaces before punctuation (within a line)
+      - collapses 3+ blank lines to 2
+      - DOES NOT do any word-joining heuristics
+    """
     if not text:
         return ""
 
-    t = str(text)
+    src = str(text).replace("\r\n", "\n").replace("\r", "\n")
 
-    # collapse whitespace early
-    t = _WS_RE.sub(" ", t).strip()
+    out_lines = []
+    for line in src.split("\n"):
+        # If line looks like markdown structure or code fence/blockquote/list, keep leading spacing as-is.
+        if _MARKDOWN_PREFIX_RE.match(line):
+            # Still de-tab/space-normalize *after* the prefix lightly
+            out_lines.append(line.rstrip())
+            continue
 
-    # remove spaces before punctuation
-    t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
+        # Normal line: collapse internal ws, trim right
+        t = _WS_RE.sub(" ", line).rstrip()
+        t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
+        out_lines.append(t)
 
-    # fix parentheses spacing: "( 1, 271 )" -> "(1, 271)"
-    t = _PAREN_OPEN_RE.sub("(", t)
-    t = _PAREN_CLOSE_RE.sub(")", t)
+    normalized = "\n".join(out_lines)
 
-    # join digit runs: "2 0 2 5" -> "2025"
-    t = _DIGIT_SPACES_RE.sub(r"\1", t)
+    # tighten blank lines: max 2
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
 
-    # ordinal join: "11 th" -> "11th"
-    t = _ORDINAL_RE.sub(r"\1\2", t)
-
-    # comma/decimal inside numbers: "1, 271" -> "1,271" ; "3 . 14" -> "3.14"
-    t = _COMMA_IN_NUMBER_RE.sub(r"\1,\2", t)
-    t = _DECIMAL_RE.sub(r"\1.\2", t)
-
-    # suffix join: "mint ed" -> "minted"
-    t = _SUFFIX_RE.sub(r"\1\2", t)
-
-    # join consecutive spaced capitals: "N FTs" -> "NFTs", "N F T s" -> "NFT s" (then plural rule fixes)
-    t = _ACRONYM_DESPACE_RE.sub(r"\1", t)
-
-    # acronym plural: "NFT s" -> "NFTs"
-    t = _ACRONYM_PLURAL_RE.sub(r"\1\2", t)
-
-    # normalize hyphen spacing: "early -stage" -> "early-stage"
-    t = _HYPHEN_RE.sub(r"\1-\2", t)
-
-    # join common split patterns; multiple passes helps
-    stop_left = {
-        "The", "This", "That", "These", "Those",
-        "A", "An",
-        "In", "On", "At", "As", "For", "From", "To", "By", "Of", "With",
-        "And", "Or", "But", "So", "Yet",
-        "It", "Its", "Is", "Are", "Was", "Were",
-        "However", "While", "When", "Where", "What", "Why", "How",
-    }
-
-    for _ in range(2):
-        t = _ACRONYM_DESPACE_RE.sub(r"\1", t)
-        t = _CAPS_SPLIT_RE.sub(r"\1\2", t)     # "N IGHT" -> "NIGHT"
-        t = _CAMEL_SPLIT_RE.sub(r"\1\2", t)    # "De Fi" -> "DeFi"
-        t = _LOWER_UPPER_RE.sub(r"\1\2", t)    # "d Apps" -> "dApps"
-
-        # Safer "Card ano" join:
-        # only join when the right chunk is a small suffix (2-5 chars)
-        # and the left chunk is not a common stopword like "The".
-        t = re.sub(
-            r"\b([A-Z][a-z]{2,10})\s+([a-z]{2,5})\b",
-            lambda m: (m.group(1) + m.group(2)) if (m.group(1) not in stop_left) else m.group(0),
-            t,
-        )
-
-    return t.strip()
+    return normalized.strip()
 
 
 def get_or_create_conversation(
@@ -304,25 +261,21 @@ def persist_assistant_message_and_touch(
     conversation: Conversation,
     content: str,
     nl_query_id: Optional[int] = None,
-) -> Optional[ConversationMessage]:
-    text = normalize_assistant_content((content or "").strip())
-    if not text:
-        return None
+) -> ConversationMessage:
+    # Store markdown-safe normalized content
+    safe = normalize_assistant_content(content or "")
 
     msg = ConversationMessage(
         conversation_id=conversation.id,
         user_id=None,
         role="assistant",
-        content=text,
+        content=safe,
         nl_query_id=nl_query_id,
     )
     db.add(msg)
 
     conversation.updated_at = datetime.utcnow()
     db.add(conversation)
-
-    db.commit()
-    db.refresh(msg)
     return msg
 
 
