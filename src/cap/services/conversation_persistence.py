@@ -15,12 +15,12 @@ _SPACE_BEFORE_PUNCT_RE = re.compile(r"[ \t]+([,.;:!?])")
 # do NOT touch markdown-required leading indentation for code blocks/quotes/lists
 _MARKDOWN_PREFIX_RE = re.compile(r"^(\s{0,3}(?:```|~~~|>|\* |- |\d+\. ))")
 
+# Split on fenced code blocks and inline code, keep delimiters
+_CODE_SPLIT_RE = re.compile(r"(```[\s\S]*?```|`[^`]*`)")
 
 def _artifact_hash(payload: Dict[str, Any]) -> str:
-    # stable JSON encoding
     s = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
 
 def _normalize_kv_type(result_type: Optional[str]) -> Optional[str]:
     s = (result_type or "").strip().lower()
@@ -38,7 +38,6 @@ def _normalize_kv_type(result_type: Optional[str]) -> Optional[str]:
         s = s[: -len("_chart")]
     return s
 
-
 def persist_conversation_artifact_from_raw_kv(
     db: Session,
     conversation: Conversation,
@@ -46,12 +45,6 @@ def persist_conversation_artifact_from_raw_kv(
     nl_query_id: Optional[int] = None,
     conversation_message_id: Optional[int] = None,
 ) -> Optional[ConversationArtifact]:
-    """
-    Parse raw kv_results JSON string and persist as ConversationArtifact.
-
-    Stores the full kv payload under config={"kv": <parsed kv json>}
-    so the frontend can reconstruct charts/tables reliably.
-    """
     if not conversation:
         return None
 
@@ -59,18 +52,13 @@ def persist_conversation_artifact_from_raw_kv(
     if not raw:
         return None
 
-    # Some streams may include prefix "kv_results:" — tolerate it.
     if raw.startswith("kv_results:"):
         raw = raw[len("kv_results:") :].strip()
 
-    # Try JSON parse (with a small rescue if extra text exists)
     kv: Optional[Dict[str, Any]] = None
     try:
         kv = json.loads(raw)
     except Exception:
-        # rescue: find first {...} block
-        import re
-
         m = re.search(r"\{[\s\S]*\}", raw)
         if m:
             kv = json.loads(m.group(0))
@@ -80,11 +68,7 @@ def persist_conversation_artifact_from_raw_kv(
 
     result_type = kv.get("result_type") or kv.get("resultType")
     kv_type = _normalize_kv_type(result_type)
-
-    # Determine artifact_type: table vs chart
     artifact_type = "table" if kv_type == "table" else "chart"
-
-    # Persist full kv payload for deterministic re-rendering
     config: Dict[str, Any] = {"kv": kv}
 
     return persist_conversation_artifact(
@@ -96,7 +80,6 @@ def persist_conversation_artifact_from_raw_kv(
         nl_query_id=nl_query_id,
         conversation_message_id=conversation_message_id,
     )
-
 
 def persist_conversation_artifact(
     db: Session,
@@ -114,11 +97,10 @@ def persist_conversation_artifact(
         "artifact_type": artifact_type,
         "kv_type": kv_type,
         "config": config,
-        "conversation_message_id": conversation_message_id,  # <- important
+        "conversation_message_id": conversation_message_id,
     }
     h = _artifact_hash(payload_for_hash)
 
-    # idempotent upsert by (conversation_id, artifact_hash)
     existing = (
         db.query(ConversationArtifact)
         .filter(
@@ -141,14 +123,12 @@ def persist_conversation_artifact(
     )
     db.add(a)
 
-    # touch conversation so it bumps correctly in UI
     conversation.updated_at = datetime.utcnow()
     db.add(conversation)
 
     db.commit()
     db.refresh(a)
     return a
-
 
 def list_conversation_artifacts(
     db: Session,
@@ -161,7 +141,6 @@ def list_conversation_artifacts(
         .all()
     )
 
-
 def _title_from_query(query: str) -> Optional[str]:
     title = (query or "").strip()
     if not title:
@@ -170,6 +149,65 @@ def _title_from_query(query: str) -> Optional[str]:
         title = title[:77] + "..."
     return title
 
+def _repair_word_glue_unicode(text: str) -> str:
+    """
+    Language-agnostic "de-glue" pass for prose:
+      - inserts a space between: lower-case letter + Upper-case letter (when it looks like a word start)
+      - inserts a space between: letter + digit (when likely prose, e.g. "Dec15th" -> "Dec 15th")
+    Uses Unicode-aware str.islower/isupper/isalpha/isdigit.
+
+    IMPORTANT: run only on non-code markdown segments (caller must split).
+    """
+    if not text:
+        return ""
+
+    out: list[str] = []
+    n = len(text)
+
+    for i, ch in enumerate(text):
+        prev = text[i - 1] if i > 0 else ""
+        nxt = text[i + 1] if i + 1 < n else ""
+
+        # Rule A: lower + Upper + lower => insert space before Upper (word boundary)
+        # Example: "inOctober" -> "in October"
+        if ch and prev:
+            if prev.isalpha() and prev.islower() and ch.isalpha() and ch.isupper():
+                # be conservative: only if next is a lowercase letter (likely "WordStart")
+                if nxt and nxt.isalpha() and nxt.islower():
+                    # avoid double spaces
+                    if out and out[-1] != " ":
+                        out.append(" ")
+
+        # Rule B: letter + digit => insert space before digit (prose boundary)
+        # Example: "December15th" -> "December 15th"
+        if ch and prev:
+            if prev.isalpha() and ch.isdigit():
+                if out and out[-1] != " ":
+                    out.append(" ")
+
+        out.append(ch)
+
+    return "".join(out)
+
+def _repair_word_glue_markdown(md: str) -> str:
+    """
+    Apply _repair_word_glue_unicode() outside of fenced code blocks and inline code.
+    """
+    if not md:
+        return ""
+
+    parts = _CODE_SPLIT_RE.split(md)
+    fixed: list[str] = []
+
+    for p in parts:
+        if not p:
+            continue
+        if p.startswith("```") or (p.startswith("`") and p.endswith("`")):
+            fixed.append(p)
+        else:
+            fixed.append(_repair_word_glue_unicode(p))
+
+    return "".join(fixed)
 
 def normalize_assistant_content(text: str) -> str:
     """
@@ -178,7 +216,7 @@ def normalize_assistant_content(text: str) -> str:
       - collapses runs of spaces/tabs *within a line* (except markdown-indented lines)
       - removes spaces before punctuation (within a line)
       - collapses 3+ blank lines to 2
-      - DOES NOT do any word-joining heuristics
+      - then applies a language-agnostic "word glue" repair outside code spans
     """
     if not text:
         return ""
@@ -187,24 +225,21 @@ def normalize_assistant_content(text: str) -> str:
 
     out_lines = []
     for line in src.split("\n"):
-        # If line looks like markdown structure or code fence/blockquote/list, keep leading spacing as-is.
         if _MARKDOWN_PREFIX_RE.match(line):
-            # Still de-tab/space-normalize *after* the prefix lightly
             out_lines.append(line.rstrip())
             continue
 
-        # Normal line: collapse internal ws, trim right
         t = _WS_RE.sub(" ", line).rstrip()
         t = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", t)
         out_lines.append(t)
 
     normalized = "\n".join(out_lines)
-
-    # tighten blank lines: max 2
     normalized = re.sub(r"\n{3,}", "\n\n", normalized)
 
-    return normalized.strip()
+    # Language-agnostic de-glue pass (do NOT touch code spans)
+    normalized = _repair_word_glue_markdown(normalized)
 
+    return normalized.strip()
 
 def get_or_create_conversation(
     db: Session,
@@ -212,10 +247,6 @@ def get_or_create_conversation(
     conversation_id: Optional[int],
     query_for_title: str,
 ) -> Conversation:
-    """
-    Returns an existing conversation (if conversation_id provided and owned by user),
-    otherwise creates a new conversation with title from query snippet.
-    """
     if conversation_id is not None:
         convo = (
             db.query(Conversation)
@@ -234,7 +265,6 @@ def get_or_create_conversation(
     db.commit()
     db.refresh(convo)
     return convo
-
 
 def persist_user_message(
     db: Session,
@@ -255,14 +285,12 @@ def persist_user_message(
     db.refresh(msg)
     return msg
 
-
 def persist_assistant_message_and_touch(
     db: Session,
     conversation: Conversation,
     content: str,
     nl_query_id: Optional[int] = None,
 ) -> ConversationMessage:
-    # Store markdown-safe normalized content
     safe = normalize_assistant_content(content or "")
 
     msg = ConversationMessage(
@@ -278,7 +306,6 @@ def persist_assistant_message_and_touch(
     db.add(conversation)
     return msg
 
-
 def start_conversation_and_persist_user(
     db: Session,
     user: Optional[User],
@@ -286,11 +313,6 @@ def start_conversation_and_persist_user(
     query: str,
     nl_query_id: Optional[int] = None,
 ) -> Tuple[Optional[Conversation], Optional[ConversationMessage]]:
-    """
-    Convenience wrapper.
-    If user is None: returns (None, None) (no persistence).
-    Otherwise: ensures conversation exists, persists user message, returns both.
-    """
     if user is None:
         return None, None
 
