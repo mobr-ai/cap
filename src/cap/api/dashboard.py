@@ -59,6 +59,22 @@ class PinRequest(DashboardItemBase):
 
 
 # ---------- Helpers ----------
+def _dashboard_counts(db: Session, dashboard_id: int) -> tuple[int, int]:
+    total_items = (
+        db.query(DashboardItem)
+        .filter(DashboardItem.dashboard_id == dashboard_id)
+        .count()
+    )
+
+    unique_types = (
+        db.query(DashboardItem.artifact_type)
+        .filter(DashboardItem.dashboard_id == dashboard_id)
+        .distinct()
+        .count()
+    )
+
+    return total_items, unique_types
+
 
 def _get_or_create_default_dashboard(db: Session, user_id: int) -> Dashboard:
     dashboard = (
@@ -176,6 +192,20 @@ def delete_dashboard(
     user=Depends(get_current_user),
 ):
     d = _ensure_owns_dashboard(db, user.user_id, dashboard_id)
+
+    # Counts BEFORE deletion
+    total_items, unique_types = _dashboard_counts(db, d.id)
+
+    # Record metrics BEFORE deleting the dashboard
+    MetricsService.record_dashboard_metrics(
+        db=db,
+        user_id=user.user_id,
+        dashboard_id=d.id,
+        action_type="deleted",
+        total_items=total_items,
+        unique_artifact_types=unique_types,
+    )
+
     # items cascade via FK ondelete=CASCADE if configured; otherwise delete manually
     db.query(DashboardItem).filter(DashboardItem.dashboard_id == d.id).delete()
     db.delete(d)
@@ -265,9 +295,29 @@ def delete_item(
     user=Depends(get_current_user),
 ):
     item = _ensure_owns_item(db, user.user_id, item_id)
+
+    dashboard_id = item.dashboard_id
+    removed_type = item.artifact_type
+
     db.delete(item)
     db.commit()
+
+    # Counts AFTER deletion
+    total_items, unique_types = _dashboard_counts(db, dashboard_id)
+
+    # Record metrics
+    MetricsService.record_dashboard_metrics(
+        db=db,
+        user_id=user.user_id,
+        dashboard_id=dashboard_id,
+        action_type="item_removed",
+        artifact_type=removed_type,
+        total_items=total_items,
+        unique_artifact_types=unique_types,
+    )
+
     return
+
 
 
 # ---------- Special: pin from chat ----------
@@ -303,4 +353,18 @@ def pin_artifact(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    total_items, unique_types = _dashboard_counts(db, dashboard.id)
+
+    MetricsService.record_dashboard_metrics(
+        db=db,
+        user_id=user.user_id,
+        dashboard_id=dashboard.id,
+        action_type="item_added",
+        artifact_type=payload.artifact_type,
+        total_items=total_items,
+        unique_artifact_types=unique_types,
+    )
+
     return item
+
