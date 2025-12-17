@@ -1,15 +1,17 @@
 """
 Metrics reporting API.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, cast, Float, Integer
+from sqlalchemy import func, and_, or_, cast, Float, Integer, select
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from cap.database.session import get_db
-from cap.database.model import QueryMetrics, KGMetrics, DashboardMetrics
+from cap.database.model import QueryMetrics, KGMetrics, DashboardMetrics, User
 from cap.services.lang_detect_client import LanguageDetector
+from cap.core.auth_dependencies import get_current_admin_user
+
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 
@@ -202,4 +204,137 @@ def get_recent_queries(
             }
             for q in queries
         ]
+    }
+
+def _query_metrics_to_dict(r: QueryMetrics) -> dict:
+    return {
+        # for the frontend cards
+        "id": r.id,
+        "nl_query": r.nl_query,
+        "language": r.detected_language,
+        "succeeded": r.query_succeeded,
+        "complexity_score": r.complexity_score,
+        "total_latency_ms": r.total_latency_ms,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+
+        # Optional extras (nice for the UI, safe to expose to admins)
+        "llm_latency_ms": r.llm_latency_ms,
+        "sparql_latency_ms": r.sparql_latency_ms,
+        "result_count": r.result_count,
+        "result_type": r.result_type,
+        "sparql_valid": r.sparql_valid,
+        "semantic_valid": r.semantic_valid,
+        "is_federated": r.is_federated,
+        "has_temporal": r.has_temporal,
+        "has_offchain_metadata": r.has_offchain_metadata,
+        "error_message": r.error_message,
+    }
+
+
+@router.get("/queries/by-user/{user_id}")
+def get_user_queries_admin(
+    user_id: int,
+    limit: int = Query(200, ge=1, le=1000),
+    q: Optional[str] = Query(None, description="Search text in nl_query (case-insensitive)"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO or YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO or YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Admin-only: list QueryMetrics for a specific user.
+
+    Filters:
+    - q: substring match on nl_query (ILIKE)
+    - start_date/end_date: inclusive datetime bounds
+    """
+    # Ensure the user exists (clean 404 instead of empty list confusion)
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    filters = [QueryMetrics.user_id == user_id]
+
+    if q:
+        like = f"%{q.strip()}%"
+        filters.append(QueryMetrics.nl_query.ilike(like))
+
+    def _parse_dt(v: str) -> datetime:
+        # Accept YYYY-MM-DD or full ISO with time
+        return datetime.fromisoformat(v)
+
+    if start_date:
+        filters.append(QueryMetrics.created_at >= _parse_dt(start_date))
+    if end_date:
+        filters.append(QueryMetrics.created_at <= _parse_dt(end_date))
+
+    rows = (
+        db.query(QueryMetrics)
+        .filter(and_(*filters))
+        .order_by(QueryMetrics.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "user_id": user_id,
+        "limit": limit,
+        "q": q,
+        "start_date": start_date,
+        "end_date": end_date,
+        "queries": [_query_metrics_to_dict(r) for r in rows],
+    }
+
+
+@router.get("/users/{user_id}/query-summary")
+def get_user_query_summary_admin(
+    user_id: int,
+    days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Time window in days for metrics aggregation",
+    ),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+):
+    """
+    Admin-only: aggregated query metrics for a single user.
+
+    Intended for admin dashboards and user-inspection pages.
+    """
+
+    # ---- Guard: user must exist
+    user = db.scalar(select(User).where(User.user_id == user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    stats = db.query(
+        func.count(QueryMetrics.id).label("total"),
+        func.sum(
+            cast(cast(QueryMetrics.query_succeeded, Integer), Float)
+        ).label("succeeded"),
+        func.avg(QueryMetrics.total_latency_ms).label("avg_total_latency_ms"),
+        func.avg(QueryMetrics.complexity_score).label("avg_complexity_score"),
+        func.max(QueryMetrics.created_at).label("last_query_at"),
+    ).filter(
+        QueryMetrics.user_id == user_id,
+        QueryMetrics.created_at >= since,
+    ).one()
+
+    total = int(stats.total or 0)
+    succeeded = float(stats.succeeded or 0.0)
+
+    return {
+        "user_id": user_id,
+        "window_days": days,
+        "total_queries": total,
+        "success_rate": (succeeded / total * 100.0) if total else 0.0,
+        "avg_total_latency_ms": float(stats.avg_total_latency_ms or 0.0),
+        "avg_complexity_score": float(stats.avg_complexity_score or 0.0),
+        "last_query_at": (
+            stats.last_query_at.isoformat() if stats.last_query_at else None
+        ),
     }

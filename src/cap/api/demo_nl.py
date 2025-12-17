@@ -1,6 +1,9 @@
 import json
 import logging
-from typing import AsyncGenerator, Optional
+import re
+import time
+
+from typing import AsyncGenerator, Optional, Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -9,7 +12,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from cap.database.session import get_db
-from cap.database.model import Conversation, User
+from cap.database.model import User
+from cap.services.metrics_service import MetricsService
 from cap.core.auth_dependencies import (
     bearer_scheme,
     _extract_token,
@@ -242,9 +246,7 @@ async def demo_nl_query(
         "'Plot a bar chart showing monthly multi assets created in 2021.'"
     )
 
-    # -------------------------------------------------------------
-    # 2) Streaming logic (MATCHES REAL NL ENDPOINT)
-    # -------------------------------------------------------------
+    t0 = time.perf_counter()
 
     async def stream_demo() -> AsyncGenerator[bytes, None]:
         # Status messages
@@ -266,6 +268,7 @@ async def demo_nl_query(
                         nl_query_id=None,
                         raw_kv_payload=json.dumps(scene["kv"]),
                     )
+                    kv_results_dict = scene["kv"] if scene and scene.get("kv") else None
                 except Exception as e:
                     db.rollback()
                     logger.error(f"Failed to persist demo artifact: {e}")
@@ -290,9 +293,29 @@ async def demo_nl_query(
                 db.rollback()
                 logger.error(f"Failed to persist demo assistant message: {e}")
 
-    # -------------------------------------------------------------
-    # 3) Headers (IDENTICAL to real NL endpoint)
-    # -------------------------------------------------------------
+        try:
+            total_ms = int((time.perf_counter() - t0) * 1000)
+
+            MetricsService.record_query_metrics(
+                db=db,
+                nl_query=req.query,
+                normalized_query=(req.query or "").strip().lower(),
+                sparql_query="-- demo endpoint (no SPARQL) --",
+                kv_results=kv_results_dict,
+                is_sequential=False,
+                sparql_valid=True,
+                query_succeeded=True,
+                llm_latency_ms=0,
+                sparql_latency_ms=0,
+                total_latency_ms=total_ms,
+                user_id=(user.user_id if user else None),
+                error_message=None,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to record demo query metrics: {e}")
+
+        yield b"data: [DONE]\n"
 
     headers = {
         "Cache-Control": "no-cache",
