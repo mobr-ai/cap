@@ -77,7 +77,7 @@ class PlaceholderRestorer:
         elif placeholder.startswith("<<CUR_"):
             return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<POOL_ID_"):
-            return PlaceholderRestorer._restore_pool_id(placeholder, cached_value, current_values)
+            return PlaceholderRestorer._restore_pool_id(placeholder, current_values.get("pool_ids"), current_values)
         elif placeholder.startswith("<<URI_"):
             return cached_value
         elif placeholder.startswith("<<DEF_"):
