@@ -160,10 +160,13 @@ class QueryNormalizer:
 
         normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
 
-        # Normalize pool IDs to placeholder
-        pool_id_pattern = r'\b(pool1[a-z0-9]{53})\b'
-        if re.search(pool_id_pattern, normalized, re.IGNORECASE):
-            normalized = re.sub(pool_id_pattern, '<<POOL_ID>>', normalized, flags=re.IGNORECASE)
+        # Normalize pool IDs to indexed placeholder
+        pool_id_pattern = r'\b(pool1[a-z0-9]{50,})\b'
+        pool_id_counter = 0
+        for match in re.finditer(pool_id_pattern, normalized, re.IGNORECASE):
+            placeholder = f'<<POOL_ID_{pool_id_counter}>>'
+            normalized = normalized.replace(match.group(1), placeholder)
+            pool_id_counter += 1
 
         # Normalize visualization terms to <<VIZ>> placeholder
         viz_terms = (PatternRegistry.BAR_CHART_TERMS +
