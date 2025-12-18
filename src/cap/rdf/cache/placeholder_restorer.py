@@ -76,6 +76,8 @@ class PlaceholderRestorer:
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("limits"), cached_value, "10")
         elif placeholder.startswith("<<CUR_"):
             return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
+        elif placeholder.startswith("<<POOL_ID_"):
+            return PlaceholderRestorer._restore_pool_id(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<URI_"):
             return cached_value
         elif placeholder.startswith("<<DEF_"):
@@ -112,6 +114,25 @@ class PlaceholderRestorer:
         # Final fallback: use ADA as default currency
         logger.warning(f"No currency available for {placeholder}, using default ADA")
         return "<https://mobr.ai/ont/cardano#cnt/ada>"
+
+    @staticmethod
+    def _restore_pool_id(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore pool ID placeholder with cyclic fallback."""
+        pool_ids = current_values.get("pool_ids", [])
+
+        if pool_ids:
+            try:
+                idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
+                pool_id = pool_ids[idx % len(pool_ids)]
+                return f'"{pool_id}"'
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.error(f"Error parsing POOL_ID placeholder {placeholder}: {e}")
+
+        return cached_value or '""'
 
     @staticmethod
     def _restore_inject(

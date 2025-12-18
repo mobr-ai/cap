@@ -22,6 +22,7 @@ class PlaceholderCounters:
     day: int = 0
     period: int = 0
     order: int = 0
+    pool_id: int = 0
     duration: int = 0
     definition: int = 0
     quantifier: int = 0
@@ -53,6 +54,9 @@ class PlaceholderCounters:
             elif placeholder.startswith("<<CUR_"):
                 idx = int(placeholder.replace('<<CUR_', '').replace('>>', ''))
                 self.cur = max(self.cur, idx + 1)
+            elif placeholder.startswith("<<POOL_ID_"):  # ADD THIS
+                idx = int(placeholder.replace('<<POOL_ID_', '').replace('>>', ''))
+                self.pool_id = max(self.pool_id, idx + 1)
             elif placeholder.startswith("<<DURATION_"):
                 idx = int(placeholder.replace('<<DURATION_', '').replace('>>', ''))
                 self.duration = max(self.duration, idx + 1)

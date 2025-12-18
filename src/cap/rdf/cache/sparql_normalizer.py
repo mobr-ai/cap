@@ -73,6 +73,7 @@ class SPARQLNormalizer:
         # Order matters: INJECT first, then currency URIs, then other patterns
         normalized = self._extract_inject_statements(normalized)
         normalized = self._extract_currency_uris(normalized)
+        normalized = self._extract_pool_ids(normalized)
         normalized = self._extract_uris(normalized)
         normalized = self._extract_temporal_patterns(normalized)
         normalized = self._extract_order_clauses(normalized)
@@ -151,6 +152,23 @@ class SPARQLNormalizer:
             placeholder = f"<<CUR_{self.counters.cur}>>"
             self.counters.cur += 1
             self.placeholder_map[placeholder] = original
+            text = text[:match.start()] + placeholder + text[match.end():]
+
+        return text
+
+    def _extract_pool_ids(self, text: str) -> str:
+        """Extract Cardano pool IDs."""
+        pattern = r'\b(pool1[a-z0-9]{53})\b'
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+
+            original = match.group(1)
+            placeholder = f"<<POOL_ID_{self.counters.pool_id}>>"
+            self.counters.pool_id += 1
+            self.placeholder_map[placeholder] = f'"{original}"'
             text = text[:match.start()] + placeholder + text[match.end():]
 
         return text

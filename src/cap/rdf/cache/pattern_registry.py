@@ -133,7 +133,7 @@ class PatternRegistry:
     # Entity terms (words only, patterns generated dynamically)
     TRANSACTION_TERMS = ['transaction', 'tx']
     TRANSACTION_DETAIL_TERMS = ['script', 'json', 'datum', 'redeemer']
-    METADATA_TERMS = ['metadata', 'meta', 'rationale', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
+    METADATA_TERMS = ['metadata', 'meta', 'rationale', 'rational', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
     POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data']
     BLOCK_TERMS = ['block']
     EPOCH_TERMS = ['epoch']
@@ -156,6 +156,7 @@ class PatternRegistry:
     REWARD_TERMS = ['reward', 'withdrawal', 'reward withdrawal']
     INPUT_TERMS = ['input', 'utxo input']
     OUTPUT_TERMS = ['output', 'utxo output']
+    POOL_ID_TERMS = ['pool id', 'pool hash', 'spo operator', 'spo', 'stake pool operator', 'pool operator', 'operator']
     ACCOUNT_TERMS = ['account', 'stake account', 'wallet']
 
     # Chart types
@@ -238,3 +239,8 @@ class PatternRegistry:
         """Build entity pattern with optional plural."""
         suffix = 's?' if plural else ''
         return PatternRegistry.build_pattern(base_terms) + suffix
+
+    @staticmethod
+    def is_pool_id(text: str) -> bool:
+        """Check if text matches pool ID pattern."""
+        return bool(re.match(r'^pool1[a-z0-9]{53}$', text))

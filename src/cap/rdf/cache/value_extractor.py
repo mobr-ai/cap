@@ -58,7 +58,8 @@ class ValueExtractor:
             "orderings": [],
             "durations": [],
             "definitions": [],
-            "quantifiers": []
+            "quantifiers": [],
+            "pool_ids": [],
         }
 
         # Extract currency/token URIs (add this new section)
@@ -110,6 +111,7 @@ class ValueExtractor:
         ValueExtractor._extract_percentages(nl_query, values)
         ValueExtractor._extract_limits(nl_query, values)
         ValueExtractor._extract_tokens(nl_query, values)
+        ValueExtractor._extract_pool_ids(nl_query, values)
         ValueExtractor._extract_numbers(nl_query, values)
         ValueExtractor._extract_durations(nl_query, values)
 
@@ -193,6 +195,15 @@ class ValueExtractor:
             token = (match.group(1) or match.group(2)).upper()
             if token not in values["tokens"] and token not in excluded_words:
                 values["tokens"].append(token)
+
+    @staticmethod
+    def _extract_pool_ids(nl_query: str, values: dict[str, list[str]]) -> None:
+        """Extract Cardano pool IDs."""
+        pool_pattern = r'\b(pool1[a-z0-9]{53})\b'
+        for match in re.finditer(pool_pattern, nl_query, re.IGNORECASE):
+            pool_id = match.group(1).lower()
+            if pool_id not in values["pool_ids"]:
+                values["pool_ids"].append(pool_id)
 
     @staticmethod
     def _extract_durations(nl_query: str, values: dict[str, list[str]]) -> None:
@@ -285,7 +296,7 @@ class ValueExtractor:
                 continue
 
             if (num not in values["limits"] and
-                num not in values["percentages"] and
-                num not in values["percentages_decimal"] and
-                num not in values["numbers"]):
+                    num not in values["percentages"] and
+                    num not in values["percentages_decimal"] and
+                    num not in values["numbers"]):
                 values["numbers"].append(num)
