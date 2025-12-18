@@ -87,6 +87,12 @@ class ValueExtractor:
             if 1900 <= int(year) <= 2100 and year not in values["years"]:
                 values["years"].append(year)
 
+        for match in re.finditer(rf'(?:{str_time_prep_names}\s+)?(\d{{4}})\b', nl_query):
+            year = match.group(1)
+            if 1900 <= int(year) <= 2100 and year not in values["years"]:
+                values["years"].append(year)
+
+
         # Extract months
         values["months"] = []
         month_names = PatternRegistry.MONTH_NAMES + PatternRegistry.MONTH_ABBREV
@@ -280,6 +286,7 @@ class ValueExtractor:
             if (normalized_num not in values["limits"] and
                 normalized_num not in values["percentages"] and
                 normalized_num not in values["percentages_decimal"] and
+                normalized_num not in values["years"] and
                 normalized_num not in values["numbers"]):
 
                 context = nl_query[max(0, match.start()-20):min(len(nl_query), match.end()+10)]
@@ -298,5 +305,6 @@ class ValueExtractor:
             if (num not in values["limits"] and
                     num not in values["percentages"] and
                     num not in values["percentages_decimal"] and
+                    num not in values["years"] and
                     num not in values["numbers"]):
                 values["numbers"].append(num)

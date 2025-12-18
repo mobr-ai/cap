@@ -408,6 +408,9 @@ class OllamaClient:
             )
 
             logger.info(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
+            if (not sparql_results or len(sparql_results) == 0):
+                logger.info(f" Sparql query returned empty: \n{sparql_query}")
+
             async for chunk in self.generate_stream(
                 prompt=prompt,
                 model=self.llm_model,
