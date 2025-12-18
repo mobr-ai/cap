@@ -29,6 +29,7 @@ from cap.api.cache_admin import router as cache_router
 from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
 from cap.api.user_admin import router as user_admin_router
+from cap.api.conversation import router as conversation_router
 from cap.api.system_admin import router as system_router
 from cap.api.dashboard import router as dashboard_router
 from cap.api.demo_nl import router as demo_router
@@ -213,7 +214,7 @@ def create_application() -> FastAPI:
         allow_credentials=True,                   # you send Authorization / may send cookies
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
-        expose_headers=["Content-Disposition"],
+        expose_headers=["Content-Disposition", "X-Conversation-Id", "X-User-Message-Id"],
     )
 
     # Place all backend routes under /api
@@ -230,6 +231,7 @@ def create_application() -> FastAPI:
     app.include_router(metrics_router)
     app.include_router(demo_router)
     app.include_router(notif_admin_router)
+    app.include_router(conversation_router)
 
     return app
 
