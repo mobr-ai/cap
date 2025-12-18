@@ -134,7 +134,7 @@ class PatternRegistry:
     TRANSACTION_TERMS = ['transaction', 'tx']
     TRANSACTION_DETAIL_TERMS = ['script', 'json', 'datum', 'redeemer']
     METADATA_TERMS = ['metadata', 'meta', 'rationale', 'rational', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
-    POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data']
+    POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data', 'pool id', 'pool hash', 'spo operator', 'spo', 'stake pool operator', 'pool operator', 'operator']
     BLOCK_TERMS = ['block']
     EPOCH_TERMS = ['epoch']
     TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
@@ -156,7 +156,6 @@ class PatternRegistry:
     REWARD_TERMS = ['reward', 'withdrawal', 'reward withdrawal']
     INPUT_TERMS = ['input', 'utxo input']
     OUTPUT_TERMS = ['output', 'utxo output']
-    POOL_ID_TERMS = ['pool id', 'pool hash', 'spo operator', 'spo', 'stake pool operator', 'pool operator', 'operator']
     ACCOUNT_TERMS = ['account', 'stake account', 'wallet']
 
     # Chart types
