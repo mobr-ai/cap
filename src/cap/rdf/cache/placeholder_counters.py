@@ -42,6 +42,12 @@ class PlaceholderCounters:
             elif placeholder.startswith("<<NUM_"):
                 idx = int(placeholder.replace('<<NUM_', '').replace('>>', ''))
                 self.num = max(self.num, idx + 1)
+            elif placeholder.startswith("<<POOL_ID_"):
+                idx = int(placeholder.replace('<<POOL_ID_', '').replace('>>', ''))
+                self.pool_id = max(self.pool_id, idx + 1)
+            elif placeholder.startswith("<<CUR_"):
+                idx = int(placeholder.replace('<<CUR_', '').replace('>>', ''))
+                self.cur = max(self.cur, idx + 1)
             elif placeholder.startswith("<<STR_"):
                 idx = int(placeholder.replace('<<STR_', '').replace('>>', ''))
                 self.str = max(self.str, idx + 1)
@@ -51,12 +57,6 @@ class PlaceholderCounters:
             elif placeholder.startswith("<<URI_"):
                 idx = int(placeholder.replace('<<URI_', '').replace('>>', ''))
                 self.uri = max(self.uri, idx + 1)
-            elif placeholder.startswith("<<CUR_"):
-                idx = int(placeholder.replace('<<CUR_', '').replace('>>', ''))
-                self.cur = max(self.cur, idx + 1)
-            elif placeholder.startswith("<<POOL_ID_"):  # ADD THIS
-                idx = int(placeholder.replace('<<POOL_ID_', '').replace('>>', ''))
-                self.pool_id = max(self.pool_id, idx + 1)
             elif placeholder.startswith("<<DURATION_"):
                 idx = int(placeholder.replace('<<DURATION_', '').replace('>>', ''))
                 self.duration = max(self.duration, idx + 1)

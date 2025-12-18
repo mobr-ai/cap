@@ -15,6 +15,7 @@ class PlaceholderRestorer:
     @staticmethod
     def restore(sparql: str, placeholder_map: dict[str, str], current_values: dict[str, list[str]]) -> str:
         """Restore placeholders with current values."""
+
         prefixes, query_body = PlaceholderRestorer._extract_prefixes(sparql)
         restored = query_body
 
@@ -62,6 +63,7 @@ class PlaceholderRestorer:
         current_values: dict[str, list[str]]
     ) -> Optional[str]:
         """Get replacement value for a placeholder."""
+
         if placeholder.startswith("<<INJECT_"):
             return PlaceholderRestorer._restore_inject(placeholder, cached_value, placeholder_map, current_values)
         elif placeholder.startswith("<<PCT_DECIMAL_"):
@@ -70,14 +72,14 @@ class PlaceholderRestorer:
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("percentages"), cached_value, "1")
         elif placeholder.startswith("<<NUM_"):
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("numbers"), cached_value, "1")
+        elif placeholder.startswith("<<POOL_ID_"):
+            return PlaceholderRestorer._restore_pool_id(placeholder, cached_value, current_values)
+        elif placeholder.startswith("<<CUR_"):
+            return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<STR_"):
             return PlaceholderRestorer._restore_string(placeholder, current_values, cached_value)
         elif placeholder.startswith("<<LIM_"):
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("limits"), cached_value, "10")
-        elif placeholder.startswith("<<CUR_"):
-            return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
-        elif placeholder.startswith("<<POOL_ID_"):
-            return PlaceholderRestorer._restore_pool_id(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<URI_"):
             return cached_value
         elif placeholder.startswith("<<DEF_"):
