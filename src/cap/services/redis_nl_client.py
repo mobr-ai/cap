@@ -192,6 +192,15 @@ class RedisNLClient:
                     placeholder_map,
                     current_values
                 )
+
+                logger.debug ("RedisNLClient.get_cached_query_with_original:")
+                logger.debug (f"    normalized_query {normalized_query}")
+                logger.debug (f"    original_query {original_query}")
+                logger.debug (f"    data {data}")
+                logger.debug (f"    placeholder_map {current_values}")
+                logger.debug (f"    placeholder_map {placeholder_map}")
+                logger.debug (f"    restored_sparql {restored_sparql}")
+
                 # Check if restoration failed (placeholders still present)
                 remaining_placeholders = re.findall(r'<<[A-Z_]+_\d+>>', restored_sparql)
                 if remaining_placeholders:

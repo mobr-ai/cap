@@ -6,6 +6,8 @@ import re
 from typing import Optional, Tuple
 from opentelemetry import trace
 
+from cap.rdf.cache.pattern_registry import PatternRegistry
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -15,6 +17,11 @@ class PlaceholderRestorer:
     @staticmethod
     def restore(sparql: str, placeholder_map: dict[str, str], current_values: dict[str, list[str]]) -> str:
         """Restore placeholders with current values."""
+
+        logger.debug ("restore:")
+        logger.debug (f"    sparql {sparql}")
+        logger.debug (f"    placeholder_map {placeholder_map}")
+        logger.debug (f"    current_values {current_values}")
 
         prefixes, query_body = PlaceholderRestorer._extract_prefixes(sparql)
         restored = query_body
@@ -140,6 +147,11 @@ class PlaceholderRestorer:
         """Restore pool ID placeholder with cyclic fallback."""
         pool_ids = current_values.get("pool_ids", [])
 
+        logger.debug ("_restore_pool_id:")
+        logger.debug (f"    placeholder {placeholder}")
+        logger.debug (f"    cached_values {cached_value}")
+        logger.debug (f"    current_values {current_values}")
+
         if pool_ids:
             try:
                 idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
@@ -216,12 +228,25 @@ class PlaceholderRestorer:
     ) -> str:
         """Restore string literal preserving quote style from cache."""
         # Preserve the quote style from cached value
+
+        logger.debug ("_restore_string:")
+        logger.debug (f"    placeholder {placeholder}")
+        logger.debug (f"    cached_values {cached_value}")
+        logger.debug (f"    current_values {current_values}")
+
         quote_char = '"'
         if cached_value:
             if cached_value.startswith("'"):
                 quote_char = "'"
             elif cached_value.startswith('"'):
                 quote_char = '"'
+
+        # Check if cached value is actually a pool ID
+        if cached_value and PatternRegistry.is_pool_id(cached_value.strip('"').strip("'")):
+            pool_ids = current_values.get("pool_ids", [])
+            if pool_ids:
+                return f'"{pool_ids[0]}"'
+            return cached_value
 
         tokens = current_values.get("tokens")
         if tokens:
