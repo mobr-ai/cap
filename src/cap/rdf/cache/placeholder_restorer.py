@@ -26,7 +26,7 @@ class PlaceholderRestorer:
         # Sort placeholders by length (longest first) to avoid partial matches
         remaining_placeholders = [
             (ph, val) for ph, val in placeholder_map.items()
-            if ph in restored and not ph.startswith(("<<YEAR_", "<<MONTH_", "<<PERIOD_", "<<ORDER_"))
+            if ph in restored and not ph.startswith(("<<YEAR_", "<<MONTH_", "<<PERIOD_", "<<ORDER_", "<<STR_"))
         ]
         remaining_placeholders.sort(key=lambda x: len(x[0]), reverse=True)
 
@@ -38,6 +38,20 @@ class PlaceholderRestorer:
 
             if replacement is not None:
                 # Use word boundary to avoid partial matches
+                restored = restored.replace(placeholder, replacement)
+
+        # Now process STR placeholders after specific types of str is resolved
+        str_placeholders = [
+            (ph, val) for ph, val in placeholder_map.items()
+            if ph.startswith("<<STR_") and ph in restored
+        ]
+        str_placeholders.sort(key=lambda x: len(x[0]), reverse=True)
+
+        for placeholder, cached_value in str_placeholders:
+            replacement = PlaceholderRestorer._get_replacement(
+                placeholder, cached_value, placeholder_map, current_values
+            )
+            if replacement is not None:
                 restored = restored.replace(placeholder, replacement)
 
         if prefixes:
