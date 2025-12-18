@@ -172,7 +172,7 @@ class PatternRegistry:
     ]
     TABLE_TERMS = [
         'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
-        'dataset', 'row', 'column'
+        'dataset', 'row', 'column', 'which'
     ]
     CHART_SUFFIXES = [
         'chart', 'graph', 'plot', 'draw', 'display', 'paint', 'compose', 'trace'
@@ -184,7 +184,7 @@ class PatternRegistry:
 
     POSSESSION_TERMS = [
         'hold', 'holds', 'has', 'have', 'own', 'possess', 'possesses',
-        'contain', 'contains', 'include', 'includes', 'carrying', 'carry'
+        'contain', 'contains', 'include', 'includes', 'carrying', 'carry', 'carries'
     ]
 
     # Filler words (shared across normalizers)
