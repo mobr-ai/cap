@@ -205,9 +205,10 @@ class ValueExtractor:
     @staticmethod
     def _extract_pool_ids(nl_query: str, values: dict[str, list[str]]) -> None:
         """Extract Cardano pool IDs."""
-        pool_pattern = r'\b(pool1[a-z0-9]{50,})\b'
+        # Match pool IDs both bare and within quotes
+        pool_pattern = r'["\']?(pool1[a-z0-9]{50,})["\']?'
         for match in re.finditer(pool_pattern, nl_query, re.IGNORECASE):
-            pool_id = match.group(1).lower()
+            pool_id = match.group(1).lower()  # group(1) gets just the pool ID without quotes
             if pool_id not in values["pool_ids"]:
                 values["pool_ids"].append(pool_id)
 

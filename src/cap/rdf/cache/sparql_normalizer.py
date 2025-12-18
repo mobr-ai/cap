@@ -158,17 +158,25 @@ class SPARQLNormalizer:
 
     def _extract_pool_ids(self, text: str) -> str:
         """Extract Cardano pool IDs."""
-        pattern = r'\b(pool1[a-z0-9]{50,})\b'
+        # Match pool IDs both bare and within quotes
+        pattern = r'["\']?(pool1[a-z0-9]{50,})["\']?'
         matches = list(re.finditer(pattern, text, re.IGNORECASE))
 
         for match in reversed(matches):
             if self._is_inside_placeholder(text, match):
                 continue
 
-            original = match.group(1)
+            original = match.group(0)  # Get the full match including quotes
+            pool_id = match.group(1)   # Get just the pool ID
             placeholder = f"<<POOL_ID_{self.counters.pool_id}>>"
             self.counters.pool_id += 1
-            self.placeholder_map[placeholder] = f'"{original}"'
+
+            # Store with quotes if original had them
+            if original.startswith('"') or original.startswith("'"):
+                self.placeholder_map[placeholder] = f'"{pool_id}"'
+            else:
+                self.placeholder_map[placeholder] = f'"{pool_id}"'
+
             text = text[:match.start()] + placeholder + text[match.end():]
 
         return text

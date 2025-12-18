@@ -161,7 +161,7 @@ class QueryNormalizer:
         normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
 
         # Normalize pool IDs to indexed placeholder
-        pool_id_pattern = r'\b(pool1[a-z0-9]{50,})\b'
+        pool_id_pattern = r'["\']?(pool1[a-z0-9]{50,})["\']?'
         pool_id_counter = 0
         for match in re.finditer(pool_id_pattern, normalized, re.IGNORECASE):
             placeholder = f'<<POOL_ID_{pool_id_counter}>>'
