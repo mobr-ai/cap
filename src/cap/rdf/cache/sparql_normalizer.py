@@ -158,7 +158,7 @@ class SPARQLNormalizer:
 
     def _extract_pool_ids(self, text: str) -> str:
         """Extract Cardano pool IDs."""
-        pattern = r'\b(pool1[a-z0-9]{53})\b'
+        pattern = r'\b(pool1[a-z0-9]{50,})\b'
         matches = list(re.finditer(pattern, text, re.IGNORECASE))
 
         for match in reversed(matches):

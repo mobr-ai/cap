@@ -243,4 +243,4 @@ class PatternRegistry:
     @staticmethod
     def is_pool_id(text: str) -> bool:
         """Check if text matches pool ID pattern."""
-        return bool(re.match(r'^pool1[a-z0-9]{53}$', text))
+        return bool(re.match(r'\b(pool1[a-z0-9]{50,})\b', text))
