@@ -348,19 +348,34 @@ def _add_group_by_clause(
 
     group_by_clause = 'GROUP BY ' + ' '.join(group_by_parts)
 
-    # Find insertion point (before ORDER BY, LIMIT, OFFSET, or final brace)
-    # Search from the end backwards to avoid matching keywords in subqueries
+    # Find the last closing brace of any subquery to determine outer query scope
+    # We need to search only in the outer query, not in subqueries
+    brace_depth = 0
+    last_subquery_close = -1
+
+    for i, char in enumerate(query):
+        if char == '{':
+            brace_depth += 1
+        elif char == '}':
+            brace_depth -= 1
+            if brace_depth == 1:  # Just closed a subquery, still in outer WHERE block
+                last_subquery_close = i
+
+    # Search for insertion point only after the last subquery
+    search_start = last_subquery_close + 1 if last_subquery_close > 0 else 0
+    outer_query = query[search_start:]
+    query_upper = outer_query.upper()
+
     insert_pos = None
-    query_upper = query.upper()
 
     for keyword in ['ORDER BY', 'LIMIT', 'OFFSET']:
-        pos = query_upper.rfind(keyword)
-        if pos > 0:
+        pos = query_upper.find(keyword)  # Use find (not rfind) since we're in outer query only
+        if pos >= 0:
             # Find whitespace before this keyword
             ws_start = pos
-            while ws_start > 0 and query[ws_start-1].isspace():
+            while ws_start > 0 and outer_query[ws_start-1].isspace():
                 ws_start -= 1
-            insert_pos = ws_start
+            insert_pos = search_start + ws_start
             break
 
     if insert_pos is not None:
