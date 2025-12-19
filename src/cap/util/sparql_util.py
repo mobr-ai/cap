@@ -348,24 +348,23 @@ def _add_group_by_clause(
 
     group_by_clause = 'GROUP BY ' + ' '.join(group_by_parts)
 
-    # Find insertion point by searching from the end for outer-level keywords
-    # This avoids matching ORDER BY inside subqueries
-    insertion_match = None
+    # Find insertion point (before ORDER BY, LIMIT, OFFSET, or final brace)
+    # Search from the end backwards to avoid matching keywords in subqueries
+    insert_pos = None
+    query_upper = query.upper()
+
     for keyword in ['ORDER BY', 'LIMIT', 'OFFSET']:
-        # Search from the end backwards
-        pos = query.upper().rfind(keyword)
+        pos = query_upper.rfind(keyword)
         if pos > 0:
             # Find whitespace before this keyword
             ws_start = pos
             while ws_start > 0 and query[ws_start-1].isspace():
                 ws_start -= 1
-            insertion_match = type('obj', (object,), {
-                'start': lambda self=ws_start: self
-            })()
+            insert_pos = ws_start
             break
 
-    if insertion_match:
-        insert_pos = insertion_match.start()
+    if insert_pos is not None:
+        # Insert before the matched keyword
         fixed_query = (
             query[:insert_pos] +
             '\n' + group_by_clause +

@@ -176,6 +176,8 @@ class RedisNLClient:
 
                 if not cached:
                     span.set_attribute("cache_hit", False)
+                    logger.debug ("RedisNLClient.get_cached_query_with_original cache MISS")
+                    logger.debug (f" query normalized to {normalized_query}")
                     return None
 
                 data = json.loads(cached)
@@ -184,6 +186,7 @@ class RedisNLClient:
 
                 if not placeholder_map:
                     span.set_attribute("cache_hit", True)
+                    logger.debug ("RedisNLClient.get_cached_query_with_original cache HIT without placeholders")
                     return data
 
                 # Restore placeholders
