@@ -52,7 +52,7 @@ class PatternRegistry:
 
     DEFAULT_PRESERVED_EXPRESSIONS = [
         'asset policy', 'proof of work', 'proof of stake', 'stake pool',
-        'native token', 'smart contract', 'ada pots', 'pot transfer',
+        'native token', 'smart contract', 'ada pot', 'pot transfer',
         'collateral input', 'collateral output', 'reference input', 'fungible token'
         'chain selection rule'
     ]
@@ -131,7 +131,8 @@ class PatternRegistry:
 
     # Entities
     # Entity terms (words only, singular. Patterns generated dynamically)
-    TRANSACTION_TERMS = ['transaction per second', 'tps', 'tx per second', 'txps', 'transaction', 'tx']
+    TPS_TERMS = ['transaction per second', 'tps', 'tx per second', 'txps']
+    TRANSACTION_TERMS = ['transaction', 'tx']
     TRANSACTION_DETAIL_TERMS = ['script', 'json', 'datum', 'redeemer']
     METADATA_TERMS = ['metadata', 'meta', 'rationale', 'rational', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
     POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data', 'pool id', 'pool hash', 'spo operator', 'spo', 'stake pool operator', 'pool operator', 'operator']

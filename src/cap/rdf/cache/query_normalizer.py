@@ -51,6 +51,7 @@ class QueryNormalizer:
         """Generate entity patterns from registry."""
         return {
             # Transaction-related (more specific patterns first)
+            PatternRegistry.build_entity_pattern(PatternRegistry.TPS_TERMS): 'ENTITY_TPS',
             PatternRegistry.build_entity_pattern(PatternRegistry.TRANSACTION_TERMS) +
                 r'\s+' + PatternRegistry.build_pattern(PatternRegistry.TRANSACTION_DETAIL_TERMS): 'ENTITY_TX_DETAIL',
             r'\b(with|having)\s+' + PatternRegistry.build_pattern(PatternRegistry.TRANSACTION_DETAIL_TERMS): 'ENTITY_DETAIL',
@@ -139,6 +140,7 @@ class QueryNormalizer:
 
         # Remove possessive 's
         normalized = re.sub(r"'s\b", '', normalized)
+        normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
 
         # Replace multi-word expressions with single tokens temporarily
         expression_map = {}
@@ -147,8 +149,6 @@ class QueryNormalizer:
                 placeholder = f'__EXPR{i}__'
                 expression_map[placeholder] = expr.replace(' ', '_')
                 normalized = normalized.replace(expr, placeholder)
-
-        normalized = lemmatize_text(text=normalized, filler_words=PatternRegistry.FILLER_WORDS)
 
         # Normalize pool IDs to indexed placeholder
         pool_id_pattern = r'["\']?(pool1[a-z0-9]{50,})["\']?'
