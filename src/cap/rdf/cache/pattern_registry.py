@@ -197,6 +197,8 @@ class PatternRegistry:
 
     QUESTION_WORDS = ['who', 'what', 'when', 'where', 'why', 'which', 'how many', 'how much', 'how long']
 
+    RESERVED_WORDS = ['trend']
+
     @staticmethod
     def ensure_expressions() -> None:
         global _PRESERVED_EXPRESSIONS
@@ -212,7 +214,7 @@ class PatternRegistry:
                 complex_labels = PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS
 
             _PRESERVED_EXPRESSIONS = complex_labels
-            _ENTITIES = entity_labels
+            _ENTITIES = entity_labels + PatternRegistry.RESERVED_WORDS
 
     @staticmethod
     def get_preserved_expressions() -> list:
