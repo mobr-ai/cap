@@ -130,8 +130,8 @@ class PatternRegistry:
     ]
 
     # Entities
-    # Entity terms (words only, patterns generated dynamically)
-    TRANSACTION_TERMS = ['transaction', 'tx']
+    # Entity terms (words only, singular. Patterns generated dynamically)
+    TRANSACTION_TERMS = ['transaction per second', 'tps', 'tx per second', 'txps', 'transaction', 'tx']
     TRANSACTION_DETAIL_TERMS = ['script', 'json', 'datum', 'redeemer']
     METADATA_TERMS = ['metadata', 'meta', 'rationale', 'rational', 'ground', 'argument', 'justification', 'information', 'meta-data', 'meta-information', 'metainformation']
     POOL_TERMS = ['stake pool', 'pool', 'off chain stake pool data', 'pool id', 'pool hash', 'spo operator', 'spo', 'stake pool operator', 'pool operator', 'operator']
@@ -172,7 +172,7 @@ class PatternRegistry:
     ]
     TABLE_TERMS = [
         'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
-        'dataset', 'row', 'column', 'which'
+        'dataset', 'row', 'column', 'which', 'report', 'trend' # showing trend as a table when asked for a line chart, but it has only one row
     ]
     CHART_SUFFIXES = [
         'chart', 'graph', 'plot', 'draw', 'display', 'paint', 'compose', 'trace'
@@ -189,7 +189,7 @@ class PatternRegistry:
 
     # Filler words (shared across normalizers)
     FILLER_WORDS = [
-        'please', 'can', 'the', 'i', 'be',
+        'please', 'can', 'the', 'i', 'be', 'you', 'my',
         'exist', 'at', 'a', 'an', 'of', 'in', 'on', 'yours', 'to', 'cardano',
         'do', 'ever', 'from', 'there'
     ]
