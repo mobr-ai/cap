@@ -9,7 +9,6 @@ import httpx
 from pathlib import Path
 from pprint import pprint
 
-from cap.util.sparql_util import _validate_and_fix_sparql
 from cap.rdf.cache.sparql_normalizer import SPARQLNormalizer
 
 def _read_content_sparql_file(path: str | Path) -> str:
@@ -41,8 +40,7 @@ class SPARQLFixTester:
             query = _read_content_sparql_file(sparql_file)
 
             try:
-                validate, new_query, fixes = _validate_and_fix_sparql(query, "")
-                normalized = self.sn.normalize(new_query)
+                normalized = self.sn.normalize(query)
 
             except Exception as e:
                 print(f"Test: {sparql_file} failed!")
@@ -53,8 +51,7 @@ class SPARQLFixTester:
 
             print(f"✓ Test passed for {sparql_file})")
             pprint(f"   SPARQL: {query}")
-            pprint(f"   Validated to: {new_query}")
-            pprint(f"   Normalized to: {new_query}")
+            pprint(f"   Normalized to: {normalized}")
 
 
 async def main():
