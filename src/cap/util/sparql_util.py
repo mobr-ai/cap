@@ -159,34 +159,88 @@ def _validate_and_fix_sparql(query: str, nl_query: str) -> tuple[bool, str, list
         logger.error(error_msg)
         return False, fixed_query, issues
 
-
 def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
     """
     Fix or add GROUP BY clause for SPARQL queries with aggregations.
-
-    This function ensures SPARQL queries with aggregate functions have correct GROUP BY:
-    1. Adds GROUP BY if missing but needed (query has aggregates)
-    2. Fixes GROUP BY that uses expression variables instead of base variables
-    3. Adds missing non-aggregated variables to existing GROUP BY
-
-    Args:
-        query: SPARQL query string to fix
-        issues: List to append fix descriptions to
-
-    Returns:
-        Fixed SPARQL query string with proper GROUP BY clause
-
-    Examples:
-        Missing GROUP BY:
-            SELECT ?addr (COUNT(?tx) AS ?count) WHERE {...}
-            -> SELECT ?addr (COUNT(?tx) AS ?count) WHERE {...} GROUP BY ?addr
-
-        Wrong expression in GROUP BY:
-            SELECT (SUBSTR(?date, 1, 7) AS ?month) (COUNT(?tx) AS ?count)
-            WHERE {...} GROUP BY ?month
-            -> ... GROUP BY (SUBSTR(?date, 1, 7))
+    Only processes the outer query, ignoring subqueries.
     """
-    # Parse query structure
+    # Check if query has subqueries
+    has_subquery = bool(re.search(r'\{\s*SELECT', query, re.IGNORECASE))
+
+    if has_subquery:
+        # Extract the outer query structure by finding the main WHERE clause
+        # Find the position after all subqueries close
+        brace_depth = 0
+        in_where = False
+        outer_start = 0
+
+        for i, char in enumerate(query):
+            if not in_where:
+                if query[i:i+5].upper() == 'WHERE':
+                    in_where = True
+                    outer_start = i
+            else:
+                if char == '{':
+                    brace_depth += 1
+                elif char == '}':
+                    brace_depth -= 1
+
+        # Only process outer query - extract SELECT and outer WHERE portions
+        select_match = re.search(r'SELECT\s+(.*?)\s+WHERE', query, re.IGNORECASE | re.DOTALL)
+        if not select_match:
+            return query
+
+        select_clause = select_match.group(1).strip()
+
+        # Check if outer query needs GROUP BY
+        var_definitions = _extract_variable_definitions(select_clause)
+        aggregate_result_vars = _extract_aggregate_result_variables(select_clause)
+        aggregated_vars = _extract_aggregated_variables(select_clause)
+        all_select_vars = set(re.findall(r'\?(\w+)', select_clause))
+
+        has_aggregates = bool(aggregate_result_vars)
+
+        if not has_aggregates:
+            return query
+
+        non_aggregated_vars = (
+            all_select_vars
+            - aggregate_result_vars
+            - aggregated_vars
+            - set(var_definitions.keys())
+        )
+
+        # Check for GROUP BY in outer query only (after last subquery closes)
+        outer_portion = query[outer_start:]
+        group_by_match = re.search(
+            r'GROUP\s+BY\s+(.*?)(?:\s+ORDER|\s+HAVING|\s+LIMIT|\s+OFFSET|\s*\}|\s*$)',
+            outer_portion,
+            re.IGNORECASE | re.DOTALL
+        )
+
+        if not group_by_match and non_aggregated_vars:
+            # Add GROUP BY to outer query only
+            fixed_query = _add_group_by_clause(
+                query,
+                non_aggregated_vars,
+                var_definitions,
+                issues
+            )
+            return fixed_query
+        elif group_by_match:
+            # Fix existing GROUP BY in outer query
+            return _fix_existing_group_by(query, group_by_match, outer_start, select_clause,
+                                         var_definitions, aggregate_result_vars,
+                                         aggregated_vars, all_select_vars, non_aggregated_vars, issues)
+        else:
+            return query
+    else:
+        # No subquery, process normally
+        return _fix_group_by_no_subquery(query, issues)
+
+
+def _fix_group_by_no_subquery(query: str, issues: list[str]) -> str:
+    """Handle GROUP BY fixes for queries without subqueries."""
     select_match = re.search(
         r'SELECT\s+(.*?)\s+WHERE',
         query,
@@ -197,28 +251,23 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
 
     select_clause = select_match.group(1).strip()
 
-    # Extract query components
     var_definitions = _extract_variable_definitions(select_clause)
     aggregate_result_vars = _extract_aggregate_result_variables(select_clause)
     aggregated_vars = _extract_aggregated_variables(select_clause)
     all_select_vars = set(re.findall(r'\?(\w+)', select_clause))
 
-    # Determine if query has aggregations
     has_aggregates = bool(aggregate_result_vars)
 
     if not has_aggregates:
-        # No aggregates, no GROUP BY needed
         return query
 
-    # Calculate non-aggregated variables that need to be in GROUP BY
     non_aggregated_vars = (
         all_select_vars
-        - aggregate_result_vars      # Exclude COUNT(...) AS ?var results
-        - aggregated_vars            # Exclude ?var inside COUNT(?var)
-        - set(var_definitions.keys())  # Exclude (expr AS ?var) results
+        - aggregate_result_vars
+        - aggregated_vars
+        - set(var_definitions.keys())
     )
 
-    # Check if GROUP BY exists
     group_by_match = re.search(
         r'GROUP\s+BY\s+(.*?)(?:\s+ORDER|\s+HAVING|\s+LIMIT|\s+OFFSET|\s*\}|\s*$)',
         query,
@@ -226,20 +275,22 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
     )
 
     if not group_by_match:
-        # No GROUP BY clause exists, add it if needed
         if non_aggregated_vars:
-            fixed_query = _add_group_by_clause(
-                query,
-                non_aggregated_vars,
-                var_definitions,
-                issues
-            )
-            return fixed_query
+            return _add_group_by_clause(query, non_aggregated_vars, var_definitions, issues)
         else:
-            # Aggregates only, no GROUP BY needed
             return query
 
-    # GROUP BY exists, fix it
+    # Fix existing GROUP BY
+    return _fix_existing_group_by(query, group_by_match, 0, select_clause,
+                                  var_definitions, aggregate_result_vars,
+                                  aggregated_vars, all_select_vars, non_aggregated_vars, issues)
+
+
+def _fix_existing_group_by(query: str, group_by_match, offset: int, select_clause: str,
+                           var_definitions: dict, aggregate_result_vars: set,
+                           aggregated_vars: set, all_select_vars: set,
+                           non_aggregated_vars: set, issues: list[str]) -> str:
+    """Fix an existing GROUP BY clause."""
     group_by_clause = group_by_match.group(1).strip()
     group_by_full_match = group_by_match.group(0)
     group_by_vars = _extract_grouping_variables(group_by_clause)
@@ -252,7 +303,6 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
             expression = var_definitions[group_var]
             expr_vars = set(re.findall(r'\?(\w+)', expression))
 
-            # Check if expression uses variables not in GROUP BY
             if expr_vars - group_by_vars:
                 pattern = rf'\b\?{group_var}\b'
                 replacement = f'({expression})'
@@ -292,7 +342,7 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
         issues.append(fix_msg)
         logger.info(fix_msg)
 
-    # Fix 3: Remove invalid variables from GROUP BY (aggregated results)
+    # Fix 3: Remove invalid variables from GROUP BY
     invalid_vars = group_by_vars & aggregate_result_vars
 
     if invalid_vars:
@@ -301,7 +351,7 @@ def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
             pattern = rf'\s*\?{invalid_var}\b'
             new_group_by_clause = re.sub(pattern, '', new_group_by_clause)
 
-        new_group_by_clause = ' '.join(new_group_by_clause.split())  # Clean whitespace
+        new_group_by_clause = ' '.join(new_group_by_clause.split())
 
         if new_group_by_clause != group_by_clause:
             new_group_by_full = group_by_full_match.replace(
