@@ -172,7 +172,7 @@ class PatternRegistry:
         'pie', 'pie chart', 'pizza', 'donut', 'doughnut', 'circle chart'
     ]
     TABLE_TERMS = [
-        'list', 'table', 'tabular', 'display', 'show', 'get', 'grid',
+        'list', 'table', 'tabular', 'display', 'show', 'get', 'grid', 'count',
         'dataset', 'row', 'column', 'which', 'report', 'trend' # showing trend as a table when asked for a line chart, but it has only one row
     ]
     CHART_SUFFIXES = [
