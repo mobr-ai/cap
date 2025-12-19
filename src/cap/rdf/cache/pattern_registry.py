@@ -14,12 +14,12 @@ _ENTITIES = []
 def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tuple[list, list]:
     """Load rdfs:label values from the Turtle ontology file."""
     entity_labels = []
-    complex_labels = []
+    reserved_labels = []
     try:
         path = Path(onto_path)
         if not path.exists():
             logger.warning(f"Ontology file not found at {onto_path}")
-            return complex_labels, entity_labels
+            return reserved_labels, entity_labels
 
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -33,16 +33,16 @@ def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tupl
             label_lower = match.lower().strip()
             if label_lower:
                 if len(label_lower.split()) > 1:
-                    complex_labels.append(label_lower)
+                    reserved_labels.append(label_lower)
 
                 entity_labels.append(label_lower)
 
-        logger.info(f"    Loaded complex labels: \n {complex_labels}\n    Loaded entity labels:\n{entity_labels}\n    From ontology: {onto_path}")
+        logger.info(f"    Loaded complex labels: \n {reserved_labels}\n    Loaded entity labels:\n{entity_labels}\n    From ontology: {onto_path}")
 
     except Exception as e:
         logger.error(f"Error loading ontology labels from {onto_path}: {e}")
 
-    return complex_labels, entity_labels
+    return reserved_labels, entity_labels
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -206,15 +206,15 @@ class PatternRegistry:
 
         if not _PRESERVED_EXPRESSIONS:
             # Load labels from ontology
-            complex_labels, entity_labels = _load_ontology_labels(ontology_path)
+            reserved_labels, entity_labels = _load_ontology_labels(ontology_path)
 
             # Add default expressions if ontology loading failed or returned nothing
-            if not complex_labels:
+            if not reserved_labels:
                 logger.warning("No ontology labels loaded, using default preserved expressions")
-                complex_labels = PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS
+                reserved_labels = PatternRegistry.DEFAULT_PRESERVED_EXPRESSIONS
 
-            _PRESERVED_EXPRESSIONS = complex_labels
-            _ENTITIES = entity_labels + PatternRegistry.RESERVED_WORDS
+            _PRESERVED_EXPRESSIONS = reserved_labels + PatternRegistry.RESERVED_WORDS
+            _ENTITIES = entity_labels
 
     @staticmethod
     def get_preserved_expressions() -> list:
