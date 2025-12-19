@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from cap.database.session import get_db
-from cap.database.model import QueryMetrics, KGMetrics, DashboardMetrics, User
+from cap.database.model import Dashboard, DashboardItem, QueryMetrics, KGMetrics, DashboardMetrics, User
 from cap.services.lang_detect_client import LanguageDetector
 from cap.core.auth_dependencies import get_current_admin_user
 
@@ -87,23 +87,29 @@ def get_aggregated_metrics(
         "target_metadata_resolution": 95.0
     }
 
-    # Dimension 3: Dashboard Adoption
-    dashboard_stats = db.query(
-        func.count(func.distinct(DashboardMetrics.dashboard_id)).label('unique_dashboards'),
-        func.count(func.distinct(DashboardMetrics.user_id)).label('unique_users')
+    # Dimension 3: Dashboard Adoption (authoritative counts)
+    dash_counts = db.query(
+        func.count(Dashboard.id).label("total_dashboards"),
+        func.count(func.distinct(Dashboard.user_id)).label("unique_users"),
     ).first()
 
-    avg_widgets = db.query(
-        func.avg(DashboardMetrics.unique_artifact_types).label('avg_types')
-    ).filter(DashboardMetrics.action_type == 'item_added').first()
+    avg_items = db.query(
+        func.avg(
+            db.query(func.count(DashboardItem.id))
+            .filter(DashboardItem.dashboard_id == Dashboard.id)
+            .correlate(Dashboard)
+            .scalar_subquery()
+        )
+    ).scalar()
 
     dashboard_adoption = {
-        "unique_dashboards": dashboard_stats.unique_dashboards or 0,
-        "unique_users": dashboard_stats.unique_users or 0,
-        "avg_widget_types_per_dashboard": float(avg_widgets.avg_types or 0),
+        "unique_dashboards": int(dash_counts.total_dashboards or 0),
+        "unique_users": int(dash_counts.unique_users or 0),
+        "avg_items_per_dashboard": float(avg_items or 0),
         "target_dashboards": 200,
-        "target_avg_widgets": 4
+        "target_avg_widgets": 4,
     }
+
 
     # Dimension 4: Performance
     perf_stats = db.query(
