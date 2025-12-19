@@ -108,6 +108,410 @@ def _ensure_prefixes(query: str) -> str:
 
     return query
 
+def _validate_and_fix_sparql(query: str, nl_query: str) -> tuple[bool, str, list[str]]:
+    """
+    Validate and attempt to fix SPARQL query issues.
+
+    Process:
+    1. Try to detect and fix common semantic issues FIRST
+    2. Then validate syntax with RDFLib parser
+    3. If validation fails, try additional fixes and re-validate
+
+    Args:
+        query: SPARQL query string to validate and fix
+
+    Returns:
+        Tuple of (is_valid: bool, fixed_query: str, issues: list[str])
+    """
+    issues = []
+    fixed_query = query
+
+    # Step 1: Pre-validation fixes for common GROUP BY issues
+    fixed_query = _fix_group_by_aggregation(fixed_query, issues)
+
+    # Step 2: Try syntax validation
+    try:
+        parseQuery(fixed_query)
+        return True, fixed_query, issues
+    except ParseException as e:
+        error_msg = f"Syntax error: {str(e)}"
+        issues.append(error_msg)
+        logger.warning(f"Error for query {nl_query}: {error_msg}")
+
+        # Step 3: Try additional fixes based on the error
+        if "expected" in str(e).lower():
+            # Try to fix missing dots, braces, etc.
+            fixed_query = _fix_structural_issues(fixed_query, issues)
+
+            # Re-validate after structural fixes
+            try:
+                parseQuery(fixed_query)
+                logger.info("Query validated after structural fixes")
+                return True, fixed_query, issues
+            except Exception:
+                pass
+
+        return False, fixed_query, issues
+
+    except Exception as e:
+        error_msg = f"Validation error: {str(e)}"
+        issues.append(error_msg)
+        logger.error(error_msg)
+        return False, fixed_query, issues
+
+
+def _fix_group_by_aggregation(query: str, issues: list[str]) -> str:
+    """
+    Fix or add GROUP BY clause for SPARQL queries with aggregations.
+
+    This function ensures SPARQL queries with aggregate functions have correct GROUP BY:
+    1. Adds GROUP BY if missing but needed (query has aggregates)
+    2. Fixes GROUP BY that uses expression variables instead of base variables
+    3. Adds missing non-aggregated variables to existing GROUP BY
+
+    Args:
+        query: SPARQL query string to fix
+        issues: List to append fix descriptions to
+
+    Returns:
+        Fixed SPARQL query string with proper GROUP BY clause
+
+    Examples:
+        Missing GROUP BY:
+            SELECT ?addr (COUNT(?tx) AS ?count) WHERE {...}
+            -> SELECT ?addr (COUNT(?tx) AS ?count) WHERE {...} GROUP BY ?addr
+
+        Wrong expression in GROUP BY:
+            SELECT (SUBSTR(?date, 1, 7) AS ?month) (COUNT(?tx) AS ?count)
+            WHERE {...} GROUP BY ?month
+            -> ... GROUP BY (SUBSTR(?date, 1, 7))
+    """
+    # Parse query structure
+    select_match = re.search(
+        r'SELECT\s+(.*?)\s+WHERE',
+        query,
+        re.IGNORECASE | re.DOTALL
+    )
+    if not select_match:
+        return query
+
+    select_clause = select_match.group(1).strip()
+
+    # Extract query components
+    var_definitions = _extract_variable_definitions(select_clause)
+    aggregate_result_vars = _extract_aggregate_result_variables(select_clause)
+    aggregated_vars = _extract_aggregated_variables(select_clause)
+    all_select_vars = set(re.findall(r'\?(\w+)', select_clause))
+
+    # Determine if query has aggregations
+    has_aggregates = bool(aggregate_result_vars)
+
+    if not has_aggregates:
+        # No aggregates, no GROUP BY needed
+        return query
+
+    # Calculate non-aggregated variables that need to be in GROUP BY
+    non_aggregated_vars = (
+        all_select_vars
+        - aggregate_result_vars      # Exclude COUNT(...) AS ?var results
+        - aggregated_vars            # Exclude ?var inside COUNT(?var)
+        - set(var_definitions.keys())  # Exclude (expr AS ?var) results
+    )
+
+    # Check if GROUP BY exists
+    group_by_match = re.search(
+        r'GROUP\s+BY\s+(.*?)(?:\s+ORDER|\s+HAVING|\s+LIMIT|\s+OFFSET|\s*\}|\s*$)',
+        query,
+        re.IGNORECASE | re.DOTALL
+    )
+
+    if not group_by_match:
+        # No GROUP BY clause exists, add it if needed
+        if non_aggregated_vars:
+            fixed_query = _add_group_by_clause(
+                query,
+                non_aggregated_vars,
+                var_definitions,
+                issues
+            )
+            return fixed_query
+        else:
+            # Aggregates only, no GROUP BY needed
+            return query
+
+    # GROUP BY exists, fix it
+    group_by_clause = group_by_match.group(1).strip()
+    group_by_full_match = group_by_match.group(0)
+    group_by_vars = _extract_grouping_variables(group_by_clause)
+
+    fixed_query = query
+
+    # Fix 1: Replace expression variables with actual expressions
+    for group_var in list(group_by_vars):
+        if group_var in var_definitions:
+            expression = var_definitions[group_var]
+            expr_vars = set(re.findall(r'\?(\w+)', expression))
+
+            # Check if expression uses variables not in GROUP BY
+            if expr_vars - group_by_vars:
+                pattern = rf'\b\?{group_var}\b'
+                replacement = f'({expression})'
+
+                new_group_by_clause = re.sub(pattern, replacement, group_by_clause)
+
+                if new_group_by_clause != group_by_clause:
+                    new_group_by_full = group_by_full_match.replace(
+                        group_by_clause,
+                        new_group_by_clause
+                    )
+                    fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
+
+                    group_by_clause = new_group_by_clause
+                    group_by_full_match = new_group_by_full
+                    group_by_vars.remove(group_var)
+                    group_by_vars.update(expr_vars)
+
+                    fix_msg = f"Replaced GROUP BY '?{group_var}' with expression '({expression})'"
+                    issues.append(fix_msg)
+                    logger.info(fix_msg)
+
+    # Fix 2: Add missing non-aggregated variables
+    missing_vars = non_aggregated_vars - group_by_vars
+
+    if missing_vars:
+        additional_vars = ' '.join(f'?{var}' for var in sorted(missing_vars))
+        new_group_by_clause = f'{group_by_clause} {additional_vars}'.strip()
+
+        new_group_by_full = group_by_full_match.replace(
+            group_by_clause,
+            new_group_by_clause
+        )
+        fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
+
+        fix_msg = f"Added missing variables to GROUP BY: {missing_vars}"
+        issues.append(fix_msg)
+        logger.info(fix_msg)
+
+    # Fix 3: Remove invalid variables from GROUP BY (aggregated results)
+    invalid_vars = group_by_vars & aggregate_result_vars
+
+    if invalid_vars:
+        new_group_by_clause = group_by_clause
+        for invalid_var in invalid_vars:
+            pattern = rf'\s*\?{invalid_var}\b'
+            new_group_by_clause = re.sub(pattern, '', new_group_by_clause)
+
+        new_group_by_clause = ' '.join(new_group_by_clause.split())  # Clean whitespace
+
+        if new_group_by_clause != group_by_clause:
+            new_group_by_full = group_by_full_match.replace(
+                group_by_clause,
+                new_group_by_clause
+            )
+            fixed_query = fixed_query.replace(group_by_full_match, new_group_by_full)
+
+            fix_msg = f"Removed invalid aggregate result variables from GROUP BY: {invalid_vars}"
+            issues.append(fix_msg)
+            logger.info(fix_msg)
+
+    return fixed_query
+
+
+def _add_group_by_clause(
+    query: str,
+    group_vars: set[str],
+    var_definitions: dict[str, str],
+    issues: list[str]
+) -> str:
+    """
+    Add GROUP BY clause to a query that needs it but doesn't have one.
+
+    Args:
+        query: Original SPARQL query
+        group_vars: Variables that should be in GROUP BY
+        var_definitions: Mapping of variables to their expressions
+        issues: List to append fix messages to
+
+    Returns:
+        Query with GROUP BY clause added
+    """
+    # Build GROUP BY clause
+    group_by_parts = []
+
+    for var in sorted(group_vars):
+        if var in var_definitions:
+            # Use the expression, not the variable
+            expression = var_definitions[var]
+            group_by_parts.append(f'({expression})')
+        else:
+            group_by_parts.append(f'?{var}')
+
+    group_by_clause = 'GROUP BY ' + ' '.join(group_by_parts)
+
+    # Find insertion point (before ORDER BY, LIMIT, OFFSET, or final brace)
+    insertion_match = re.search(
+        r'(\s+)(ORDER\s+BY|LIMIT|OFFSET|\})',
+        query,
+        re.IGNORECASE
+    )
+
+    if insertion_match:
+        # Insert before the matched keyword
+        insert_pos = insertion_match.start(1)
+        fixed_query = (
+            query[:insert_pos] +
+            '\n' + group_by_clause +
+            query[insert_pos:]
+        )
+    else:
+        # Add at end before final brace or end of query
+        if query.rstrip().endswith('}'):
+            insert_pos = query.rstrip().rfind('}')
+            fixed_query = (
+                query[:insert_pos] +
+                group_by_clause + '\n' +
+                query[insert_pos:]
+            )
+        else:
+            fixed_query = query.rstrip() + '\n' + group_by_clause
+
+    fix_msg = f"Added GROUP BY clause with variables: {group_vars}"
+    issues.append(fix_msg)
+    logger.info(fix_msg)
+
+    return fixed_query
+
+
+def _extract_variable_definitions(select_clause: str) -> dict[str, str]:
+    """
+    Extract variable definitions from SELECT clause.
+
+    Finds patterns like: (EXPRESSION AS ?variable)
+
+    Args:
+        select_clause: SELECT clause content
+
+    Returns:
+        Dictionary mapping variable names to their expressions
+
+    Example:
+        "(SUBSTR(STR(?timestamp), 1, 7) AS ?month)" -> {"month": "SUBSTR(STR(?timestamp), 1, 7)"}
+    """
+    definitions = {}
+
+    # Pattern for nested expressions: (expr AS ?var)
+    # Handle balanced parentheses
+    pattern = r'\(([^()]+(?:\([^()]*\)[^()]*)*)\s+AS\s+\?(\w+)\)'
+    matches = re.findall(pattern, select_clause, re.IGNORECASE)
+
+    for expr, var_name in matches:
+        definitions[var_name] = expr.strip()
+
+    return definitions
+
+
+def _extract_grouping_variables(group_by_clause: str) -> set[str]:
+    """
+    Extract actual grouping variables from GROUP BY clause.
+
+    Excludes variables inside function calls or expressions.
+    Only returns simple variable references like ?var.
+
+    Args:
+        group_by_clause: GROUP BY clause content (without "GROUP BY" prefix)
+
+    Returns:
+        Set of variable names used for grouping
+
+    Example:
+        "?epochNumber (SUBSTR(?date, 1, 7))" -> {"epochNumber"}
+    """
+    # Remove all expressions in parentheses (including functions)
+    temp_clause = group_by_clause
+
+    # Iteratively remove parenthesized expressions
+    max_iterations = 10
+    for _ in range(max_iterations):
+        before = temp_clause
+        temp_clause = re.sub(r'\([^()]*\)', '', temp_clause)
+        if temp_clause == before:
+            break
+
+    # Extract remaining simple variables
+    variables = set(re.findall(r'\?(\w+)', temp_clause))
+
+    return variables
+
+
+def _extract_aggregate_result_variables(select_clause: str) -> set[str]:
+    """
+    Extract variables that are results of aggregate functions.
+
+    Finds patterns like: COUNT(...) AS ?var, SUM(...) AS ?var
+
+    Args:
+        select_clause: SELECT clause content
+
+    Returns:
+        Set of variable names that hold aggregate results
+
+    Example:
+        "(COUNT(?tx) AS ?totalTxs)" -> {"totalTxs"}
+    """
+    pattern = r'(?:COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT|SAMPLE)\s*\([^)]*\)\s+AS\s+\?(\w+)'
+    matches = re.findall(pattern, select_clause, re.IGNORECASE)
+    return set(matches)
+
+
+def _extract_aggregated_variables(select_clause: str) -> set[str]:
+    """
+    Extract variables used inside aggregate functions.
+
+    Finds variables that appear within COUNT(), SUM(), etc.
+
+    Args:
+        select_clause: SELECT clause content
+
+    Returns:
+        Set of variable names used inside aggregates
+
+    Example:
+        "COUNT(?tx) SUM(?value)" -> {"tx", "value"}
+    """
+    # Find all aggregate function calls and extract variables from inside them
+    aggregate_pattern = r'(?:COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT|SAMPLE)\s*\(([^)]*)\)'
+    aggregate_contents = re.findall(aggregate_pattern, select_clause, re.IGNORECASE)
+
+    variables = set()
+    for content in aggregate_contents:
+        # Extract variables from the aggregate content
+        vars_in_agg = re.findall(r'\?(\w+)', content)
+        variables.update(vars_in_agg)
+
+    return variables
+
+
+def _fix_structural_issues(query: str, issues: list[str]) -> str:
+    """
+    Fix basic structural issues like unbalanced braces or parentheses.
+    """
+    fixed_query = query
+
+    # Check and fix unbalanced braces
+    open_braces = fixed_query.count('{')
+    close_braces = fixed_query.count('}')
+    if open_braces > close_braces:
+        fixed_query += ' }' * (open_braces - close_braces)
+        issues.append(f"Added {open_braces - close_braces} missing closing braces")
+
+    # Check and fix unbalanced parentheses
+    open_parens = fixed_query.count('(')
+    close_parens = fixed_query.count(')')
+    if open_parens > close_parens:
+        fixed_query += ')' * (open_parens - close_parens)
+        issues.append(f"Added {open_parens - close_parens} missing closing parentheses")
+
+    return fixed_query
 
 def _parse_sequential_sparql(sparql_text: str) -> list[dict[str, Any]]:
     """
@@ -174,7 +578,12 @@ def ensure_validity(sparql_query: str, nl_query: str) -> str:
     cleaned = _clean_sparql(sparql_query)
     cleaned = _ensure_prefixes(cleaned)
 
-    return cleaned
+    # Validate and fix
+    _, fixed_query, issues = _validate_and_fix_sparql(cleaned, nl_query)
+    if issues:
+        logger.info(f"SPARQL validation results: {'; '.join(issues)}")
+
+    return fixed_query
 
 
 def _is_hex_string(value: str) -> bool:

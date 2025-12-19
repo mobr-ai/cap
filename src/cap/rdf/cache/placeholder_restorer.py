@@ -363,17 +363,25 @@ class PlaceholderRestorer:
         current_values: dict[str, list[str]]
     ) -> str:
         """Restore ordering placeholders."""
-        for placeholder in [k for k in placeholder_map.keys() if k.startswith("<<ORDER_")]:
+        # Sort by placeholder index to process in order
+        order_placeholders = sorted(
+            [(k, v) for k, v in placeholder_map.items() if k.startswith("<<ORDER_")],
+            key=lambda x: int(x[0].replace('<<ORDER_', '').replace('>>', ''))
+        )
+
+        for placeholder, cached_order in order_placeholders:
+            if placeholder not in sparql:
+                continue
+
             if current_values.get("orderings"):
                 ordering = current_values["orderings"][0]
                 direction = ordering.split(':')[1]
-                cached_order = placeholder_map[placeholder]
                 replacement = re.sub(r'\b(ASC|DESC)\b', direction, cached_order, flags=re.IGNORECASE)
             else:
-                replacement = placeholder_map[placeholder]
+                replacement = cached_order
 
-            pattern = re.escape(placeholder)
-            sparql = re.sub(pattern, replacement, sparql)
+            # Use exact replacement to avoid partial matches
+            sparql = sparql.replace(placeholder, replacement, 1)
 
         return sparql
 

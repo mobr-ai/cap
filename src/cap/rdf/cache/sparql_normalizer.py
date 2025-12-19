@@ -231,9 +231,12 @@ class SPARQLNormalizer:
     def _extract_order_clauses(self, text: str) -> str:
         """Extract ORDER BY clauses with DESC/ASC variants."""
 
-        pattern = r'ORDER\s+BY\s+(?:DESC|ASC)?\s*\([^\)]+\)|ORDER\s+BY\s+\?[\w]+(?:\s+(?:ASC|DESC))?'
+        # this pattern must be specific to avoid capturing multiple clauses
+        pattern = r'ORDER\s+BY\s+(?:DESC|ASC)?\s*\([^\)]+\)|ORDER\s+BY\s+(?:DESC|ASC)?\s*\?\w+(?:\s+(?:ASC|DESC))?(?=\s|$)'
 
-        for match in re.finditer(pattern, text, re.IGNORECASE):
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):  # Process in reverse to maintain positions
             if self._is_inside_placeholder(text, match):
                 continue
 

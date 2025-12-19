@@ -9,7 +9,7 @@ import argparse
 import time
 from pathlib import Path
 
-from cap.services.redis_nl_client import RedisNLClient
+from cap.services.redis_nl_client import RedisNLClient, cleanup_redis_nl_client
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 
 logger = logging.getLogger(__name__)
@@ -26,10 +26,11 @@ class NLNormalizationTester:
     """Test harness for NL normalization pipeline."""
 
 
-    def __init__(self, base_url: str, input: str):
+    def __init__(self, input: str, input_pairs: str):
         self.qn = QueryNormalizer()
         self.redis_client = RedisNLClient()
         self.input: str = input
+        self.input_pairs: str = input_pairs
         self.metrics = []
         self.query_pairs = []
 
@@ -77,6 +78,7 @@ class NLNormalizationTester:
         print("="*60)
 
         try:
+
             normalized = QueryNormalizer.normalize(query)
             cached_data = await self.redis_client.get_cached_query_with_original(normalized, query)
 
@@ -118,6 +120,14 @@ class NLNormalizationTester:
         else:
             nl_dir = Path(self.input)
             txt_files = sorted(nl_dir.rglob("*.txt"))
+
+        if (self.input_pairs != ""):
+            print("\n" + "="*60)
+            print("Testing precache from file")
+            print("="*60)
+            await cleanup_redis_nl_client()
+            await self.redis_client.precache_from_file(self.input_pairs)
+            print("="*60)
 
         for txt_file in txt_files:
             print(f"Testing queries in file: {txt_file}")
@@ -168,20 +178,20 @@ async def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run SPARQL test suite.")
     parser.add_argument(
-        "--base-url",
-        default="http://localhost:8000",
-        help="Base URL of the NL endpoint (default: http://localhost:8000)"
-    )
-    parser.add_argument(
         "--input",
         default="documentation/examples/nl",
         help="Folder containing .txt files with NL queries (default: documentation/examples/nl) or a txt file"
     )
+    parser.add_argument(
+        "--input-pairs",
+        default="",
+        help="msg file with NL - SPARQL queries (default: empty)"
+    )
     args = parser.parse_args()
 
     tester = NLNormalizationTester(
-        base_url=args.base_url,
-        input=args.input
+        input=args.input,
+        input_pairs=args.input_pairs
     )
     await tester.run_all_tests()
     print("✓✓✓ All tests passed ✓✓✓")
@@ -189,9 +199,7 @@ async def main():
 # Usage:
 # python nl_normalization_tests.py
 # or
-# python nl_normalization_tests.py --base-url http://your-server:8000
-# or
-# python nl_normalization_tests.py --base-url http://your-server:8000 --input path_to_folder_with_txt_files_or_txt_file
+# python nl_normalization_tests.py --input path_to_folder_with_txt_files_or_txt_file
 
 if __name__ == "__main__":
     print("""

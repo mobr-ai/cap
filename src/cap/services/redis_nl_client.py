@@ -351,7 +351,6 @@ class RedisNLClient:
 
                 queries = QueryFileParser.parse(content)
                 stats["total_queries"] = len(queries)
-
                 client = await self._get_nl_client()
                 ttl_value = ttl or self.ttl
                 skipped_keys = []
@@ -369,6 +368,11 @@ class RedisNLClient:
                                 data["precached"] = True
                                 await client.setex(cache_key, ttl_value, json.dumps(data))
                                 cached_keys.append(cache_key)
+
+                            logger.debug (f"query cached ")
+                            logger.debug (f"    nl query {nl_query} ")
+                            logger.debug (f"    sparql query {sparql_query} ")
+                            logger.debug (f"    ttl {ttl_value} ")
 
                             stats["cached_successfully"] += 1
                         elif success == 0:
