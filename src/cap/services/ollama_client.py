@@ -312,7 +312,7 @@ class OllamaClient:
 
                         # Convert to Vega format for chart types
                         if result_type in ["bar_chart", "pie_chart", "line_chart", "table"]:
-                            vega_data = VegaUtil._convert_to_vega_format(
+                            vega_data = VegaUtil.convert_to_vega_format(
                                 kv_results,
                                 user_query,
                                 sparql_query
@@ -324,12 +324,25 @@ class OllamaClient:
                                 elif isinstance(kv_results.get("data"), dict):
                                     columns = list(kv_results["data"].keys())
 
+                            # Format column names for display and handle series labels
+                            formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
+
+                            # If vega_data contains series labels, replace appropriate column with series labels
+                            if vega_data.get("_series_labels"):
+                                series_labels = vega_data["_series_labels"]
+                                # Replace the last formatted column with series labels for multi-series charts
+                                # (last column is typically the metric that was split into series)
+                                if formatted_columns:
+                                    formatted_columns[-1] = series_labels
+                                # Remove internal metadata from vega_data
+                                vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
+
                             output_data = {
                                 "result_type": result_type,
                                 "data": vega_data,
                                 "metadata": {
                                     "count": kv_results.get("count", 0),
-                                    "columns": columns
+                                    "columns": formatted_columns
                                 }
                             }
                             kv_formatted = json.dumps(output_data, indent=2)

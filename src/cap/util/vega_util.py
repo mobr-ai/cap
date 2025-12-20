@@ -36,7 +36,31 @@ class VegaUtil:
         return x_candidates
 
     @staticmethod
-    def _convert_to_vega_format(
+    def _format_column_name(column_name: str) -> str:
+        """
+        Convert camelCase/variable names to human-readable format.
+
+        Examples:
+            timePeriod -> Time Period
+            blockProducedCount -> Block Count
+            poolId -> Pool Id
+        """
+        # Split camelCase into words
+        import re
+        # Insert space before uppercase letters
+        spaced = re.sub(r'([A-Z])', r' \1', column_name)
+        # Split and capitalize each word
+        words = spaced.split()
+
+        if not words:
+            return column_name
+
+        # Capitalize all words
+        formatted = ' '.join(word.capitalize() for word in words)
+        return formatted.strip()
+
+    @staticmethod
+    def convert_to_vega_format(
         kv_results: dict[str, Any],
         user_query: str,
         sparql_query: str
@@ -255,6 +279,67 @@ class VegaUtil:
         return str(x_val) if x_val is not None else ""
 
     @staticmethod
+    def _abbreviate_label(label: str, max_length: int = 11) -> str:
+        """Abbreviate labels longer than max_length using ellipsis format."""
+        if len(label) <= max_length:
+            return label
+        # Keep first 7 and last 4 characters for identifiable abbreviation
+        prefix_len = min(7, max_length - 7)
+        suffix_len = 4
+        return f"{label[:prefix_len]}...{label[-suffix_len:]}"
+
+    @staticmethod
+    def _extract_series_labels(data: list, x_key: str, series_keys: list, repetition_count: int) -> list[str]:
+        """
+        Extract series labels from repeating patterns in non-series columns.
+
+        Args:
+            data: The data list
+            x_key: The x-axis key
+            series_keys: Keys used for series values
+            repetition_count: Number of series detected
+
+        Returns:
+            List of labels for each series
+        """
+        if repetition_count <= 1:
+            return []
+
+        # Find columns that could contain series identifiers
+        # (not x-axis, not y-axis/series values)
+        first_item = data[0]
+        candidate_keys = [k for k in first_item.keys()
+                        if k != x_key and k not in series_keys]
+
+        if not candidate_keys:
+            return [f"Series {i+1}" for i in range(repetition_count)]
+
+        # Use the first candidate column for labels
+        label_key = candidate_keys[0]
+        labels = []
+
+        # Extract unique values in the order they appear (one per series)
+        seen = set()
+        for item in data:
+            label_val = item.get(label_key, "")
+            if isinstance(label_val, dict):
+                label_val = label_val.get('value', str(label_val))
+            label_str = str(label_val)
+
+            if label_str not in seen:
+                seen.add(label_str)
+                labels.append(VegaUtil._abbreviate_label(label_str))
+
+                if len(labels) == repetition_count:
+                    break
+
+        # Fill in any missing labels
+        while len(labels) < repetition_count:
+            labels.append(f"Series {len(labels)+1}")
+
+        return labels
+
+    @staticmethod
     def _extract_y_value(y_val: Any) -> Any:
         """Extract numeric value from potentially nested structures."""
         if isinstance(y_val, dict):
@@ -343,7 +428,17 @@ class VegaUtil:
                         except Exception as e:
                             logger.warning(f"Failed to build series {series_idx}: {e}")
 
-        line_chart = {"values": values}
+        # Extract series labels if multiple series detected
+        series_labels = []
+        if repetition_count > 1 and len(series_keys) == 1:
+            series_labels = VegaUtil._extract_series_labels(
+                data, x_key, series_keys, repetition_count
+            )
+
+        line_chart = {
+            "values": values,
+            "_series_labels": series_labels if series_labels else None  # Internal metadata
+        }
         logger.debug(f"converted to line chart: {line_chart}")
         return line_chart
 
