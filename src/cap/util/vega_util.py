@@ -4,6 +4,7 @@ Vega util to convert data to vega format.
 import logging
 from typing import Any
 from opentelemetry import trace
+from collections import Counter
 
 from cap.util.epoch_util import epoch_to_date
 
@@ -187,6 +188,83 @@ class VegaUtil:
         return {"values": []}
 
     @staticmethod
+    def _detect_series_from_repetitions(data: list, x_key: str) -> bool:
+        """
+        Detect if data contains multiple series within a single y variable
+        by checking for consistent x-value repetitions.
+
+        Returns True if repetitions detected, False otherwise.
+        """
+        if len(data) < 2:
+            return False
+
+        # Count occurrences of each x value
+        x_values = [item.get(x_key) for item in data]
+        x_counts = Counter(x_values)
+
+        # Check if there's a consistent repetition pattern (same count for all x values)
+        unique_counts = set(x_counts.values())
+
+        # If all x values repeat the same number of times (and > 1), we have multiple series
+        if len(unique_counts) == 1 and list(unique_counts)[0] > 1:
+            return True
+
+        return False
+
+    @staticmethod
+    def _detect_repetition_pattern(data: list, x_key: str) -> int:
+        """
+        Detect if x values repeat consistently, indicating multiple series in one variable.
+
+        Returns: Number of repetitions per x value (1 if no pattern detected)
+        """
+        if len(data) < 2:
+            return 1
+
+        x_values = [item.get(x_key) for item in data]
+        x_counts = Counter(x_values)
+        unique_counts = set(x_counts.values())
+
+        # Consistent repetition pattern exists if all x values repeat the same number of times
+        if len(unique_counts) == 1 and list(unique_counts)[0] > 1:
+            return list(unique_counts)[0]
+
+        return 1
+
+    @staticmethod
+    def _format_x_value(x_val: Any, x_key: str) -> str:
+        """Extract and format x-axis value for line charts."""
+        if isinstance(x_val, dict):
+            x_val = x_val.get('value', str(x_val))
+
+        if isinstance(x_val, str) and 'epoch' in x_key.lower():
+            try:
+                epoch_num = int(float(x_val))
+                return epoch_to_date(epoch_num)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to convert epoch {x_val}: {e}")
+                return str(x_val)
+
+        if not isinstance(x_val, str) and 'epoch' in x_key.lower():
+            try:
+                epoch_num = int(float(x_val)) if isinstance(x_val, str) else int(x_val)
+                return epoch_to_date(epoch_num)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to convert epoch {x_val}: {e}")
+
+        return str(x_val) if x_val is not None else ""
+
+    @staticmethod
+    def _extract_y_value(y_val: Any) -> Any:
+        """Extract numeric value from potentially nested structures."""
+        if isinstance(y_val, dict):
+            extracted = y_val.get('value', y_val.get('ada', y_val.get('lovelace', None)))
+            if extracted is None and isinstance(y_val, dict):
+                return next(iter(y_val.values()), 0)
+            return extracted
+        return y_val
+
+    @staticmethod
     def _convert_line_chart(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
         """Convert data to line chart format with multi-series support."""
         if not isinstance(data, list) or len(data) == 0:
@@ -237,60 +315,33 @@ class VegaUtil:
 
         # Build line chart data with series index
         values = []
-        for item in data:
-            x_val = item.get(x_key)
-            # Convert x to appropriate format
-            if isinstance(x_val, dict):
-                # Handle nested structures (like timestamps with 'value' key)
-                x_val = x_val.get('value', str(x_val))
+        repetition_count = VegaUtil._detect_repetition_pattern(data, x_key)
 
-            # Extract date from epoch and datetime strings like "01T00:00:00.0"
-            if isinstance(x_val, str):
-                # Handle epoch
-                if 'epoch' in x_key.lower():
-                    try:
-                        # Convert to float first to handle decimal strings, then to int
-                        epoch_num = int(float(x_val))
-                        x_display = epoch_to_date(epoch_num)
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Failed to convert epoch {x_val}: {e}")
-                        x_display = str(x_val)
+        if repetition_count > 1 and len(series_keys) == 1:
+            # Single variable contains multiple series via repetition
+            for idx, item in enumerate(data):
+                series_idx = idx % repetition_count
+                x_display = VegaUtil._format_x_value(item.get(x_key), x_key)
+                y_val = VegaUtil._extract_y_value(item.get(series_keys[0]))
 
-                else:
-                    x_display = x_val
-
-            else:
-                x_display = str(x_val) if x_val is not None else ""
-                if 'epoch' in x_key.lower():
-                    try:
-                        # Convert to float first to handle decimal strings, then to int
-                        epoch_num = int(float(x_val)) if isinstance(x_val, str) else int(x_val)
-                        x_display = epoch_to_date(epoch_num)
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Failed to convert epoch {x_val}: {e}")
-                        x_display = str(x_val)
-
-            for series_idx, series_key in enumerate(series_keys):
-                y_val = item.get(series_key)
                 if y_val is not None:
                     try:
-                        # Handle nested dict structures
-                        if isinstance(y_val, dict):
-                            y_val_ = y_val.get('value', y_val.get('ada', y_val.get('lovelace', None)))
-                            # If still None or empty dict, try to get first value
-                            if y_val_ is None and isinstance(y_val, dict):
-                                y_val = next(iter(y_val.values()), 0)
-                            else:
-                                y_val = y_val_
-
-                        values.append({
-                            "x": x_display,
-                            "y": y_val,
-                            "c": series_idx
-                        })
+                        values.append({"x": x_display, "y": y_val, "c": series_idx})
                     except Exception as e:
                         logger.warning(f"Failed to build series {series_idx}: {e}")
-                        continue
+        else:
+            # Multiple variables each represent a series
+            for item in data:
+                x_display = VegaUtil._format_x_value(item.get(x_key), x_key)
+
+                for series_idx, series_key in enumerate(series_keys):
+                    y_val = VegaUtil._extract_y_value(item.get(series_key))
+
+                    if y_val is not None:
+                        try:
+                            values.append({"x": x_display, "y": y_val, "c": series_idx})
+                        except Exception as e:
+                            logger.warning(f"Failed to build series {series_idx}: {e}")
 
         line_chart = {"values": values}
         logger.debug(f"converted to line chart: {line_chart}")
