@@ -430,14 +430,25 @@ class VegaUtil:
 
         # Extract series labels if multiple series detected
         series_labels = []
+        label_key = None
         if repetition_count > 1 and len(series_keys) == 1:
+            # Find the column used for series identification
+            first_item = data[0]
+            candidate_keys = [k for k in first_item.keys()
+                            if k != x_key and k not in series_keys]
+            if candidate_keys:
+                label_key = candidate_keys[0]
+
             series_labels = VegaUtil._extract_series_labels(
                 data, x_key, series_keys, repetition_count
             )
 
         line_chart = {
             "values": values,
-            "_series_labels": series_labels if series_labels else None  # Internal metadata
+            "_series_labels": series_labels if series_labels else None,
+            "_label_key": label_key,  # Which column was used for series labels
+            "_x_key": x_key,  # X-axis column
+            "_y_keys": series_keys  # Y-axis column(s)
         }
         logger.debug(f"converted to line chart: {line_chart}")
         return line_chart

@@ -324,18 +324,32 @@ class OllamaClient:
                                 elif isinstance(kv_results.get("data"), dict):
                                     columns = list(kv_results["data"].keys())
 
-                            # Format column names for display and handle series labels
-                            formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
+                            # Check if we have series labels from vega conversion
+                            series_labels = vega_data.get("_series_labels")
+                            label_key = vega_data.get("_label_key")
+                            x_key = vega_data.get("_x_key")
+                            y_keys = vega_data.get("_y_keys", [])
 
-                            # If vega_data contains series labels, replace appropriate column with series labels
-                            if vega_data.get("_series_labels"):
-                                series_labels = vega_data["_series_labels"]
-                                # Replace the last formatted column with series labels for multi-series charts
-                                # (last column is typically the metric that was split into series)
-                                if formatted_columns:
-                                    formatted_columns[-1] = series_labels
+                            if series_labels and label_key:
+                                # Build formatted columns: [x_label, y_label, ...series_labels]
+                                formatted_columns = []
+
+                                # Add x-axis label
+                                if x_key:
+                                    formatted_columns.append(VegaUtil._format_column_name(x_key))
+
+                                # Add y-axis labels (all series keys)
+                                for y_key in y_keys:
+                                    formatted_columns.append(VegaUtil._format_column_name(y_key))
+
+                                # Add series labels (replacing the label_key column)
+                                formatted_columns.extend(series_labels)
+
                                 # Remove internal metadata from vega_data
                                 vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
+                            else:
+                                # Standard case: format all column names
+                                formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
 
                             output_data = {
                                 "result_type": result_type,
