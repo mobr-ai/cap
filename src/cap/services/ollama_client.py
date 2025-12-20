@@ -340,7 +340,8 @@ class OllamaClient:
 
                                 # Add y-axis labels (all series keys)
                                 for y_key in y_keys:
-                                    formatted_columns.append(VegaUtil._format_column_name(y_key))
+                                    pass
+                                    #formatted_columns.append(VegaUtil._format_column_name(y_key)) hiding y keys for now
 
                                 # Add series labels (replacing the label_key column)
                                 formatted_columns.extend(series_labels)
