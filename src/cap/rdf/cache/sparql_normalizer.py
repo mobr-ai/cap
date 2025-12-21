@@ -188,12 +188,11 @@ class SPARQLNormalizer:
         temporal_patterns = [
             (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*1\s*,\s*7\s*\)\s+AS\s+\?timePeriod\s*\)', 'MONTH'),
             (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*1\s*,\s*4\s*\)\s+AS\s+\?timePeriod\s*\)', 'YEAR'),
-            (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*9\s*,\s*10\s*\)\s+AS\s+\?timePeriod\s*\)', 'DAY'),
-            (r'BIND\s*\(\s*CONCAT\s*\([^)]*SUBSTR[^)]*week[^)]*\)\s+AS\s+\?timePeriod\s*\)', 'WEEK'),
+            (r'BIND\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*1\s*,\s*10\s*\)\s+AS\s+\?timePeriod\s*\)', 'DAY'),
+            (r'BIND\s*\(\s*CONCAT\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*1\s*,\s*7\s*\)\s*,\s*"-W"\s*,\s*STR\s*\(\s*FLOOR\s*\(\s*\(\s*xsd:integer\s*\(\s*SUBSTR\s*\(\s*STR\s*\(\s*\?timestamp\s*\)\s*,\s*9\s*,\s*2\s*\)\s*\)\s*-\s*1\s*\)\s*/\s*7\s*\)\s*\+\s*1\s*\)\s*\)\s*\)\s+AS\s+\?timePeriod\s*\)', 'WEEK'),
             (r'\?epoch\s+c:hasEpochNumber\s+\?timePeriod', 'EPOCH'),
             (r'GROUP\s+BY\s+\?timePeriod', 'GROUPED_PERIOD'),
         ]
-
         for pattern, period_type in temporal_patterns:
             matches = list(re.finditer(pattern, text, re.IGNORECASE))
             for match in reversed(matches):

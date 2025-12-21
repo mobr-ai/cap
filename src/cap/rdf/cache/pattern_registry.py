@@ -65,11 +65,11 @@ class PatternRegistry:
     ]
 
     # Temporal terms
-    YEARLY_TERMS = ['yearly', 'annually', 'per year', 'each year', 'every year']
-    MONTHLY_TERMS = ['monthly', 'per month', 'each month', 'every month']
-    WEEKLY_TERMS = ['weekly', 'per week', 'each week', 'every week']
-    DAILY_TERMS = ['daily', 'per day', 'each day', 'every day']
-    EPOCH_PERIOD_TERMS = ['per epoch', 'each epoch', 'every epoch', 'by epoch']
+    YEARLY_TERMS = ['break it by year', 'yearly', 'annually', 'per year', 'each year', 'every year', 'by year']
+    MONTHLY_TERMS = ['break it by month', 'monthly', 'per month', 'each month', 'every month', 'by month']
+    WEEKLY_TERMS = ['break it by week', 'weekly', 'per week', 'each week', 'every week', 'by week']
+    DAILY_TERMS = ['break it by day', 'daily', 'per day', 'each day', 'every day', 'by day']
+    EPOCH_PERIOD_TERMS = ['break it by epoch', 'per epoch', 'each epoch', 'every epoch', 'by epoch']
     TEMPORAL_PREPOSITIONS = ['in', 'on', 'at', 'of', 'for', 'during']
 
     # Month names
@@ -139,7 +139,8 @@ class PatternRegistry:
     BLOCK_TERMS = ['block']
     SLOT_TERMS = ['slot leader', 'slot leadershop', 'block producer', 'producer', 'block miner', 'miner', 'block creator', 'block generator']
     EPOCH_TERMS = ['epoch']
-    TOKEN_TERMS = ['cnt', 'native token', 'cardano native token', 'token', 'nft', 'fungible token']
+    NFT_TERMS = ['nft', 'non-fungible token', 'non fungible token']
+    TOKEN_TERMS = ['cnt', 'cardano native token', 'native token', 'fungible token', 'token', 'multi-asset', 'multi asset', 'asset']
     GOVERNANCE_PROPOSAL_TERMS = ['governance', 'proposal', 'action']
     VOTING_TERMS = ['vote', 'voting', 'voting anchor']
     COMMITTEE_TERMS = ['committee']

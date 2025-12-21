@@ -78,6 +78,7 @@ class QueryNormalizer:
             PatternRegistry.build_entity_pattern(PatternRegistry.COST_MODEL_TERMS): 'ENTITY_COST_MODEL',
 
             # Tokens and Assets
+            PatternRegistry.build_entity_pattern(PatternRegistry.NFT_TERMS): 'ENTITY_NFT',
             PatternRegistry.build_entity_pattern(PatternRegistry.TOKEN_TERMS): 'ENTITY_TOKEN',
             PatternRegistry.build_entity_pattern(PatternRegistry.ADA_POT_TERMS): 'ENTITY_ADA_POTS',
 
