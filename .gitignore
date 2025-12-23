@@ -149,3 +149,6 @@ Modelfile
 # Frontend build output (served by backend)
 src/cap/static/*
 !src/cap/static/.gitkeep
+
+# Runtime / local data (do not commit)
+data/
