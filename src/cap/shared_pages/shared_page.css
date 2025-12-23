@@ -1,0 +1,174 @@
+:root {
+  --bg: #0b1222;
+  --card: #151b26;
+  --border: #243047;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --accent: #3b82f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: radial-gradient(1200px 600px at 20% -10%, #1e293b, var(--bg));
+  color: var(--text);
+}
+
+.share-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.share-header {
+  position: absolute;
+  top: 1.5rem;
+  left: 2rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.share-card {
+  background: linear-gradient(180deg, #1e293b, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  max-width: 720px;
+  width: 100%;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.share-card h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.description {
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+.image-wrapper {
+  background: #0b1222;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  height: 60vh;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 20px 40px rgba(0, 0, 0, 0.55);
+}
+
+.image-wrapper img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: scale-down;
+  padding: 1rem;
+}
+
+.cta {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.35);
+}
+
+.cta:hover {
+  filter: brightness(1.05);
+}
+
+/* Mobile tightening */
+@media (max-width: 640px) {
+  body {
+    /* better with mobile browser UI bars */
+    background: radial-gradient(900px 520px at 30% -10%, #1e293b, var(--bg));
+  }
+
+  .share-page {
+    /* stop vertically centering on mobile; use space efficiently */
+    min-height: 100svh;
+    align-items: flex-start;
+    justify-content: space-evenly;
+    padding: 1rem;
+    flex-direction: column;
+  }
+
+  .share-header {
+    /* header consumes space when absolute; make it part of the flow */
+    position: static;
+    margin: 0 0 0.75rem 0.25rem;
+  }
+
+  .share-card {
+    padding: 1.1rem;
+    border-radius: 14px;
+    max-width: 520px;
+  }
+
+  .share-card h1 {
+    font-size: 1.15rem;
+    line-height: 1.25;
+    margin-bottom: 0.45rem;
+  }
+
+  .description {
+    margin-bottom: 0.9rem;
+    font-size: 0.95rem;
+  }
+
+  .image-wrapper {
+    /* reduce “empty” feel; still big enough for charts */
+    height: min(52svh, 420px);
+    border-radius: 12px;
+  }
+
+  .image-wrapper img {
+    padding: 0.6rem;
+  }
+
+  .cta {
+    margin-top: 1rem;
+    width: 100%;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+  }
+}
+
+/* Extra-small phones */
+@media (max-width: 380px) {
+  .share-page {
+    padding: 0.75rem;
+  }
+
+  .share-card {
+    padding: 1rem;
+  }
+
+  .image-wrapper {
+    height: min(50svh, 380px);
+  }
+
+  .image-wrapper img {
+    padding: 0.5rem;
+  }
+}

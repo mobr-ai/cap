@@ -33,12 +33,13 @@ from cap.api.user_admin import router as user_admin_router
 from cap.api.conversation import router as conversation_router
 from cap.api.system_admin import router as system_router
 from cap.api.dashboard import router as dashboard_router
+from cap.api.share import router as share_router
 from cap.api.demo_nl import router as demo_router
 from cap.api.metrics import router as metrics_router
 from cap.api.notifications_admin import router as notif_admin_router
 
-
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Allowed frontend origins (comma-separated env optional)
@@ -58,11 +59,12 @@ logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 tracer = trace.get_tracer(__name__)
 
 # Configure ETL logging
-etl_logger = logging.getLogger('cap.etl')
+etl_logger = logging.getLogger("cap.etl")
 etl_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 
 # Set uvloop as the event loop policy
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 
 async def initialize_graph(client: TriplestoreClient, graph_uri: str, ontology_path: str) -> bool:
     """Initialize a graph with ontology data if it doesn't exist."""
@@ -88,9 +90,8 @@ async def initialize_graph(client: TriplestoreClient, graph_uri: str, ontology_p
                     logger.info(f"Successfully initialized graph: {graph_uri}")
                     return True
 
-                else:
-                    logger.error(f"Could not create graph: {graph_uri}")
-                    return False
+                logger.error(f"Could not create graph: {graph_uri}")
+                return False
 
             logger.info(f"Graph already exists: {graph_uri}")
             return False
@@ -100,12 +101,13 @@ async def initialize_graph(client: TriplestoreClient, graph_uri: str, ontology_p
             logger.error(f"Failed to initialize graph {graph_uri}: {e}")
             raise RuntimeError(f"Failed to initialize graph {graph_uri}: {e}")
 
+
 async def initialize_required_graphs(client: TriplestoreClient) -> None:
     """Initialize all required graphs for the application."""
     with tracer.start_as_current_span("initialize_required_graphs") as span:
         required_graphs = [
             (settings.CARDANO_GRAPH, "src/ontologies/cardano.ttl"),
-            (f"{settings.CARDANO_GRAPH}/metadata", "")
+            (f"{settings.CARDANO_GRAPH}/metadata", ""),
         ]
 
         initialization_results = []
@@ -113,7 +115,6 @@ async def initialize_required_graphs(client: TriplestoreClient) -> None:
             try:
                 if ontology_path:
                     result = await initialize_graph(client, graph_uri, ontology_path)
-
                 else:
                     # Create empty graph for data
                     exists = await client.check_graph_exists(graph_uri)
@@ -132,6 +133,7 @@ async def initialize_required_graphs(client: TriplestoreClient) -> None:
         span.set_attribute("initialization_results", str(initialization_results))
         logger.info("Graph initialization completed successfully")
 
+
 async def start_etl_service():
     """Start the ETL service if configured to auto-start."""
     if settings.ETL_AUTO_START:
@@ -141,7 +143,7 @@ async def start_etl_service():
                 etl_service.start_etl(
                     batch_size=settings.ETL_BATCH_SIZE,
                     sync_interval=settings.ETL_SYNC_INTERVAL,
-                    continuous=settings.ETL_CONTINUOUS
+                    continuous=settings.ETL_CONTINUOUS,
                 )
             )
             logger.info("ETL service auto-start task scheduled")
@@ -149,6 +151,7 @@ async def start_etl_service():
             logger.error(f"Failed to auto-start ETL service: {e}")
     else:
         logger.info("ETL auto-start disabled. ETL service can be started manually.")
+
 
 async def stop_etl_service():
     """Stop the ETL service gracefully."""
@@ -158,6 +161,7 @@ async def stop_etl_service():
         logger.info("ETL service stopped successfully")
     except Exception as e:
         logger.error(f"Error stopping ETL service: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -188,14 +192,15 @@ async def lifespan(app: FastAPI):
         await cleanup_redis_nl_client()
         logger.info("Application shutdown completed")
 
+
 def setup_tracing():
     # Only set up tracing if explicitly enabled
     if settings.ENABLE_TRACING:
         setup_telemetry()
-
     else:
         # Set a no-op tracer provider to disable tracing
         trace.set_tracer_provider(trace.NoOpTracerProvider())
+
 
 def create_application() -> FastAPI:
     setup_tracing()
@@ -211,8 +216,8 @@ def create_application() -> FastAPI:
     # CORS (handles preflight + normal responses)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=ALLOWED_ORIGINS,            # no "*" when using credentials/Authorization
-        allow_credentials=True,                   # you send Authorization / may send cookies
+        allow_origins=ALLOWED_ORIGINS,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
         expose_headers=["Content-Disposition", "X-Conversation-Id", "X-User-Message-Id"],
@@ -229,7 +234,8 @@ def create_application() -> FastAPI:
     app.include_router(cache_router)
     app.include_router(etl_router)
     app.include_router(dashboard_router)
-    app.include_router(system_router) 
+    app.include_router(share_router)
+    app.include_router(system_router)
     app.include_router(metrics_router)
     app.include_router(demo_router)
     app.include_router(notif_admin_router)
@@ -237,52 +243,88 @@ def create_application() -> FastAPI:
 
     return app
 
+
 app = create_application()
 
 # DB init
 Base.metadata.create_all(bind=engine)
 with engine.begin() as conn:
-    conn.execute(text("""
+    conn.execute(
+        text(
+            """
     CREATE TABLE IF NOT EXISTS waiting_list (
       id SERIAL PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       ref TEXT,
       language TEXT
     )
-    """))
+    """
+        )
+    )
 
-FRONTEND_DIST = os.getenv(
-    "FRONTEND_DIST",
-    os.path.join(os.path.dirname(__file__), "static")
-)
+# Paths
+CAP_DIR = os.path.dirname(__file__)
+FRONTEND_DIST = os.getenv("FRONTEND_DIST", os.path.join(CAP_DIR, "static"))
+INDEX_HTML = os.path.join(FRONTEND_DIST, "index.html")
 
-# 1) Serve built assets
+# 1) Serve built assets (safe: only mount if present)
 assets_dir = os.path.join(FRONTEND_DIST, "assets")
 if os.path.isdir(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+# Share page static (your repo uses "shared_pages")
+SHARED_PAGES_DIR = os.path.join(CAP_DIR, "shared_pages")
+if os.path.isdir(SHARED_PAGES_DIR):
+    app.mount(
+        "/share-static",
+        StaticFiles(directory=SHARED_PAGES_DIR),
+        name="share-static",
+    )
+
+# Optional: avoid noisy 500s for favicon in backend-only mode
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    fav = os.path.join(FRONTEND_DIST, "favicon.ico")
+    if os.path.isfile(fav):
+        return FileResponse(fav)
+    raise HTTPException(status_code=404, detail="Not found")
 
 # 2) LLM interface route (must come before catch-all)
 @app.get("/llm", include_in_schema=False)
 async def llm_interface():
     """Serve the LLM natural language query interface."""
-    llm_page = os.path.join(os.path.dirname(__file__), "templates", "llm.html")
+    llm_page = os.path.join(CAP_DIR, "templates", "llm.html")
     if os.path.isfile(llm_page):
         return FileResponse(llm_page)
     raise HTTPException(status_code=404, detail="LLM interface not found")
 
-# 3) Root -> index.html
+# 3) Root -> index.html (safe in backend-only mode)
 @app.get("/", include_in_schema=False)
 async def index():
-    return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+    if os.path.isfile(INDEX_HTML):
+        return FileResponse(INDEX_HTML)
+    raise HTTPException(
+        status_code=404,
+        detail="Frontend not built (missing static/index.html). Run the frontend dev server or build the UI.",
+    )
 
 # 4) Catch-all SPA fallback (must be last)
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str):
+    # Never let SPA fallback shadow API routes
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not Found")
 
+    # Try to serve a real file if it exists
     candidate = os.path.join(FRONTEND_DIST, full_path)
     if os.path.isfile(candidate):
         return FileResponse(candidate)
 
-    return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+    # Otherwise, serve index.html only if present; else 404 (backend-only mode)
+    if os.path.isfile(INDEX_HTML):
+        return FileResponse(INDEX_HTML)
+
+    raise HTTPException(
+        status_code=404,
+        detail="Frontend not built (missing static/index.html).",
+    )

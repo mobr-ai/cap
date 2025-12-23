@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>{{ title }} – CAP</title>
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="CAP" />
+    <meta property="og:title" content="{{ title }}" />
+    <meta property="og:description" content="{{ description }}" />
+    <meta property="og:image" content="{{ image_url }}" />
+    <meta property="og:url" content="{{ page_url }}" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{ title }}" />
+    <meta name="twitter:description" content="{{ description }}" />
+    <meta name="twitter:image" content="{{ image_url }}" />
+
+    <link rel="stylesheet" href="{{ css_url }}" />
+  </head>
+
+  <body>
+    <main class="share-page">
+      <header class="share-header">
+        <div class="brand">CAP</div>
+        <div class="subtitle">{{ t_shared_from_cap }}</div>
+      </header>
+
+      <section class="share-card">
+        <h1>{{ title }}</h1>
+        <p class="description">{{ description }}</p>
+
+        <div class="image-wrapper">
+          <img src="{{ image_url }}" alt="{{ t_chart_image_alt }}" />
+        </div>
+
+        <a class="cta" href="{{ target_url }}"> {{ t_open_in_cap }} </a>
+      </section>
+    </main>
+  </body>
+</html>

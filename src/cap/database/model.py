@@ -1,5 +1,6 @@
 # cap/database/model.py
-
+# cap/database/model.py
+import uuid
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import (
     Column,
@@ -160,7 +161,14 @@ class DashboardItem(Base):
         index=True,
     )
 
-    # "table", "chart" (extend later e.g. "metric", "text", etc.)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversation.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # "table", "chart" (extend later e.g. "metric", "indicator", etc.)
     artifact_type = Column(String(50), nullable=False)
 
     # Short label shown to the user
@@ -286,4 +294,28 @@ class AdminSetting(Base):
         DateTime,
         server_default=text("NOW()"),
         onupdate=text("NOW()"),
+    )
+
+
+class SharedImage(Base):
+    __tablename__ = "shared_image"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("user.user_id"), index=True, nullable=False)
+
+    access_token = Column(String(64), nullable=False, index=True)
+
+    content_sha256 = Column(String(64), nullable=False)
+    mime = Column(String(64), nullable=False)
+    bytes = Column(Integer, nullable=False)
+    etag = Column(String(64), nullable=False)
+
+    storage_path = Column(String(512), nullable=False)
+
+    created_at = Column(DateTime, server_default=text("NOW()"), index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("uq_shared_image_user_sha", "user_id", "content_sha256", unique=True),
+        Index("idx_shared_image_expires", "expires_at"),
     )

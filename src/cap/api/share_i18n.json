@@ -1,0 +1,16 @@
+{
+  "en": {
+    "shared_from_cap": "Shared from CAP",
+    "open_in_cap": "Try CAP",
+    "chart_image_alt": "CAP shared chart",
+    "default_title": "CAP analysis",
+    "default_description": "Explore data-driven insights on CAP"
+  },
+  "pt-br": {
+    "shared_from_cap": "Compartilhado do CAP",
+    "open_in_cap": "Experimente o CAP",
+    "chart_image_alt": "Gráfico compartilhado do CAP",
+    "default_title": "Análise do CAP",
+    "default_description": "Explore insights orientados por dados no CAP"
+  }
+}

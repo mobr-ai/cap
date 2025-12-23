@@ -3,6 +3,8 @@ services:
     build: .
     platform: linux/amd64
     container_name: cap_server
+    volumes:
+      - /home/cap/data/share-images:/var/lib/cap/share-images
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
