@@ -4,13 +4,29 @@
     "open_in_cap": "Try CAP",
     "chart_image_alt": "CAP shared chart",
     "default_title": "CAP analysis",
-    "default_description": "Explore data-driven insights on CAP"
+    "default_description": "Explore data-driven insights on CAP",
+    "download_image": "Download image",
+    "copy_link": "Copy link",
+    "open_preview": "Open",
+    "preview_title": "Preview",
+    "copied": "Link copied",
+    "copy_failed": "Copy failed",
+    "download": "Download",
+    "close": "Close"
   },
   "pt-br": {
     "shared_from_cap": "Compartilhado do CAP",
     "open_in_cap": "Experimente o CAP",
     "chart_image_alt": "Gráfico compartilhado do CAP",
     "default_title": "Análise do CAP",
-    "default_description": "Explore insights orientados por dados no CAP"
+    "default_description": "Explore insights orientados por dados no CAP",
+    "download_image": "Baixar imagem",
+    "copy_link": "Copiar link",
+    "open_preview": "Abrir",
+    "preview_title": "Visualização",
+    "copied": "Link copiado",
+    "copy_failed": "Falha ao copiar",
+    "download": "Baixar",
+    "close": "Fechar"
   }
 }

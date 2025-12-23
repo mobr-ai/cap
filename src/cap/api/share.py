@@ -409,8 +409,7 @@ def get_shared_page(
         "Explore data-driven insights on CAP",
     )).strip()[:300]
 
-    # target = (target_url or PUBLIC_BASE_URL or "/").strip()
-    target = PUBLIC_BASE_URL
+    target = (target_url or PUBLIC_BASE_URL or "/").strip()
 
     # Escape
     page_title_e = _escape_attr(page_title)
@@ -428,10 +427,21 @@ def get_shared_page(
         "description": page_desc_e,
         "image_url": og_image_e,
         "target_url": target_e,
+        "page_url": og_url_e,
         "css_url": f"/share-static/shared_page.css",
+        "default_title": i18n.get("default_title"),
+        "default_description": i18n.get("default_description"),
         "t_shared_from_cap": i18n.get("shared_from_cap"),
         "t_chart_image_alt": i18n.get("chart_image_alt"),
-        "t_open_in_cap": i18n.get("open_in_cap")
+        "t_open_in_cap": i18n.get("open_in_cap"),
+        "t_download_image": i18n.get("download_image"),
+        "t_download": i18n.get("download"),
+        "t_copy_link": i18n.get("copy_link"),
+        "t_copy_failed": i18n.get("copy_failed"),
+        "t_copied": i18n.get("copied"),
+        "t_close": i18n.get("close"),
+        "t_open_preview": i18n.get("open_preview"),
+        "t_preview_title": i18n.get("preview_title"),
     }
     html = render_shared_page(ctx, html)
     

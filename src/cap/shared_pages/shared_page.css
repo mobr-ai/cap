@@ -5,6 +5,10 @@
   --text: #e5e7eb;
   --muted: #94a3b8;
   --accent: #3b82f6;
+  --accent2: #2563eb;
+
+  /* JS sets this per-image; fallback is sensible for charts */
+  --media-ar: 16/9;
 }
 
 * {
@@ -47,7 +51,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 1.75rem;
-  max-width: 720px;
+  max-width: 1040px;
   width: 100%;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
@@ -59,75 +63,238 @@ body {
 
 .description {
   color: var(--muted);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
+  max-width: 72ch;
 }
 
+.media-shell {
+  width: 100%;
+}
+
+/* Button wrapper so we can click to open modal */
 .image-wrapper {
+  width: 100%;
+  display: block;
   background: #0b1222;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
-  height: 60vh;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 20px 40px rgba(0, 0, 0, 0.55);
+
+  /* The key: keep the same aspect ratio as the content */
+  aspect-ratio: var(--media-ar);
+
+  /* Expand as much as possible without becoming absurdly tall */
+  max-height: min(74vh, 820px);
+
+  padding: 0;
+  cursor: zoom-in;
+  position: relative;
 }
 
 .image-wrapper img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: scale-down;
-  padding: 1rem;
+  object-fit: contain; /* readable table/charts */
+  background: #0b1222;
 }
 
-.cta {
-  display: inline-block;
-  margin-top: 1.5rem;
-  padding: 0.6rem 1rem;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #3b82f6, #2563eb);
-  color: white;
+.zoom-hint {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  padding: 0.45rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 48, 71, 0.8);
+  background: rgba(11, 18, 34, 0.72);
+  color: rgba(229, 231, 235, 0.92);
+  font-size: 0.85rem;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 650;
+  border: 1px solid transparent;
+  user-select: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn span {
+  position: relative;
+  top: 1px;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  color: #fff;
   box-shadow: 0 10px 20px rgba(59, 130, 246, 0.35);
 }
 
-.cta:hover {
+.btn-primary:hover {
   filter: brightness(1.05);
+}
+
+.btn-ghost {
+  background: rgba(21, 27, 38, 0.35);
+  color: var(--text);
+  border-color: rgba(36, 48, 71, 0.9);
+}
+
+.btn-ghost:hover {
+  border-color: rgba(59, 130, 246, 0.65);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(11, 18, 34, 0.9);
+  border: 1px solid rgba(36, 48, 71, 0.9);
+  color: var(--text);
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.toast.show {
+  opacity: 1;
+}
+
+/* Modal */
+.no-scroll {
+  overflow: hidden;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  display: none;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.modal-backdrop.open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  width: min(1200px, 96vw);
+  height: min(920px, 92vh);
+  background: linear-gradient(180deg, #0f172a, #0b1222);
+  border: 1px solid rgba(36, 48, 71, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 40px 110px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid rgba(36, 48, 71, 0.75);
+}
+
+.modal-title {
+  font-weight: 700;
+  color: rgba(229, 231, 235, 0.92);
+}
+
+.modal-spacer {
+  flex: 1;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(36, 48, 71, 0.95);
+  background: rgba(21, 27, 38, 0.35);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.icon-btn:hover {
+  border-color: rgba(59, 130, 246, 0.65);
+}
+
+.modal-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.modal-body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 /* Mobile tightening */
 @media (max-width: 640px) {
   body {
-    /* better with mobile browser UI bars */
     background: radial-gradient(900px 520px at 30% -10%, #1e293b, var(--bg));
   }
 
   .share-page {
-    /* stop vertically centering on mobile; use space efficiently */
     min-height: 100svh;
     align-items: flex-start;
-    justify-content: space-evenly;
+    justify-content: flex-start;
     padding: 1rem;
     flex-direction: column;
+    gap: 0.75rem;
   }
 
   .share-header {
-    /* header consumes space when absolute; make it part of the flow */
     position: static;
-    margin: 0 0 0.75rem 0.25rem;
+    margin: 0 0 0.25rem 0.25rem;
   }
 
   .share-card {
-    padding: 1.1rem;
+    padding: 1.05rem;
     border-radius: 14px;
-    max-width: 520px;
+    max-width: 720px;
   }
 
   .share-card h1 {
     font-size: 1.15rem;
     line-height: 1.25;
-    margin-bottom: 0.45rem;
   }
 
   .description {
@@ -136,39 +303,90 @@ body {
   }
 
   .image-wrapper {
-    /* reduce “empty” feel; still big enough for charts */
-    height: min(52svh, 420px);
+    max-height: min(66svh, 540px);
     border-radius: 12px;
   }
 
-  .image-wrapper img {
-    padding: 0.6rem;
+  .actions {
+    gap: 0.6rem;
   }
 
-  .cta {
-    margin-top: 1rem;
+  .btn {
     width: 100%;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
+    justify-content: center;
+    padding: 0.8rem 1rem;
+  }
+
+  .modal-card {
+    width: 96vw;
+    height: 92vh;
+    border-radius: 14px;
   }
 }
 
-/* Extra-small phones */
 @media (max-width: 380px) {
   .share-page {
     padding: 0.75rem;
   }
 
   .share-card {
-    padding: 1rem;
+    padding: 0.95rem;
   }
 
   .image-wrapper {
-    height: min(50svh, 380px);
+    max-height: min(64svh, 480px);
   }
+}
 
-  .image-wrapper img {
-    padding: 0.5rem;
+/* Make action buttons consistent */
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  align-items: stretch;
+}
+
+/* Normalize both <a> and <button> */
+.btn {
+  appearance: none;
+  -webkit-appearance: none;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+
+  min-height: 44px; /* same height */
+  padding: 0.8rem 1.05rem; /* same padding */
+  font-size: 0.95rem; /* same font size */
+  font-weight: 650;
+  line-height: 1; /* avoid baseline differences */
+
+  border-radius: 12px;
+  text-decoration: none;
+  user-select: none;
+  cursor: pointer;
+
+  white-space: nowrap;
+}
+
+/* Ensure icon size and alignment is consistent */
+.btn i {
+  font-size: 1rem;
+  line-height: 1;
+  width: 1.1rem; /* same icon slot width */
+  text-align: center;
+}
+
+/* Remove the old "top: 1px" baseline hack if present */
+.btn span {
+  position: static;
+}
+
+/* Mobile: full-width buttons already ok; ensure they stay same height */
+@media (max-width: 640px) {
+  .btn {
+    width: 100%;
   }
 }

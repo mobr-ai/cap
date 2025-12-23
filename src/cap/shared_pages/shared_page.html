@@ -6,7 +6,6 @@
 
     <title>{{ title }} – CAP</title>
 
-    <!-- Open Graph -->
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="CAP" />
     <meta property="og:title" content="{{ title }}" />
@@ -14,11 +13,16 @@
     <meta property="og:image" content="{{ image_url }}" />
     <meta property="og:url" content="{{ page_url }}" />
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{{ title }}" />
     <meta name="twitter:description" content="{{ description }}" />
     <meta name="twitter:image" content="{{ image_url }}" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+      referrerpolicy="no-referrer"
+    />
 
     <link rel="stylesheet" href="{{ css_url }}" />
   </head>
@@ -34,12 +38,187 @@
         <h1>{{ title }}</h1>
         <p class="description">{{ description }}</p>
 
-        <div class="image-wrapper">
-          <img src="{{ image_url }}" alt="{{ t_chart_image_alt }}" />
+        <div class="media-shell">
+          <button
+            class="image-wrapper"
+            id="openModalBtn"
+            type="button"
+            aria-label="{{ t_open_preview }}"
+            title="{{ t_open_preview }}"
+          >
+            <img
+              id="sharedImg"
+              src="{{ image_url }}"
+              alt="{{ t_chart_image_alt }}"
+              loading="eager"
+            />
+            <div class="zoom-hint">
+              <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+              <span>{{ t_open_preview }}</span>
+            </div>
+          </button>
         </div>
 
-        <a class="cta" href="{{ target_url }}"> {{ t_open_in_cap }} </a>
+        <div class="actions">
+          <a class="btn btn-primary" href="{{ target_url }}">
+            <i class="fa-solid fa-rocket"></i>
+            <span>{{ t_open_in_cap }}</span>
+          </a>
+
+          <a
+            class="btn btn-ghost"
+            id="downloadBtn"
+            href="{{ image_url }}"
+            download
+          >
+            <i class="fa-solid fa-download"></i>
+            <span>{{ t_download_image }}</span>
+          </a>
+
+          <button class="btn btn-ghost" id="copyLinkBtn" type="button">
+            <i class="fa-regular fa-copy"></i>
+            <span>{{ t_copy_link }}</span>
+          </button>
+        </div>
+
+        <div
+          class="toast"
+          id="toast"
+          aria-live="polite"
+          aria-atomic="true"
+        ></div>
       </section>
     </main>
+
+    <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="{{ t_preview_title }}"
+      >
+        <div class="modal-topbar">
+          <div class="modal-title">{{ t_preview_title }}</div>
+          <div class="modal-spacer"></div>
+
+          <a
+            class="icon-btn"
+            id="modalDownloadBtn"
+            href="{{ image_url }}"
+            download
+            title="{{ t_download }}"
+            aria-label="{{ t_download }}"
+          >
+            <i class="fa-solid fa-download"></i>
+          </a>
+
+          <button
+            class="icon-btn"
+            id="modalCloseBtn"
+            type="button"
+            title="{{ t_close }}"
+            aria-label="{{ t_close }}"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <img
+            id="modalImg"
+            src="{{ image_url }}"
+            alt="{{ t_chart_image_alt }}"
+          />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const pageUrl = "{{ page_url }}";
+        const msgCopied = "{{ t_copied }}";
+        const msgCopyFailed = "{{ t_copy_failed }}";
+
+        const img = document.getElementById("sharedImg");
+        const wrapperBtn = document.getElementById("openModalBtn");
+
+        const modalBackdrop = document.getElementById("modalBackdrop");
+        const closeBtn = document.getElementById("modalCloseBtn");
+
+        const copyBtn = document.getElementById("copyLinkBtn");
+        const toast = document.getElementById("toast");
+
+        function showToast(msg) {
+          toast.textContent = msg;
+          toast.classList.add("show");
+          window.clearTimeout(showToast._t);
+          showToast._t = window.setTimeout(
+            () => toast.classList.remove("show"),
+            1800
+          );
+        }
+
+        function applyAspectRatio() {
+          if (!img || !img.naturalWidth || !img.naturalHeight) return;
+          const ar = img.naturalWidth / img.naturalHeight;
+          const clamped = Math.max(0.4, Math.min(2.6, ar));
+          wrapperBtn.style.setProperty("--media-ar", clamped.toString());
+        }
+
+        if (img.complete) applyAspectRatio();
+        img.addEventListener("load", applyAspectRatio);
+
+        function openModal() {
+          modalBackdrop.classList.add("open");
+          modalBackdrop.setAttribute("aria-hidden", "false");
+          document.body.classList.add("no-scroll");
+        }
+
+        function closeModal() {
+          modalBackdrop.classList.remove("open");
+          modalBackdrop.setAttribute("aria-hidden", "true");
+          document.body.classList.remove("no-scroll");
+        }
+
+        wrapperBtn.addEventListener("click", openModal);
+        closeBtn.addEventListener("click", closeModal);
+
+        modalBackdrop.addEventListener("click", (e) => {
+          if (e.target === modalBackdrop) closeModal();
+        });
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && modalBackdrop.classList.contains("open"))
+            closeModal();
+        });
+
+        copyBtn.addEventListener("click", async () => {
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(pageUrl);
+              showToast(msgCopied);
+              return;
+            }
+          } catch (_) {}
+
+          const ta = document.createElement("textarea");
+          ta.value = pageUrl;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+
+          try {
+            document.execCommand("copy");
+            showToast(msgCopied);
+          } catch (e) {
+            showToast(msgCopyFailed);
+          } finally {
+            document.body.removeChild(ta);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
