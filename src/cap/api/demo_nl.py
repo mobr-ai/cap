@@ -4,7 +4,7 @@ import logging
 import re
 import time
 
-from typing import AsyncGenerator, Optional, Iterator
+from typing import AsyncGenerator, Optional, Iterator, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/demo", tags=["demo"])
 
 NL_TOKEN = "__NL__"
+DONE_SSE = "data: [DONE]"
+BreakSSEMode = Optional[Literal["concat_payload", "concat_raw"]]
 
 # ---------------------------------------------------------------------
 # Schemas
@@ -39,6 +41,9 @@ NL_TOKEN = "__NL__"
 class DemoQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
     conversation_id: Optional[int] = None
+    # Optional override for SSE regression tests.
+    # If not provided, can be driven by DEMO_SCENES entries.
+    break_sse_mode: BreakSSEMode = None
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +168,9 @@ DEMO_SCENES = {
     },
     "markdown_only_formatting": {
         "match": "markdown formatting test",
+        #"break_sse": True,
+        #"break_sse_mode": "concat_raw",
+        "break_sse_mode": "concat_payload",
         "assistant_text": (
             "# Markdown formatting smoke test\n\n"
             "This response has **no kv artifact** — it is *pure markdown text*.\n\n"
@@ -327,6 +335,26 @@ DEMO_SCENES = {
     },
 }
 
+def _truthy(v) -> bool:
+    if v is True:
+        return True
+    if v is False or v is None:
+        return False
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "y", "on")
+    return bool(v)
+
+def _scene_break_mode(req: DemoQueryRequest, scene: Optional[dict]) -> BreakSSEMode:
+    if req.break_sse_mode in ("concat_payload", "concat_raw"):
+        return req.break_sse_mode
+    if not scene:
+        return None
+    mode = scene.get("break_sse_mode")
+    if mode in ("concat_payload", "concat_raw"):
+        return mode
+    if _truthy(scene.get("break_sse")):
+        return "concat_raw"
+    return None
 
 def pick_scene(query: str):
     q = (query or "").strip().lower()
@@ -454,6 +482,7 @@ async def demo_nl_query(
     )
 
     t0 = time.perf_counter()
+    break_mode = _scene_break_mode(req, scene)
 
     async def stream_demo() -> AsyncGenerator[bytes, None]:
         yield b"status: Planning...\n"
@@ -482,9 +511,45 @@ async def demo_nl_query(
 
         yield b"status: Writing answer...\n"
 
-        # Stream markdown as SSE events, using NL_TOKEN for newlines
-        for payload in iter_sse_markdown_events(assistant_text or "", max_len=96):
-            yield f"data: {payload}\n".encode("utf-8")
+        # Stream markdown as SSE events, using NL_TOKEN for newlines.
+        # In break_sse_mode, intentionally inject malformed framing to regression-test frontend.
+        payloads = list(iter_sse_markdown_events(assistant_text or "", max_len=96))
+
+        if break_mode and payloads:
+            # Choose a "carrier" payload that is NOT NL_TOKEN and not empty.
+            # Otherwise we can produce unrealistic junk like "__NL__data: [DONE]".
+            carrier_idx = None
+            for i in range(len(payloads) - 1, -1, -1):
+                p = payloads[i]
+                if p and p != NL_TOKEN:
+                    carrier_idx = i
+                    break
+
+            # If we can't find a safe carrier (edge case), fall back to normal mode.
+            if carrier_idx is None:
+                for payload in payloads:
+                    yield f"data: {payload}\n".encode("utf-8")
+            else:
+                # Emit everything except the carrier normally (preserves original layout).
+                for i, payload in enumerate(payloads):
+                    if i == carrier_idx:
+                        continue
+                    yield f"data: {payload}\n".encode("utf-8")
+
+                carrier = payloads[carrier_idx]
+
+                if break_mode == "concat_payload":
+                    # Valid SSE line, but DONE marker is concatenated inside the payload:
+                    # data: ...trend.data: [DONE]
+                    yield f"data: {carrier}{DONE_SSE}\n".encode("utf-8")
+                else:
+                    # break_mode == "concat_raw"
+                    # Malformed non-data line where "data: [DONE]" is concatenated without SSE framing:
+                    # ...trend.data: [DONE]
+                    yield f"{carrier}{DONE_SSE}\n".encode("utf-8")
+        else:
+            for payload in payloads:
+                yield f"data: {payload}\n".encode("utf-8")
 
         # Persist assistant message BEFORE done
         if persist and conversation is not None:
@@ -522,7 +587,10 @@ async def demo_nl_query(
             db.rollback()
             logger.error(f"Failed to record demo query metrics: {e}")
 
-        yield b"data: [DONE]\n"
+        # In normal mode we emit a proper SSE DONE marker.
+        # In break modes, DONE is already concatenated above.
+        if not break_mode:
+            yield b"data: [DONE]\n"
 
     headers = {
         "Cache-Control": "no-cache",
