@@ -5,7 +5,7 @@ Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging
 import re
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Tuple
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -46,6 +46,41 @@ class NLQueryRequest(BaseModel):
 # ---------------------------------------------------------------------
 # Streaming helpers (NO mid-word splits, NO whitespace "help")
 # ---------------------------------------------------------------------
+# NOTE:
+# Upstream/proxies sometimes append "data: [DONE]" directly onto the end of a
+# data payload without a newline, e.g. "...smart contracts.data: [DONE]".
+# Do NOT rely on word-boundary before "data:" because chunking/punctuation can
+# make it inconsistent.
+_INLINE_DONE_RE = re.compile(r"(?:data:\s*)?\[DONE\]")
+
+
+def split_inline_done(payload: str) -> Tuple[str, bool]:
+    """
+    Upstream streams (or proxies) may accidentally concatenate `data: [DONE]`
+    onto the end of a normal payload without a newline, e.g.:
+      ".... smart contracts.data: [DONE]"
+
+    This function detects an inline DONE marker and splits it off so we can:
+      - emit the preceding text (without leaking `data:` into UI),
+      - then emit a clean DONE event, and stop.
+    """
+    if not payload:
+        return payload, False
+
+    m = _INLINE_DONE_RE.search(payload)
+    if not m:
+        return payload, False
+
+    before = payload[: m.start()]
+    # If the broken concat left a trailing "data:" token at the end of the text,
+    # strip it (preserve everything else).
+    before = re.sub(r"(?:\s*data:\s*)$", "", before)
+    return before, True
+
+def strip_any_done_markers(text: str) -> Tuple[str, bool]:
+    before, hit = split_inline_done(text)
+    return before, hit
+
 def sse_line(text: str) -> bytes:
     # Keep protocol simple and standard
     return (str(text) + "\n").encode("utf-8")
@@ -204,6 +239,7 @@ async def natural_language_query(
 
             # word-safe streaming buffer
             pending_text = ""
+            stop_stream = False
 
             async def flush_pending(force: bool = False):
                 nonlocal pending_text
@@ -213,10 +249,27 @@ async def natural_language_query(
                 if not force and len(pending_text) < 192:
                     return
 
+                # Final safety net: if DONE snuck into the pending buffer somehow,
+                # strip it before emitting anything to the client.
+                safe_pending, hit_done = strip_any_done_markers(pending_text)
+                pending_text = safe_pending
+                
                 for chunk in iter_word_safe_chunks(pending_text, max_len=96):
+                    # Second safety net at chunk level (in case re-chunking created a
+                    # situation where DONE appears across boundaries).
+                    safe_chunk, hit_done_chunk = strip_any_done_markers(chunk)
+                    if safe_chunk:
+                        # emit and persist exactly what we send
+                        yield sse_data(safe_chunk)
+                        assistant_buf.append(safe_chunk)
+
+                    if hit_done_chunk:
+                        # stop immediately; caller will emit canonical DONE
+                        pending_text = ""
+                        return
+
                     # emit and persist exactly what we send
-                    yield sse_data(chunk)
-                    assistant_buf.append(chunk)
+                    # (normal path handled above)
 
                 pending_text = ""
 
@@ -252,6 +305,10 @@ async def natural_language_query(
 
                 for raw_line in lines:
                     line = raw_line.rstrip("\r")
+                    
+                    if stop_stream:
+                        break
+
                     payload = parse_sse_payload_from_line(line)
                     chk = payload.strip()
 
@@ -273,7 +330,22 @@ async def natural_language_query(
                             yield out
                         # pass through a canonical done line
                         yield sse_data("[DONE]")
-                        return
+                        stop_stream = True
+                        break
+
+                    # Inline/concatenated DONE marker inside a normal payload
+                    before, hit_done = split_inline_done(payload)
+                    if hit_done:
+                        if before:
+                            pending_text += before
+                            async for out in flush_pending(force=False):
+                                yield out
+                        # Flush remaining pending chunks, emit DONE, and stop
+                        async for out in flush_pending(force=True):
+                            yield out
+                        yield sse_data("[DONE]")
+                        stop_stream = True
+                        break
 
                     # status lines: forward as-is (normalize only framing, not spaces inside)
                     if chk.startswith("status:"):
@@ -351,9 +423,21 @@ async def natural_language_query(
 
                     for idx, part in enumerate(parts):
                         if part:
-                            pending_text += part
-                            async for out in flush_pending(force=False):
-                                yield out
+                            # Extra defense: DONE could be concatenated inside the part
+                            # (especially when upstream line splitting is inconsistent).
+                            safe_part, hit_done = strip_any_done_markers(part)
+                            if safe_part:
+                                pending_text += safe_part
+                                async for out in flush_pending(force=False):
+                                    yield out
+
+                            if hit_done:
+                                # Flush and stop; emit canonical DONE and finish.
+                                async for out in flush_pending(force=True):
+                                    yield out
+                                yield sse_data("[DONE]")
+                                stop_stream = True
+                                break
 
                         # If there was a newline after this part, emit NL_TOKEN
                         if idx < len(parts) - 1:
@@ -367,10 +451,13 @@ async def natural_language_query(
                             # Persist real newline
                             assistant_buf.append("\n")
 
+                    if stop_stream:
+                        break
 
-            # Stream ended without explicit DONE:
-            async for out in flush_pending(force=True):
-                yield out
+            if not stop_stream:
+                # Stream ended without explicit DONE:
+                async for out in flush_pending(force=True):
+                    yield out
 
             # 3) Persist assistant message (normalize once, at end)
             if persist and convo is not None:
