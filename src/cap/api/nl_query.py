@@ -46,7 +46,6 @@ class NLQueryRequest(BaseModel):
 # ---------------------------------------------------------------------
 # Streaming helpers (NO mid-word splits, NO whitespace "help")
 # ---------------------------------------------------------------------
-
 def sse_line(text: str) -> bytes:
     # Keep protocol simple and standard
     return (str(text) + "\n").encode("utf-8")
@@ -195,6 +194,8 @@ async def natural_language_query(
         # -----------------------------------------------------------------
 
         async def stream_and_persist() -> AsyncGenerator[bytes, None]:
+            NL_TOKEN = "__NL__"
+
             collecting_kv = False
             kv_buffer: list[str] = []
 
@@ -258,6 +259,12 @@ async def natural_language_query(
                     if chk == "":
                         if collecting_kv:
                             kv_buffer.append("")
+                        else:
+                            # treat empty assistant payload as a logical newline
+                            async for out in flush_pending(force=True):
+                                yield out
+                            yield sse_data(NL_TOKEN)
+                            assistant_buf.append("\n")
                         continue
 
                     # DONE handling: flush assistant pending and pass through DONE exactly once
@@ -266,7 +273,7 @@ async def natural_language_query(
                             yield out
                         # pass through a canonical done line
                         yield sse_data("[DONE]")
-                        continue
+                        return
 
                     # status lines: forward as-is (normalize only framing, not spaces inside)
                     if chk.startswith("status:"):
@@ -339,11 +346,27 @@ async def natural_language_query(
                         continue
 
                     # Normal assistant content:
-                    # Buffer and re-emit on word boundaries (no trimming, no collapsing)
-                    pending_text += payload
+                    # Split on real newlines and emit NL_TOKEN explicitly
+                    parts = payload.split("\n")
 
-                    async for out in flush_pending(force=False):
-                        yield out
+                    for idx, part in enumerate(parts):
+                        if part:
+                            pending_text += part
+                            async for out in flush_pending(force=False):
+                                yield out
+
+                        # If there was a newline after this part, emit NL_TOKEN
+                        if idx < len(parts) - 1:
+                            # Flush any buffered text before emitting newline
+                            async for out in flush_pending(force=True):
+                                yield out
+
+                            # Emit newline token
+                            yield sse_data(NL_TOKEN)
+
+                            # Persist real newline
+                            assistant_buf.append("\n")
+
 
             # Stream ended without explicit DONE:
             async for out in flush_pending(force=True):

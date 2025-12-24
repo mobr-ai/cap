@@ -224,7 +224,7 @@ async def query_with_stream_response(
             )
 
             async for chunk in stream_with_timeout_messages(context_stream, timeout_seconds=300.0):
-                yield f"{chunk}\n"
+                yield chunk
 
         except Exception as e:
             logger.error(f"Contextualization error: {e}", exc_info=True)
