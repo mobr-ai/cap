@@ -51,8 +51,8 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 1.75rem;
-  /* max-width: 1040px; */
-  width: 60%;
+  max-width: 1040px;
+  width: 100%;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 
