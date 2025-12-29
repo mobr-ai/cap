@@ -19,7 +19,6 @@ LOVELACE_TO_ADA = 1_000_000
 def _detect_ada_variables(sparql_query: str) -> set[str]:
     """
     Detect which variables in a SPARQL query represent ADA amounts.
-    Handles multi-level aggregations (e.g., SUM(SUM(?value))).
     """
     if not sparql_query:
         return set()
@@ -122,13 +121,6 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
 def _detect_token_name_variables(sparql_query: str) -> set[str]:
     """
     Detect which variables in a SPARQL query represent token names.
-    These should be converted from hex to string if applicable.
-
-    Args:
-        sparql_query: SPARQL query string or structure
-
-    Returns:
-        Set of variable names that represent token names
     """
     if not sparql_query:
         return set()
@@ -180,12 +172,6 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
     """
     Convert a lovelace amount to ADA and return formatted information
     with proper decimal representation.
-
-    Args:
-        lovelace_value: String representation of lovelace amount
-
-    Returns:
-        Dictionary with lovelace and ADA representations
     """
     try:
         # Convert to Decimal safely
@@ -211,21 +197,6 @@ def _convert_lovelace_to_ada(lovelace_value: str) -> dict[str, Any]:
 def convert_sparql_to_kv(sparql_results: dict, sparql_query: str = "") -> dict[str, Any]:
     """
     Convert SPARQL results to simplified key-value pairs for LLM consumption.
-
-    Optimized for blockchain data:
-    - Preserves large integers (amounts in lovelace)
-    - Flattens nested structures
-    - Removes SPARQL metadata noise
-    - Groups related data logically
-    - Detects and converts ADA amounts from lovelace
-    - Converts hex token names to readable strings
-
-    Args:
-        sparql_results: Raw SPARQL query results from Virtuoso
-        sparql_query: Original SPARQL query (used to detect ADA variables and token names)
-
-    Returns:
-        Simplified dictionary with key-value pairs
     """
     if not sparql_results:
         return {}
@@ -276,18 +247,6 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
                      token_name_variables: set[str] = None) -> dict[str, Any]:
     """
     Flatten a single SPARQL binding to simple key-value pairs.
-
-    Handles blockchain-specific data types:
-    - Large integers (lovelace amounts)
-    - Timestamps
-    - Hashes and addresses
-    - ADA/lovelace conversions
-    - Hex token name conversions
-
-    Args:
-        binding: SPARQL binding dictionary
-        ada_variables: Set of variable names that represent ADA amounts
-        token_name_variables: Set of variable names that represent token names (hex-encoded)
     """
     if ada_variables is None:
         ada_variables = set()
@@ -343,11 +302,6 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
 def _convert_value(value: str, datatype: str, value_type: str) -> Any:
     """
     Convert SPARQL value to appropriate Python type.
-
-    Critical for blockchain data:
-    - Use strings for large integers to prevent overflow
-    - Preserve precision for amounts
-    - Handle various numeric types
     """
     # Handle URIs
     if value_type == 'uri':
@@ -387,13 +341,6 @@ def _convert_value(value: str, datatype: str, value_type: str) -> Any:
 def format_for_llm(kv_data: dict[str, Any], max_items: int = 10000) -> str:
     """
     Format key-value data into a concise, LLM-friendly string.
-
-    Args:
-        kv_data: Key-value data from convert_sparql_to_kv
-        max_items: Maximum number of items to include (prevents token overflow)
-
-    Returns:
-        Formatted string suitable for LLM context
     """
     result_type = kv_data.get('result_type', 'unknown')
 
