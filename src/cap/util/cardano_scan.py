@@ -82,6 +82,10 @@ def convert_entity_to_cardanoscan_link(var_name: str, value: Any, sparql_query: 
     # Detect entity type from ontology property usage
     entity_type = _detect_entity_from_ontology(var_name, sparql_query)
 
+    # Handle multiple use of hasHash: could be block or pool
+    if entity_type == 'block' and value_clean.startswith('pool1'):
+        entity_type = 'pool'
+
     if not entity_type:
         return value
 
