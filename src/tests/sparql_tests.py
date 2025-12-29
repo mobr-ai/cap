@@ -9,7 +9,7 @@ import httpx
 from pathlib import Path
 from pprint import pprint
 
-from cap.util.sparql_util import convert_sparql_to_kv, _detect_ada_variables
+from cap.util.sparql_result_processor import convert_sparql_to_kv, _detect_ada_variables
 from cap.rdf.triplestore import TriplestoreClient
 
 def _read_content_sparql_file(path: str | Path) -> str:

@@ -16,6 +16,7 @@ tracer = trace.get_tracer(__name__)
 async def execute_sparql(sparql_query: str, is_sequential: bool, sparql_queries: list) -> dict:
     has_data = True
     error_msg = ""
+    sparql_results = {}
     triplestore = TriplestoreClient()
 
     if is_sequential and sparql_queries:

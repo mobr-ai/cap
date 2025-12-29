@@ -13,7 +13,8 @@ from cap.util.status_message import StatusMessage
 from cap.services.metrics_service import MetricsService
 from cap.services.sparql_service import execute_sparql
 from cap.rdf.cache.query_normalizer import QueryNormalizer
-from cap.util.sparql_util import convert_sparql_to_kv, format_for_llm, detect_and_parse_sparql
+from cap.util.sparql_util import detect_and_parse_sparql
+from cap.util.sparql_result_processor import convert_sparql_to_kv, format_for_llm
 from cap.services.ollama_client import get_ollama_client
 from cap.services.redis_nl_client import get_redis_nl_client
 
