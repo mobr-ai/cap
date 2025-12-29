@@ -7,8 +7,7 @@ CARDANOSCAN_BASE = "https://cardanoscan.io"
 # Property to entity type mapping from ontology
 PROPERTY_TO_ENTITY = {
     # Block properties
-    'hasHash': 'block',  # b:Block hasHash
-    'hasPreviousBlock': 'block',
+    'hasBlockNumber': 'block',
 
     # Transaction properties
     'hasTxID': 'transaction',  # b:Transaction hasTxID
@@ -20,7 +19,7 @@ PROPERTY_TO_ENTITY = {
     'hasAddressId': 'address',  # c:TransactionOutput hasAddressId
 
     # Pool properties
-    'hasDelegatee': 'pool',  # c:Delegation hasDelegatee
+    'hasHash': 'pool',  # c:Delegation hasDelegatee
 
     # Policy properties
     'hasPolicyId': 'policy',  # c:NFT, c:MultiAssetCNT hasPolicyId
@@ -83,8 +82,8 @@ def convert_entity_to_cardanoscan_link(var_name: str, value: Any, sparql_query: 
     entity_type = _detect_entity_from_ontology(var_name, sparql_query)
 
     # Handle multiple use of hasHash: could be block or pool
-    if entity_type == 'block' and value_clean.startswith('pool1'):
-        entity_type = 'pool'
+    if entity_type == 'pool' and not value_clean.startswith('pool1'):
+        entity_type = None
 
     if not entity_type:
         return value
