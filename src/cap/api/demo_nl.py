@@ -45,6 +45,14 @@ class DemoQueryRequest(BaseModel):
     # If not provided, can be driven by DEMO_SCENES entries.
     break_sse_mode: BreakSSEMode = None
 
+    # Artificial delay for UI testing
+    delay_ms: Optional[int] = Field(
+        None,
+        ge=0,
+        le=5000,
+        description="Artificial per-step delay (ms) for demo streaming UX tests",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Demo scenes (UNCHANGED)
@@ -484,9 +492,18 @@ async def demo_nl_query(
     t0 = time.perf_counter()
     break_mode = _scene_break_mode(req, scene)
 
+    delay_ms = req.delay_ms if req.delay_ms is not None else 0
+
+    def _sleep(ms: int):
+        if ms and ms > 0:
+            time.sleep(ms / 1000.0)
+
     async def stream_demo() -> AsyncGenerator[bytes, None]:
         yield b"status: Planning...\n"
+        _sleep(delay_ms)
+
         yield b"status: Querying knowledge graph...\n"
+        _sleep(delay_ms)
 
         # KV block
         if scene and scene.get("kv"):
@@ -494,6 +511,7 @@ async def demo_nl_query(
             raw_kv = json.dumps(scene["kv"])
             yield (raw_kv + "\n").encode("utf-8")
             yield b"_kv_results_end_\n"
+            _sleep(delay_ms)
 
             if persist and conversation is not None:
                 try:
@@ -510,6 +528,7 @@ async def demo_nl_query(
                     logger.error(f"Failed to persist demo artifact: {e}")
 
         yield b"status: Writing answer...\n"
+        _sleep(delay_ms)
 
         # Stream markdown as SSE events, using NL_TOKEN for newlines.
         # In break_sse_mode, intentionally inject malformed framing to regression-test frontend.
@@ -535,6 +554,7 @@ async def demo_nl_query(
                     if i == carrier_idx:
                         continue
                     yield f"data: {payload}\n".encode("utf-8")
+                    _sleep(max(0, int(delay_ms / 3)))  # smaller delay per chunk
 
                 carrier = payloads[carrier_idx]
 
