@@ -514,8 +514,11 @@ class VegaUtil:
                         # Fallback: try to get meaningful representation
                         value = str(value)
 
-                # Convert URLs to clickable links
+                elif isinstance(value, str):
+                    if value.endswith(".0"):
+                        value = value[:-2]
 
+                # Convert URLs to clickable links
                 # Convert blockchain entities to Cardanoscan links
                 value = convert_entity_to_cardanoscan_link(col_name, value, sparql_query)
 
