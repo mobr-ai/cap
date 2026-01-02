@@ -6,7 +6,14 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func, delete
 from sqlalchemy.exc import IntegrityError
-from cap.database.model import User, Dashboard, DashboardMetrics, QueryMetrics
+from cap.database.model import (
+    User,
+    Dashboard,
+    DashboardMetrics,
+    QueryMetrics,
+    Conversation,
+    SharedImage,
+)
 from cap.database.session import get_db
 from cap.core.auth_dependencies import get_current_admin_user
 
@@ -286,85 +293,128 @@ def admin_delete_user_account(
     - Admins may not delete themselves here (use self-delete flow instead).
     - Admins may not delete the last remaining admin.
     """
+    # Guardrail: cannot delete self from admin endpoint
+    if admin.user_id == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Admins may not delete themselves via this endpoint.",
+        )
+
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user.user_id == admin.user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Use your own account deletion flow instead",
-        )
+    # Guardrail: cannot delete the last remaining admin
+    if user.is_admin:
+        remaining_admins = db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.is_admin.is_(True))
+            .where(User.user_id != user.user_id)
+        ) or 0
+        if remaining_admins <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the last remaining admin.",
+            )
 
-    # Guard: do not delete (or anonymize) the last remaining admin
-    total_admins = db.scalar(
-        select(func.count())
-        .select_from(User)
-        .where(User.is_admin.is_(True))
-    ) or 0
-
-    if user.is_admin and total_admins <= 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete the last remaining admin",
-        )
+    def _is_anonymized(u: User) -> bool:
+        # Heuristic: anonymized accounts have no email and a "deleted_user_" username prefix
+        # (aligns with how we set it below)
+        uname = (u.username or "").strip()
+        return (u.email is None) and uname.startswith("deleted_user_")
 
     try:
+        # Stage 1: anonymize
         if not _is_anonymized(user):
-            # First stage: anonymize but keep the row & content
-            _anonymize_user(user)
+            ts = int(datetime.now(timezone.utc).timestamp())
+
+            # Clear identifiers / credentials
+            user.email = None
+            user.password_hash = None
+            user.google_id = None
+            user.wallet_address = None
+
+            # Clear profile fields
+            user.display_name = None
+            user.settings = None
+
+            # Clear avatar storage fields
+            user.avatar_blob = None
+            user.avatar_mime = None
+            user.avatar_etag = None
+            user.avatar = None
+
+            # Revoke privileges / confirmation
+            user.is_admin = False
+            user.is_confirmed = False
+            user.confirmation_token = None
+
+            # Keep username unique and deterministic enough for debugging
+            user.username = f"deleted_user_{user.user_id}_{ts}"
+
             db.add(user)
             db.commit()
             db.refresh(user)
+
             return {
                 "status": "anonymized",
-                "user": _user_to_dict(user),
+                "user_id": user.user_id,
             }
 
-        # Second stage: already anonymized -> hard delete related data and user
-
-        # 1) Delete dashboard-related data (dashboard_items and dashboard_metrics
-        #     will cascade from these FKs)
+        # Stage 2: already anonymized -> hard delete related data and user
+        # IMPORTANT ORDER:
+        # 1) conversations first (cascades conversation_message + conversation_artifact)
+        # 2) then other user-owned tables
+        # 3) then query_metrics
+        # 4) then user
         db.execute(
-            delete(DashboardMetrics).where(
-                DashboardMetrics.user_id == user.user_id
-            )
-        )
-        db.execute(
-            delete(Dashboard).where(
-                Dashboard.user_id == user.user_id
-            )
+            delete(Conversation).where(Conversation.user_id == user.user_id)
         )
 
-        # 2) Delete query metrics tied to this user
         db.execute(
-            delete(QueryMetrics).where(
-                QueryMetrics.user_id == user.user_id
-            )
+            delete(SharedImage).where(SharedImage.user_id == user.user_id)
         )
 
-        # 3) Finally delete the user row
+        db.execute(
+            delete(DashboardMetrics).where(DashboardMetrics.user_id == user.user_id)
+        )
+        db.execute(
+            delete(Dashboard).where(Dashboard.user_id == user.user_id)
+        )
+
+        db.execute(
+            delete(QueryMetrics).where(QueryMetrics.user_id == user.user_id)
+        )
+
         db.delete(user)
         db.commit()
 
         return {
             "status": "deleted",
+            "user_id": user_id,
         }
 
     except IntegrityError as exc:
         db.rollback()
-        # If any other FK we didn't cover exists, return a clean error instead of raw SQL
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot fully delete user because other records still reference this account.",
-        ) from exc
+
+        # Optional: expose the FK table/constraint in the error message when available (Postgres)
+        detail = "Cannot fully delete user because other records still reference this account."
+        orig = getattr(exc, "orig", None)
+        diag = getattr(orig, "diag", None)
+        if diag:
+            parts = []
+            if getattr(diag, "table_name", None):
+                parts.append(f"table={diag.table_name}")
+            if getattr(diag, "constraint_name", None):
+                parts.append(f"constraint={diag.constraint_name}")
+            if parts:
+                detail = f"{detail} ({', '.join(parts)})"
+
+        raise HTTPException(status_code=400, detail=detail) from exc
 
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
