@@ -395,12 +395,12 @@ class OllamaClient:
                 logger.warning(f"Result formatting failed: {e}")
                 context_res = str(sparql_results)
 
-            current_date = datetime.now(timezone.utc).date()
+            current_date = f"Current utc date and time: {datetime.now(timezone.utc)}."
             known_info = ""
             temperature = 0.1
             if "chart" in result_type or "table" in result_type:
                 known_info = f"""
-                Today is {current_date}.
+                {current_date}
                 {self.chart_prompt}
                 The system is showing an artifact to the user using the data below. Always write a SHORT insight about it.
                 {kv_results}
@@ -408,7 +408,7 @@ class OllamaClient:
 
             elif context_res != "":
                 known_info = f"""
-                Today is {current_date}.
+                {current_date}
                 This is the current value you MUST consider in your answer:
                 {context_res}
 
@@ -417,9 +417,8 @@ class OllamaClient:
 
             else:
                 known_info = f"""
-                If you do not know how to answer User's question, say you do not know the answer.
-                NEVER explain how to get results for the question.
-                NEVER answer with a SPARQL query.
+                    Answer with the following message:
+                    I do not have this information or I was not capable of retrieving it correctly. We would appreciate if you could specify here what you wanted to do as a feature and we will try to make your prompt work asap.
                 """
 
             # Format the prompt with query and results
