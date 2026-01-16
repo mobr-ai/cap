@@ -591,15 +591,37 @@ TAIL_RE = re.compile(
     re.IGNORECASE | re.DOTALL | re.VERBOSE
 )
 
-def force_empty_result(query: str) -> str:
+def force_limit_cap(query: str, limit_cap: int = 3500) -> str:
     """
-    Ensures the query returns zero rows without
-    modifying its logical structure.
+    Ensures the query has an appropriate LIMIT based on limit_cap:
+    - If limit_cap is 0: removes existing LIMIT and sets LIMIT 0
+    - If limit_cap > 0: only updates LIMIT if existing LIMIT is larger than limit_cap
+    - Only modifies the outermost query LIMIT
     """
     q = query.rstrip().rstrip(";")
 
-    # Remove existing trailing LIMIT/OFFSET (if any)
-    q = TAIL_RE.sub("", q).rstrip()
+    if limit_cap == 0:
+        # Remove existing trailing LIMIT/OFFSET and set LIMIT 0
+        q = TAIL_RE.sub("", q).rstrip()
+        return f"{q}\nLIMIT 0"
 
-    # Append a guaranteed final LIMIT
-    return f"{q}\nLIMIT 0"
+    # Extract existing LIMIT value from outermost query
+    limit_match = re.search(
+        r'LIMIT\s+(\d+)\s*(?:OFFSET\s+\d+)?\s*$',
+        q,
+        re.IGNORECASE
+    )
+
+    if limit_match:
+        existing_limit = int(limit_match.group(1))
+        # Only update if existing limit is larger than limit_cap
+        if existing_limit > limit_cap:
+            q = TAIL_RE.sub("", q).rstrip()
+            return f"{q}\nLIMIT {limit_cap}"
+        else:
+            # Keep existing limit as is
+            return query.rstrip().rstrip(";")
+    else:
+        # No existing LIMIT, add limit_cap
+        q = TAIL_RE.sub("", q).rstrip()
+        return f"{q}\nLIMIT {limit_cap}"

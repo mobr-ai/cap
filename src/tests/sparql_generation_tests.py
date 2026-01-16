@@ -8,7 +8,7 @@ import argparse
 import json
 from pathlib import Path
 
-from cap.util.sparql_util import detect_and_parse_sparql, force_empty_result
+from cap.util.sparql_util import detect_and_parse_sparql, force_limit_cap
 from cap.rdf.triplestore import TriplestoreClient
 from cap.services.ollama_client import OllamaClient
 
@@ -44,7 +44,7 @@ class SPARQLGenerationTester:
                         print(f"Testing {query}")
                         llm_resp = await self.oc.nl_to_sparql(query)
                         is_sequential, sparql_content = detect_and_parse_sparql(llm_resp, query)
-                        query_to_validate = force_empty_result(sparql_content)
+                        query_to_validate = force_limit_cap(sparql_content, 0)
                         res = await self.tc.execute_query(query_to_validate)
 
                     except Exception as e:

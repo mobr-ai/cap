@@ -10,6 +10,7 @@ import logging
 import urllib
 from datetime import datetime, timezone
 
+from cap.util.sparql_util import force_limit_cap
 from cap.util.sparql_date_processor import SparqlDateProcessor
 from cap.config import settings
 
@@ -110,7 +111,9 @@ class TriplestoreClient:
         async with self._query_lock:
             test_time = datetime.now(timezone.utc)
             processor = SparqlDateProcessor(reference_time=test_time)
-            query, _ = processor.process(sparql_query)
+            query = force_limit_cap(sparql_query)
+            query, _ = processor.process(query)
+
             logger.debug ("executing query: ")
             logger.debug (query)
             # If endpoint use plain HTTP GET
@@ -169,6 +172,20 @@ class TriplestoreClient:
             except Exception as e:
                 logger.error(f"Async SPARQL execution error: {e}")
                 raise HTTPException(status_code=500, detail=f"SPARQL query failed: {str(e)}")
+
+    async def execute_query(self, query: str) -> dict:
+        """Execute a SPARQL query."""
+        with tracer.start_as_current_span("execute_query") as span:
+            span.set_attribute("query_type", "SELECT" if "SELECT" in query.upper() else "OTHER")
+
+            try:
+                return await self._execute_sparql_query_async(query)
+            except HTTPException:
+                logger.error(f"Error HTTPException")
+                raise
+            except Exception as e:
+                logger.error(f"Error executing SPARQL query: {e}")
+                raise
 
     async def _make_crud_request(
         self,
@@ -435,20 +452,6 @@ class TriplestoreClient:
                 logger.error(f"Error checking graph existence {graph_uri}: {e}")
                 # Don't raise HTTPException here, just return False
                 return False
-
-    async def execute_query(self, query: str) -> dict:
-        """Execute a SPARQL query."""
-        with tracer.start_as_current_span("execute_query") as span:
-            span.set_attribute("query_type", "SELECT" if "SELECT" in query.upper() else "OTHER")
-
-            try:
-                return await self._execute_sparql_query_async(query)
-            except HTTPException:
-                logger.error(f"Error HTTPException")
-                raise
-            except Exception as e:
-                logger.error(f"Error executing SPARQL query: {e}")
-                raise
 
     async def get_graph_count(self, graph_uri: str) -> int:
         """Get the number of triples in a graph."""
