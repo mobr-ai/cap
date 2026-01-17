@@ -25,6 +25,8 @@ class WaitIn(BaseModel):
     email: EmailStr
     ref: Optional[str] = None
     language: Optional[str] = "en"
+    uid: Optional[int] = None
+    wallet: Optional[str] = None
 
 # Keep a simple injection guard
 INJECTION_CHARS = set('<>"\';&(){}\\')
@@ -110,6 +112,29 @@ def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
     # Ensure we have a User and attach optional referrer
     refer_user_id = _parse_ref(data.ref)
     try:
+        # If wallet flow provided a uid (or wallet), try to bind email to that user
+        user = None
+
+        if data.uid:
+            user = db.query(User).filter(User.user_id == data.uid).first()
+
+        if not user and data.wallet:
+            user = db.query(User).filter(User.wallet_address == data.wallet).first()
+
+        if user:
+            # Safety: do not overwrite an existing email
+            if user.email is None:
+                user.email = email
+                db.add(user)
+                db.commit()
+            else:
+                # Wallet already has an email; if different, it's a wallet-email conflict (not a generic user-exists)
+                if user.email != email:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="walletEmailAlreadySet"
+                    )
+                
         user = _get_or_create_user(db, email=email, refer_user_id=refer_user_id)
     except SQLAlchemyError as e:
         # Don't block waitlist on user-create errors

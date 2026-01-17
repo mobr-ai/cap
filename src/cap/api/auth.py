@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from cap.database.session import get_db
 from cap.database.model import User
@@ -36,6 +37,13 @@ route_prefix = "/api/v1"
 router = APIRouter(prefix=route_prefix, tags=["auth"])
 
 # ---- Pydantic shapes ----
+class WalletClaimEmailIn(BaseModel):
+    user_id: int
+    wallet_address: str
+    email: EmailStr
+    ref: str | None = ""
+    language: str | None = "en"
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str
@@ -54,10 +62,75 @@ class GoogleIn(BaseModel):
     token: str
     token_type: str | None = None
     remember_me: bool = False
+    language: str | None = "en"
+    ref: str | None = ""
 
 class CardanoIn(BaseModel):
     address: str
     remember_me: bool = True
+    language: str | None = "en"
+    ref: str | None = ""
+
+def _ensure_waitlist_row(db: Session, email: str, ref: str = "", language: str = "en") -> None:
+    """
+    Insert into waiting_list if not exists.
+    This keeps OAuth "signup" behavior aligned with /wait_list but without failing on duplicates.
+    """
+    e = (email or "").strip().lower()
+    if not e:
+        return
+
+    exists = db.execute(
+        text("SELECT 1 FROM waiting_list WHERE email = :e"),
+        {"e": e},
+    ).first()
+    if exists:
+        return
+
+    db.execute(
+        text("INSERT INTO waiting_list (email, ref, language) VALUES (:e, :r, :l)"),
+        {"e": e, "r": ref or "", "l": (language or "en").strip().lower()},
+    )
+    db.commit()
+
+# ---- Auth: Claim e-mail (for wallet) ----
+@router.post("/auth/wallet_claim_email")
+def wallet_claim_email(data: WalletClaimEmailIn, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.user_id == data.user_id).first()
+    if not user:
+        raise HTTPException(404, detail="userNotFound")
+
+    if not user.wallet_address or user.wallet_address != data.wallet_address:
+        raise HTTPException(400, detail="walletMismatch")
+
+    # prevent stealing an email already owned by another user
+    existing = db.query(User).filter(User.email == data.email).first()
+    if existing and existing.user_id != user.user_id:
+        raise HTTPException(400, detail="userExistsError")
+
+    # attach email if missing (or same email)
+    user.email = data.email
+    db.commit()
+
+    # add to waiting list (idempotent)
+    before = db.execute(
+        text("SELECT 1 FROM waiting_list WHERE email = :e"),
+        {"e": data.email.strip().lower()},
+    ).first()
+
+    _ensure_waitlist_row(
+        db,
+        email=data.email,
+        ref=(data.ref or ""),
+        language=(data.language or "en"),
+    )
+
+    # return status that lets frontend show success vs already
+    if before:
+        raise HTTPException(418, detail="alreadyOnList")
+
+    return {"status": "waitlisted", "id": user.user_id, "email": user.email}
+
 
 # ---- Auth: Register (unconfirmed) ----
 @router.post("/register")
@@ -173,15 +246,18 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 @router.post("/auth/google")
 def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
     try:
-        # Exchange access_token → People API profile. :contentReference[oaicite:3]{index=3}
         info = get_userinfo_from_access_token_or_idtoken(data.token, getattr(data, "token_type", None))
 
         google_id = info["sub"]
-        email = info["email"]
-        display_name = info["name"]
+        email = info.get("email")
+        display_name = info.get("name") or ""
         avatar = info.get("picture", "")
 
+        if not email:
+            raise HTTPException(400, detail="missingGoogleEmail")
+
         user = db.query(User).filter(User.google_id == google_id).first()
+
         if not user:
             username = generate_unique_username(db, User, preferred=(display_name or email.split("@")[0]))
             user = User(
@@ -190,22 +266,35 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
                 username=username,
                 display_name=display_name,
                 avatar=avatar,
-                is_confirmed=True,
+                is_confirmed=False,   # CHANGED: do not auto-confirm
                 is_admin=False,
             )
             db.add(user)
+            db.commit()
 
-            # Fire an OAuth login trigger (analytics/notice) once
-            on_oauth_login(to=[email], language="en", provider="Google")
-
-            # Notify admins (if configured)
             maybe_notify_admins_new_user(db, user, source="google")
-        elif not user.avatar:
-            # keep avatar if already defined
-            user.avatar = avatar
-        db.commit()
+        else:
+            # Keep profile fields fresh
+            if email and not user.email:
+                user.email = email
+            if display_name and not user.display_name:
+                user.display_name = display_name
+            if avatar and not user.avatar:
+                user.avatar = avatar
+            db.commit()
 
+        # If not confirmed, put on waitlist and do not issue token
+        if not bool(user.is_confirmed):
+            _ensure_waitlist_row(db, email=email, ref=(data.ref or ""), language=(data.language or "en"))
+            return {
+                "status": "pending_confirmation",
+                "id": user.user_id,
+                "email": user.email,
+            }
+
+        # Confirmed users can login normally
         token = make_access_token(str(user.user_id), remember=data.remember_me)
+        on_oauth_login(to=[email], language=(data.language or "en"), provider="Google")
 
         return {
             "id": user.user_id,
@@ -218,6 +307,8 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
             "is_admin": getattr(user, "is_admin", False),
             "access_token": token,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, detail=str(e))
 
@@ -225,14 +316,13 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
 @router.post("/auth/cardano")
 def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
     if not data.address:
-        raise HTTPException(400, detail="Missing address")
+        raise HTTPException(400, detail="missingWalletAddress")
 
     user = db.query(User).filter(User.wallet_address == data.address).first()
+
     if not user:
-        # make a stable username derived from address
         suffix = int(hashlib.sha256(data.address.encode()).hexdigest(), 16) % 1_000_000
         username = f"cardano_user{suffix}"
-        # ensure uniqueness
         if db.query(User).filter(User.username == username).first():
             username = generate_unique_username(db, User, preferred=username)
 
@@ -241,20 +331,27 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
             username=username,
             wallet_address=data.address,
             display_name=display_name,
-            is_confirmed=True,
+            is_confirmed=False,   # CHANGED: do not auto-confirm
             is_admin=False,
         )
         db.add(user)
         db.commit()
 
-        # Notify admins (if configured)
         maybe_notify_admins_new_user(db, user, source="cardano")
+
+    # If not confirmed, do not issue token
+    if not bool(user.is_confirmed):
+        # Note: waiting_list table is email-based today; wallet users still become "pending"
+        return {
+            "status": "pending_confirmation",
+            "id": user.user_id,
+            "wallet_address": user.wallet_address,
+        }
 
     token = make_access_token(str(user.user_id), remember=data.remember_me)
 
-    # Optional: fire a wallet login trigger (analytics/notice)
     if user.email:
-        on_wallet_login(to=[user.email] if user.email else [], language="en", wallet_address=data.address)
+        on_wallet_login(to=[user.email], language=(data.language or "en"), wallet_address=data.address)
 
     return {
         "id": user.user_id,
