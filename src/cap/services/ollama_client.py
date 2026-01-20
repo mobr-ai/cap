@@ -317,7 +317,7 @@ class OllamaClient:
             new_type = "pie_chart"
 
         # Tabular or list queries
-        elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
+        if new_type == "" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type
