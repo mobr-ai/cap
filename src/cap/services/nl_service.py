@@ -75,7 +75,10 @@ async def query_with_stream_response(
             yield StatusMessage.generating_sparql()
 
             try:
-                raw_sparql_response = await ollama.nl_to_sparql(natural_query=user_query)
+                raw_sparql_response = await ollama.nl_to_sparql(
+                    natural_query=user_query,
+                    conversation_history=conversation_history
+                )
                 is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response, user_query)
 
                 if is_sequential:

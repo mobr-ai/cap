@@ -4,14 +4,14 @@ from opentelemetry import trace
 from pathlib import Path
 from typing import Tuple
 
-ontology_path: str = "src/ontologies/cardano.ttl"
+from cap.config import settings
 
 # Static global for preserved expressions
 _PRESERVED_EXPRESSIONS = []
 
 _ENTITIES = []
 
-def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tuple[list, list]:
+def _load_ontology_labels(onto_path: str) -> Tuple[list, list]:
     """Load rdfs:label values from the Turtle ontology file."""
     entity_labels = []
     reserved_labels = []
@@ -36,8 +36,6 @@ def _load_ontology_labels(onto_path: str = "src/ontologies/cardano.ttl") -> Tupl
                     reserved_labels.append(label_lower)
 
                 entity_labels.append(label_lower)
-
-        logger.info(f"    Loaded complex labels: \n {reserved_labels}\n    Loaded entity labels:\n{entity_labels}\n    From ontology: {onto_path}")
 
     except Exception as e:
         logger.error(f"Error loading ontology labels from {onto_path}: {e}")
@@ -207,7 +205,7 @@ class PatternRegistry:
 
         if not _PRESERVED_EXPRESSIONS:
             # Load labels from ontology
-            reserved_labels, entity_labels = _load_ontology_labels(ontology_path)
+            reserved_labels, entity_labels = _load_ontology_labels(settings.ONTOLOGY_PATH)
 
             # Add default expressions if ontology loading failed or returned nothing
             if not reserved_labels:

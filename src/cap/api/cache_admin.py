@@ -77,7 +77,6 @@ async def precache_from_file_path(request: PrecacheRequest):
             logger.error(f"Pre-caching error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/precache/upload", response_model=PrecacheStats)
 async def precache_from_upload(
     file: UploadFile = File(..., description="Query mappings file"),
@@ -175,7 +174,6 @@ async def clear_cache():
         except Exception as e:
             logger.error(f"Cache clear error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/info")
 async def get_cache_info():

@@ -4,6 +4,7 @@ Handles large integers (ADA amounts in lovelace) and nested structures
 """
 import logging
 import re
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -74,3 +75,17 @@ def hex_to_string(hex_value: str) -> str:
     except (ValueError, TypeError) as e:
         logger.debug(f"Could not decode hex string '{hex_value}': {e}")
         return hex_value
+
+def get_file_content(file_path: str) -> str:
+    if file_path == "":
+        return ""
+
+    path = Path(file_path)
+    if not path.exists():
+        logger.warning(f"-- file not found: {file_path}")
+        return ""
+
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    return content

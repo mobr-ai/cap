@@ -9,12 +9,23 @@ from typing import AsyncIterator, Optional, Any, Union
 import httpx
 from opentelemetry import trace
 
+from cap.config import settings
+from cap.util.str_util import get_file_content
 from cap.util.vega_util import VegaUtil
 from cap.util.sparql_util import detect_and_parse_sparql
+from cap.services.redis_nl_client import get_redis_nl_client
+from cap.services.msg_formatter import MessageFormatter
+from cap.services.similarity_service import SimilarityService
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
+
+
+MODEL_CONTEXT_CAP = settings.MODEL_CONTEXT_CAP * 1000
+CHAR_PER_TOKEN = settings.CHAR_PER_TOKEN
+MAX_CONTEXT_CHARS = CHAR_PER_TOKEN * MODEL_CONTEXT_CAP
+
 
 def matches_keyword(low_uq: str, keywords):
     return any(
@@ -59,11 +70,20 @@ class OllamaClient:
 
     @property
     def chart_prompt(self) -> str:
-        """Get contextualization prompt (refreshed from env)."""
+        """Get contextualization prompt for chart related queries (refreshed from env)."""
         return self._load_prompt(
             "CHART_PROMPT",
             "You are the Cardano Analytics Platform chart analyzer."
         )
+
+    @property
+    def ontology_prompt(self) -> str:
+        """Add ontology to prompt (refreshed from env)."""
+        if settings.LLM_ONTOLOGY_PATH != "":
+            onto = get_file_content(settings.LLM_ONTOLOGY_PATH)
+            return f"ALWAYS USE THIS ONTOLOGY:\n{onto}"
+
+        return ""
 
     @property
     def contextualize_prompt(self) -> str:
@@ -219,7 +239,8 @@ class OllamaClient:
 
     async def nl_to_sparql(
         self,
-        natural_query: str
+        natural_query: str,
+        conversation_history: list[dict] | None
     ) -> str:
         """Convert natural language query to SPARQL."""
         with tracer.start_as_current_span("nl_to_sparql") as span:
@@ -229,8 +250,22 @@ class OllamaClient:
             system_prompt = ""
             nl_prompt = f"""
                 {self.nl_to_sparql_prompt}
+                {self.ontology_prompt}
+
                 User Question: {natural_query}
+
             """
+
+            nl_prompt = await self._add_few_shot_learning(
+                nl_query=natural_query,
+                prompt=nl_prompt
+            )
+
+            # Prepare messages with history and all context
+            nl_prompt = self._add_history(
+                prompt=nl_prompt,
+                conversation_history=conversation_history,
+            )
 
             sparql_response = await self.generate_complete(
                 prompt=nl_prompt,
@@ -248,7 +283,6 @@ class OllamaClient:
             else:
                 span.set_attribute("sparql_length", len(content))
                 return content
-
 
     def _categorize_query(user_query: str, result_type: str) -> str:
         """
@@ -418,7 +452,7 @@ class OllamaClient:
             else:
                 known_info = f"""
                     Answer with the following message:
-                    I do not have this information or I was not capable of retrieving it correctly. We would appreciate if you could specify here what you wanted to do as a feature and we will try to make your prompt work asap.
+                    I do not have this information or I was not capable of retrieving it correctly. We would appreciate it if you could specify here what you wanted to do as a feature and we will try to make your prompt work asap.
                 """
 
             # Format the prompt with query and results
@@ -446,6 +480,27 @@ class OllamaClient:
             ):
                 yield chunk
 
+    async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
+        """Use similar queries as few-shot examples."""
+        top_n = 3
+        min_similarity = 0.4
+
+        # Find similar cached queries and format as examples
+        similar = await SimilarityService.find_similar_queries(
+            nl_query=nl_query,
+            top_n=top_n,
+            min_similarity=min_similarity
+        )
+
+        messages = MessageFormatter.format_similar_queries_to_examples(
+            similar_queries=similar,
+            max_examples=top_n
+        )
+
+        return MessageFormatter.append_examples_to_prompt(
+            examples=messages,
+            existing_prompt=prompt
+        )
 
     def _add_history(
         self,
@@ -453,10 +508,8 @@ class OllamaClient:
         conversation_history: Optional[list[dict]] = None
     ) -> list[dict]:
         """
-        Prepare messages for chat API with 40K token limit.
-        Estimates ~4 chars per token and caps at ~160K characters (40K tokens).
+        Prepare messages for chat API with token limit.
         """
-        MAX_CONTEXT_CHARS = 160_000  # Conservative estimate for 40K tokens
 
         history = []
 
