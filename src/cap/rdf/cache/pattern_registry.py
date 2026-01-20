@@ -101,7 +101,6 @@ class PatternRegistry:
                             'min', 'minimum']
     ORDINAL_SUFFIXES = ['st', 'nd', 'rd', 'th']
 
-
     SEMANTIC_SUGAR = [
         'create', 'created', 'plot', 'draw', 'indeed', 'very', 'too', 'so', 'make', 'compose',
         'visualization', 'cardano', 'count', 'network', 'represent', 'table', 'versus', 'about',
@@ -169,6 +168,21 @@ class PatternRegistry:
     ]
     PIE_CHART_TERMS = [
         'pie', 'pie chart', 'pizza', 'donut', 'doughnut', 'circle chart'
+    ]
+    SCATTER_CHART_TERMS = [
+        'scatter', 'scatter plot', 'scatter chart', 'scatterplot',
+        'point plot', 'xy plot', 'correlation plot'
+    ]
+    BUBBLE_CHART_TERMS = [
+        'bubble', 'bubble chart', 'bubble plot', 'bubble graph'
+    ]
+    TREEMAP_TERMS = [
+        'treemap', 'tree map', 'hierarchical', 'hierarchy chart',
+        'nested rectangles', 'partition chart'
+    ]
+    HEATMAP_TERMS = [
+        'heatmap', 'heat map', 'density plot', 'intensity map',
+        'color map', 'matrix chart', 'grid chart'
     ]
     TABLE_TERMS = [
         'list', 'table', 'tabular', 'display', 'show', 'get', 'grid', 'count',

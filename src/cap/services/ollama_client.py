@@ -299,12 +299,22 @@ class OllamaClient:
 
         # Chart-related queries
         new_type = ""
-        if result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bar"]):
-            new_type = "bar_chart"
+        if result_type == "multiple":
+            if matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bar"]):
+                new_type = "bar_chart"
+            elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["line"]):
+                new_type = "line_chart"
+            elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["scatter"]):
+                new_type = "scatter_chart"
+            elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bubble"]):
+                new_type = "bubble_chart"
+            elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["treemap"]):
+                new_type = "treemap"
+            elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["heatmap"]):
+                new_type = "heatmap"
+
         elif result_type == "single" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["pie"]):
             new_type = "pie_chart"
-        elif result_type == "multiple" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["line"]):
-            new_type = "line_chart"
 
         # Tabular or list queries
         elif matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):

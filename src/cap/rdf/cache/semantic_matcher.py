@@ -22,6 +22,10 @@ class SemanticMatcher:
         'bar': PatternRegistry.BAR_CHART_TERMS,
         'line': PatternRegistry.LINE_CHART_TERMS,
         'pie': PatternRegistry.PIE_CHART_TERMS,
+        'scatter': PatternRegistry.SCATTER_CHART_TERMS,
+        'bubble': PatternRegistry.BUBBLE_CHART_TERMS,
+        'treemap': PatternRegistry.TREEMAP_TERMS,
+        'heatmap': PatternRegistry.HEATMAP_TERMS,
         'table': PatternRegistry.TABLE_TERMS,
     }
 

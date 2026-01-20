@@ -96,6 +96,17 @@ class VegaUtil:
             elif result_type == "table":
                 return VegaUtil._convert_table(data, user_query, sparql_query)
 
+            elif result_type == "scatter_chart":
+                return VegaUtil._convert_scatter_chart(data, user_query, sparql_query)
+
+            elif result_type == "bubble_chart":
+                return VegaUtil._convert_bubble_chart(data, user_query, sparql_query)
+
+            elif result_type == "treemap":
+                return VegaUtil._convert_treemap(data, user_query, sparql_query)
+
+            elif result_type == "heatmap":
+                return VegaUtil._convert_heatmap(data, user_query, sparql_query)
             else:
                 return {"values": []}
 
@@ -453,6 +464,248 @@ class VegaUtil:
         }
         logger.debug(f"converted to line chart: {line_chart}")
         return line_chart
+
+    @staticmethod
+    def _convert_scatter_chart(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
+        """Convert data to scatter chart format."""
+        if not isinstance(data, list) or len(data) == 0:
+            return {"values": []}
+
+        first_item = data[0]
+        keys = list(first_item.keys())
+
+        # Find x and y fields (first two numeric fields)
+        numeric_keys = []
+        for k in keys:
+            val = first_item[k]
+            if isinstance(val, dict):
+                val = val.get('value', val.get('ada', val.get('lovelace', None)))
+            try:
+                if val is not None and isinstance(val, (int, float)):
+                    numeric_keys.append(k)
+                elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
+                    numeric_keys.append(k)
+            except:
+                continue
+
+        if len(numeric_keys) < 2:
+            logger.warning("Need at least 2 numeric fields for scatter chart")
+            return {"values": []}
+
+        x_key = numeric_keys[0]
+        y_key = numeric_keys[1]
+
+        # Optional: find category field for coloring
+        category_key = None
+        for k in keys:
+            if k not in numeric_keys and isinstance(first_item[k], str):
+                category_key = k
+                break
+
+        values = []
+        for item in data:
+            x_val = VegaUtil._extract_y_value(item.get(x_key))
+            y_val = VegaUtil._extract_y_value(item.get(y_key))
+
+            if x_val is not None and y_val is not None:
+                try:
+                    point = {"x": float(x_val), "y": float(y_val)}
+                    if category_key:
+                        cat_val = item.get(category_key, "")
+                        if isinstance(cat_val, dict):
+                            cat_val = cat_val.get('value', str(cat_val))
+                        point["category"] = str(cat_val)
+                    values.append(point)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping scatter point: {e}")
+                    continue
+
+        return {"values": values}
+
+    @staticmethod
+    def _convert_bubble_chart(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
+        """Convert data to bubble chart format (x, y, size)."""
+        if not isinstance(data, list) or len(data) == 0:
+            return {"values": []}
+
+        first_item = data[0]
+        keys = list(first_item.keys())
+
+        # Find three numeric fields for x, y, and size
+        numeric_keys = []
+        for k in keys:
+            val = first_item[k]
+            if isinstance(val, dict):
+                val = val.get('value', val.get('ada', val.get('lovelace', None)))
+            try:
+                if val is not None and isinstance(val, (int, float)):
+                    numeric_keys.append(k)
+                elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
+                    numeric_keys.append(k)
+            except:
+                continue
+
+        if len(numeric_keys) < 3:
+            logger.warning("Need at least 3 numeric fields for bubble chart")
+            return {"values": []}
+
+        x_key = numeric_keys[0]
+        y_key = numeric_keys[1]
+        size_key = numeric_keys[2]
+
+        # Optional: find category/label field
+        label_key = None
+        for k in keys:
+            if k not in numeric_keys:
+                label_key = k
+                break
+
+        values = []
+        for item in data:
+            x_val = VegaUtil._extract_y_value(item.get(x_key))
+            y_val = VegaUtil._extract_y_value(item.get(y_key))
+            size_val = VegaUtil._extract_y_value(item.get(size_key))
+
+            if x_val is not None and y_val is not None and size_val is not None:
+                try:
+                    bubble = {
+                        "x": float(x_val),
+                        "y": float(y_val),
+                        "size": float(size_val)
+                    }
+                    if label_key:
+                        label_val = item.get(label_key, "")
+                        if isinstance(label_val, dict):
+                            label_val = label_val.get('value', str(label_val))
+                        bubble["label"] = str(label_val)
+                    values.append(bubble)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping bubble: {e}")
+                    continue
+
+        return {"values": values}
+
+    @staticmethod
+    def _convert_treemap(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
+        """Convert data to treemap format (hierarchical structure)."""
+        if not isinstance(data, list) or len(data) == 0:
+            return {"values": []}
+
+        first_item = data[0]
+        keys = list(first_item.keys())
+
+        # Find name/label and size fields
+        name_key = next((k for k in keys if k.lower() in ['name', 'label', 'category', 'group']), keys[0])
+
+        # Find numeric field for size
+        size_key = None
+        for k in keys:
+            if k != name_key:
+                val = first_item[k]
+                if isinstance(val, dict):
+                    val = val.get('value', val.get('ada', val.get('lovelace', None)))
+                try:
+                    if val is not None and isinstance(val, (int, float)):
+                        size_key = k
+                        break
+                    elif isinstance(val, str) and val.replace('.', '', 1).isdigit():
+                        size_key = k
+                        break
+                except:
+                    continue
+
+        if not size_key:
+            size_key = keys[-1] if len(keys) > 1 else keys[0]
+
+        # Optional: find parent/group field for hierarchy
+        parent_key = next((k for k in keys if k.lower() in ['parent', 'group', 'category'] and k != name_key), None)
+
+        values = []
+        for item in data:
+            name_val = item.get(name_key, "")
+            if isinstance(name_val, dict):
+                name_val = name_val.get('value', str(name_val))
+
+            size_val = VegaUtil._extract_y_value(item.get(size_key))
+
+            if size_val is not None:
+                try:
+                    node = {
+                        "name": str(name_val),
+                        "value": float(size_val)
+                    }
+                    if parent_key:
+                        parent_val = item.get(parent_key, "")
+                        if isinstance(parent_val, dict):
+                            parent_val = parent_val.get('value', str(parent_val))
+                        node["parent"] = str(parent_val)
+                    values.append(node)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping treemap node: {e}")
+                    continue
+
+        return {"values": values}
+
+    @staticmethod
+    def _convert_heatmap(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
+        """Convert data to heatmap format (x, y, value)."""
+        if not isinstance(data, list) or len(data) == 0:
+            return {"values": []}
+
+        first_item = data[0]
+        keys = list(first_item.keys())
+
+        # Find x and y categorical fields and a numeric value field
+        categorical_keys = []
+        numeric_key = None
+
+        for k in keys:
+            val = first_item[k]
+            if isinstance(val, dict):
+                val = val.get('value', val.get('ada', val.get('lovelace', None)))
+
+            try:
+                if val is not None and isinstance(val, (int, float)):
+                    if not numeric_key:
+                        numeric_key = k
+                elif isinstance(val, str):
+                    if not val.replace('.', '', 1).replace('-', '', 1).isdigit():
+                        categorical_keys.append(k)
+            except:
+                categorical_keys.append(k)
+
+        if len(categorical_keys) < 2:
+            logger.warning("Need at least 2 categorical fields for heatmap")
+            return {"values": []}
+
+        x_key = categorical_keys[0]
+        y_key = categorical_keys[1]
+        value_key = numeric_key if numeric_key else keys[-1]
+
+        values = []
+        for item in data:
+            x_val = item.get(x_key, "")
+            if isinstance(x_val, dict):
+                x_val = x_val.get('value', str(x_val))
+
+            y_val = item.get(y_key, "")
+            if isinstance(y_val, dict):
+                y_val = y_val.get('value', str(y_val))
+
+            heat_val = VegaUtil._extract_y_value(item.get(value_key))
+
+            if heat_val is not None:
+                try:
+                    values.append({
+                        "x": str(x_val),
+                        "y": str(y_val),
+                        "value": float(heat_val)
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping heatmap cell: {e}")
+                    continue
+
+        return {"values": values}
 
     @staticmethod
     def _convert_url_to_link(value: str) -> str:
