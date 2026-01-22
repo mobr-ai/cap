@@ -39,8 +39,7 @@ async def get_sync_data():
                 LIMIT 1
             """
 
-            # Create a QueryRequest to use the existing query logic
-            request = QueryRequest(query=sync_query, type="select")
+            request = QueryRequest(query=sync_query)
             return await execute_query(request)
 
         except HTTPException as e:
