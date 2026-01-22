@@ -355,12 +355,14 @@ class OllamaClient:
                         kv_results["result_type"] = result_type
 
                         # Convert to Vega format for chart types
-                        if result_type in ["bar_chart", "pie_chart", "line_chart", "table"]:
+                        if result_type in ["bar_chart", "pie_chart", "line_chart", "scatter_chart", "bubble_chart", "treemap", "heatmap", "table"]:
                             vega_data = VegaUtil.convert_to_vega_format(
                                 kv_results,
                                 user_query,
                                 sparql_query
                             )
+
+                            # Determine columns based on chart type
                             columns = []
                             if kv_results.get("data"):
                                 if isinstance(kv_results.get("data"), list):
@@ -368,7 +370,7 @@ class OllamaClient:
                                 elif isinstance(kv_results.get("data"), dict):
                                     columns = list(kv_results["data"].keys())
 
-                            # Check if we have series labels from vega conversion
+                            # Check if we have series labels from vega conversion (for line charts)
                             series_labels = vega_data.get("_series_labels")
                             label_key = vega_data.get("_label_key")
                             x_key = vega_data.get("_x_key")
@@ -382,19 +384,22 @@ class OllamaClient:
                                 if x_key:
                                     formatted_columns.append(VegaUtil._format_column_name(x_key))
 
-                                # Add y-axis labels (all series keys)
+                                # Add y-axis labels (do we need this?)
                                 for y_key in y_keys:
                                     pass
-                                    #formatted_columns.append(VegaUtil._format_column_name(y_key)) hiding y keys for now
 
                                 # Add series labels (replacing the label_key column)
                                 formatted_columns.extend(series_labels)
-
-                                # Remove internal metadata from vega_data
-                                vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
                             else:
-                                # Standard case: format all column names
-                                formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
+                                # Standard case: format all column names OR use metadata columns
+                                metadata_columns = vega_data.get("_columns")
+                                if metadata_columns:
+                                    formatted_columns = metadata_columns
+                                else:
+                                    formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
+
+                            # Remove internal metadata from vega_data
+                            vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
 
                             output_data = {
                                 "result_type": result_type,
@@ -492,8 +497,8 @@ class OllamaClient:
 
     async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
         """Use similar queries as few-shot examples."""
-        top_n = 3
-        min_similarity = 0.4
+        top_n = 5
+        min_similarity = 0.2
 
         # Find similar cached queries and format as examples
         similar = await SimilarityService.find_similar_queries(

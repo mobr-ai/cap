@@ -520,7 +520,21 @@ class VegaUtil:
                     logger.warning(f"Skipping scatter point: {e}")
                     continue
 
-        return {"values": values}
+        # Format column names for metadata
+        formatted_columns = [
+            VegaUtil._format_column_name(x_key),
+            VegaUtil._format_column_name(y_key)
+        ]
+        if category_key:
+            formatted_columns.append(VegaUtil._format_column_name(category_key))
+
+        return {
+            "values": values,
+            "_x_key": x_key,
+            "_y_key": y_key,
+            "_category_key": category_key,
+            "_columns": formatted_columns
+        }
 
     @staticmethod
     def _convert_bubble_chart(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
@@ -583,7 +597,23 @@ class VegaUtil:
                     logger.warning(f"Skipping bubble: {e}")
                     continue
 
-        return {"values": values}
+        # Format column names for metadata
+        formatted_columns = [
+            VegaUtil._format_column_name(x_key),
+            VegaUtil._format_column_name(y_key),
+            VegaUtil._format_column_name(size_key)
+        ]
+        if label_key:
+            formatted_columns.append(VegaUtil._format_column_name(label_key))
+
+        return {
+            "values": values,
+            "_x_key": x_key,
+            "_y_key": y_key,
+            "_size_key": size_key,
+            "_label_key": label_key,
+            "_columns": formatted_columns
+        }
 
     @staticmethod
     def _convert_treemap(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
@@ -595,7 +625,7 @@ class VegaUtil:
         keys = list(first_item.keys())
 
         # Find name/label and size fields
-        name_key = next((k for k in keys if k.lower() in ['name', 'label', 'category', 'group']), keys[0])
+        name_key = next((k for k in keys if k.lower() in ['name', 'label', 'category', 'group', 'policyid', 'policy', 'token']), keys[0])
 
         # Find numeric field for size
         size_key = None
@@ -644,7 +674,21 @@ class VegaUtil:
                     logger.warning(f"Skipping treemap node: {e}")
                     continue
 
-        return {"values": values}
+        # Format column names for metadata
+        formatted_columns = [
+            VegaUtil._format_column_name(name_key),
+            VegaUtil._format_column_name(size_key)
+        ]
+        if parent_key:
+            formatted_columns.append(VegaUtil._format_column_name(parent_key))
+
+        return {
+            "values": values,
+            "_name_key": name_key,
+            "_size_key": size_key,
+            "_parent_key": parent_key,
+            "_columns": formatted_columns
+        }
 
     @staticmethod
     def _convert_heatmap(data: Any, user_query: str, sparql_query: str) -> dict[str, Any]:
@@ -705,7 +749,20 @@ class VegaUtil:
                     logger.warning(f"Skipping heatmap cell: {e}")
                     continue
 
-        return {"values": values}
+        # Format column names for metadata
+        formatted_columns = [
+            VegaUtil._format_column_name(x_key),
+            VegaUtil._format_column_name(y_key),
+            VegaUtil._format_column_name(value_key)
+        ]
+
+        return {
+            "values": values,
+            "_x_key": x_key,
+            "_y_key": y_key,
+            "_value_key": value_key,
+            "_columns": formatted_columns
+        }
 
     @staticmethod
     def _convert_url_to_link(value: str) -> str:
