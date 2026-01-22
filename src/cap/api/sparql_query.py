@@ -21,6 +21,34 @@ logger = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.DEBUG)
 
+@router.get("/query/sync_data", response_model=QueryResponse)
+async def get_sync_data():
+    """Execute a SPARQL query to get current sync status."""
+    with tracer.start_as_current_span("get_sync_data") as span:
+        try:
+            sync_query = """
+                PREFIX b: <https://mobr.ai/ont/blockchain#>
+                PREFIX c: <https://mobr.ai/ont/cardano#>
+                SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+                WHERE {
+                  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+                  ?block a b:Block .
+                  ?block c:hasBlockNumber ?blockNum .
+                }
+                GROUP BY (?currentCardanoHeight)
+                LIMIT 1
+            """
+
+            # Create a QueryRequest to use the existing query logic
+            request = QueryRequest(query=sync_query, type="select")
+            return await execute_query(request)
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"get_sync_data execution error: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=400, detail=str(e))
+
 @router.post("/query", response_model=QueryResponse)
 async def execute_query(request: QueryRequest):
     """Execute a SPARQL query."""
