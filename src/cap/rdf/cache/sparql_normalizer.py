@@ -315,10 +315,7 @@ class SPARQLNormalizer:
                 continue
             if self._is_inside_bind_if(text, match):
                 continue
-
-            # Skip if this is part of SPARQL syntax (GROUP BY, ORDER BY, etc.)
-            literal_content = match.group(1).strip()
-            if re.match(r'^(GROUP|ORDER|FILTER|BIND|OPTIONAL)\s+BY', literal_content, re.IGNORECASE):
+            if self._is_inside_optional_block(text, match):
                 continue
 
             placeholder = f"<<STR_{self.counters.str}>>"
@@ -357,6 +354,36 @@ class SPARQLNormalizer:
 
         # If paren_count > 0, we're still inside the BIND(IF(...))
         return paren_count > 0
+
+    def _is_inside_optional_block(self, text: str, match: re.Match) -> bool:
+        """Check if match is inside an OPTIONAL {...} block."""
+        before_text = text[:match.start()]
+
+        # Find all OPTIONAL blocks before this position
+        optional_starts = []
+        for m in re.finditer(r'OPTIONAL\s*\{', before_text, re.IGNORECASE):
+            optional_starts.append(m.end() - 1)  # Position of the opening brace
+
+        if not optional_starts:
+            return False
+
+        # For each OPTIONAL start, count braces to see if we're still inside
+        for opt_start in optional_starts:
+            brace_count = 1  # Start with the opening brace
+            i = opt_start + 1
+
+            while i < match.start() and brace_count > 0:
+                if text[i] == '{':
+                    brace_count += 1
+                elif text[i] == '}':
+                    brace_count -= 1
+                i += 1
+
+            # If this OPTIONAL block is still open at our match position, we're inside it
+            if brace_count > 0:
+                return True
+
+        return False
 
     def _extract_limit_offset(self, text: str) -> str:
         """Extract LIMIT and OFFSET values."""
