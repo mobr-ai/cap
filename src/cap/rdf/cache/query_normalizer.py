@@ -89,8 +89,6 @@ class QueryNormalizer:
             r'\b((what is happening|what up (cardano)s?)s?)s?\b': 'ENTITY_STATUS',
 
             PatternRegistry.build_entity_pattern(PatternRegistry.REWARD_TERMS): 'ENTITY_REWARD_WITHDRAWAL',
-            PatternRegistry.build_entity_pattern(PatternRegistry.INPUT_TERMS): 'ENTITY_UTXO_INPUT',
-            PatternRegistry.build_entity_pattern(PatternRegistry.OUTPUT_TERMS): 'ENTITY_UTXO_OUTPUT',
 
             PatternRegistry.build_entity_pattern(PatternRegistry.POOL_TERMS) + r'(?!\s+owner)': 'ENTITY_POOL',
             PatternRegistry.build_entity_pattern(PatternRegistry.SLOT_TERMS): 'ENTITY_SLOT_LEADER',
@@ -158,6 +156,22 @@ class QueryNormalizer:
             placeholder = f'<<POOL_ID_{pool_id_counter}>>'
             normalized = normalized.replace(match.group(1), placeholder)
             pool_id_counter += 1
+
+        # Normalize UTXO references to indexed placeholder
+        utxo_pattern = r'["\']?([a-f0-9]{64})#(\d+)["\']?'
+        utxo_counter = 0
+        for match in re.finditer(utxo_pattern, normalized, re.IGNORECASE):
+            placeholder = f'<<UTXO_REF_{utxo_counter}>>'
+            normalized = normalized.replace(match.group(0), placeholder)
+            utxo_counter += 1
+
+        # Normalize Cardano addresses to indexed placeholder
+        address_pattern = r'["\']?(addr1[a-z0-9]{50,}|stake1[a-z0-9]{50,})["\']?'
+        address_counter = 0
+        for match in re.finditer(address_pattern, normalized, re.IGNORECASE):
+            placeholder = f'<<ADDRESS_{address_counter}>>'
+            normalized = normalized.replace(match.group(0), placeholder)
+            address_counter += 1
 
         # Normalize visualization terms to <<VIZ>> placeholder
         viz_terms = (PatternRegistry.BAR_CHART_TERMS +

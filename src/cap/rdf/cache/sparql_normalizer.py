@@ -74,6 +74,8 @@ class SPARQLNormalizer:
         normalized = self._extract_inject_statements(normalized)
         normalized = self._extract_currency_uris(normalized)
         normalized = self._extract_pool_ids(normalized)
+        normalized = self._extract_utxo_refs(normalized)
+        normalized = self._extract_addresses(normalized)
         normalized = self._extract_uris(normalized)
         normalized = self._extract_temporal_patterns(normalized)
         normalized = self._extract_order_clauses(normalized)
@@ -176,6 +178,46 @@ class SPARQLNormalizer:
                 self.placeholder_map[placeholder] = f'"{pool_id}"'
             else:
                 self.placeholder_map[placeholder] = f'"{pool_id}"'
+
+            text = text[:match.start()] + placeholder + text[match.end():]
+
+        return text
+
+    def _extract_utxo_refs(self, text: str) -> str:
+        """Extract UTXO references (txhash#index)."""
+        utxo_pattern = r'["\']?([a-f0-9]{64})#(\d+)["\']?'
+        matches = list(re.finditer(utxo_pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+
+            tx_hash = match.group(1)
+            tx_index = match.group(2)
+            placeholder = f"<<UTXO_REF_{self.counters.utxo_ref}>>"
+            self.counters.utxo_ref += 1
+
+            # Store as separate components for SPARQL VALUES
+            self.placeholder_map[placeholder] = f'{tx_hash}#{tx_index}'
+
+            text = text[:match.start()] + placeholder + text[match.end():]
+
+        return text
+
+    def _extract_addresses(self, text: str) -> str:
+        """Extract Cardano addresses."""
+        address_pattern = r'["\']?(addr1[a-z0-9]{50,}|stake1[a-z0-9]{50,})["\']?'
+        matches = list(re.finditer(address_pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+
+            address = match.group(1)
+            placeholder = f"<<ADDRESS_{self.counters.address}>>"
+            self.counters.address += 1
+
+            self.placeholder_map[placeholder] = f'"{address}"'
 
             text = text[:match.start()] + placeholder + text[match.end():]
 

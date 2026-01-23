@@ -60,6 +60,8 @@ class ValueExtractor:
             "definitions": [],
             "quantifiers": [],
             "pool_ids": [],
+            "utxo_refs": [],
+            "addresses": [],
         }
 
         # Extract currency/token URIs (add this new section)
@@ -118,6 +120,8 @@ class ValueExtractor:
         ValueExtractor._extract_limits(nl_query, values)
         ValueExtractor._extract_tokens(nl_query, values)
         ValueExtractor._extract_pool_ids(nl_query, values)
+        ValueExtractor._extract_utxo_refs(nl_query, values)
+        ValueExtractor._extract_addresses(nl_query, values)
         ValueExtractor._extract_numbers(nl_query, values)
         ValueExtractor._extract_durations(nl_query, values)
 
@@ -211,6 +215,26 @@ class ValueExtractor:
             pool_id = match.group(1).lower()  # group(1) gets just the pool ID without quotes
             if pool_id not in values["pool_ids"]:
                 values["pool_ids"].append(pool_id)
+
+    @staticmethod
+    def _extract_utxo_refs(nl_query: str, values: dict[str, list[str]]) -> None:
+        """Extract UTXO references (txhash#index)."""
+        utxo_pattern = r'["\']?([a-f0-9]{64})#(\d+)["\']?'
+        for match in re.finditer(utxo_pattern, nl_query, re.IGNORECASE):
+            tx_hash = match.group(1).lower()
+            tx_index = match.group(2)
+            utxo_ref = f"{tx_hash}#{tx_index}"
+            if utxo_ref not in values["utxo_refs"]:
+                values["utxo_refs"].append(utxo_ref)
+
+    @staticmethod
+    def _extract_addresses(nl_query: str, values: dict[str, list[str]]) -> None:
+        """Extract Cardano addresses."""
+        address_pattern = r'["\']?(addr1[a-z0-9]{50,}|stake1[a-z0-9]{50,})["\']?'
+        for match in re.finditer(address_pattern, nl_query, re.IGNORECASE):
+            address = match.group(1).lower()
+            if address not in values["addresses"]:
+                values["addresses"].append(address)
 
     @staticmethod
     def _extract_durations(nl_query: str, values: dict[str, list[str]]) -> None:

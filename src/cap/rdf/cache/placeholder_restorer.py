@@ -95,6 +95,10 @@ class PlaceholderRestorer:
             return PlaceholderRestorer._get_cyclic_value(placeholder, current_values.get("numbers"), cached_value, "1")
         elif placeholder.startswith("<<POOL_ID_"):
             return PlaceholderRestorer._restore_pool_id(placeholder, cached_value, current_values)
+        elif placeholder.startswith("<<UTXO_REF_"):
+            return PlaceholderRestorer._restore_utxo_ref(placeholder, cached_value, current_values)
+        elif placeholder.startswith("<<ADDRESS_"):
+            return PlaceholderRestorer._restore_address(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<CUR_"):
             return PlaceholderRestorer._restore_currency(placeholder, cached_value, current_values)
         elif placeholder.startswith("<<STR_"):
@@ -159,6 +163,50 @@ class PlaceholderRestorer:
                 return f'"{pool_id}"'
             except (AttributeError, ValueError, IndexError) as e:
                 logger.error(f"Error parsing POOL_ID placeholder {placeholder}: {e}")
+
+        return cached_value or '""'
+
+    @staticmethod
+    def _restore_utxo_ref(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore UTXO reference placeholder with cyclic fallback."""
+        utxo_refs = current_values.get("utxo_refs", [])
+
+        if utxo_refs:
+            try:
+                idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
+                utxo_ref = utxo_refs[idx % len(utxo_refs)]
+                tx_hash, tx_index = utxo_ref.split('#')
+                return f'("{tx_hash}" "{tx_index}"^^xsd:decimal)'
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.error(f"Error parsing UTXO_REF placeholder {placeholder}: {e}")
+
+        # Fallback to cached value
+        if cached_value:
+            tx_hash, tx_index = cached_value.split('#')
+            return f'("{tx_hash}" "{tx_index}"^^xsd:decimal)'
+
+        return '("" ""^^xsd:decimal)'
+
+    @staticmethod
+    def _restore_address(
+        placeholder: str,
+        cached_value: str,
+        current_values: dict[str, list[str]]
+    ) -> str:
+        """Restore address placeholder with cyclic fallback."""
+        addresses = current_values.get("addresses", [])
+
+        if addresses:
+            try:
+                idx = int(re.search(r'_(\d+)>>', placeholder).group(1))
+                address = addresses[idx % len(addresses)]
+                return f'"{address}"'
+            except (AttributeError, ValueError, IndexError) as e:
+                logger.error(f"Error parsing ADDRESS placeholder {placeholder}: {e}")
 
         return cached_value or '""'
 
