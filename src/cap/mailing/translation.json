@@ -1,94 +1,94 @@
 {
-    "base_email": {
-        "en": {
-            "footer_note": "You received this email because you're on the CAP waitlist.",
-            "unsubscribe": "Unsubscribe"
-        },
-        "pt": {
-            "footer_note": "Você recebeu este e-mail porque está na lista de espera da CAP.",
-            "unsubscribe": "Cancelar inscrição"
-        }
+  "base_email": {
+    "en": {
+      "footer_note": "You received this email because you're on the CAP waitlist.",
+      "unsubscribe": "Unsubscribe"
     },
-    "waiting_list_confirmation": {
-        "en": {
-            "title": "You're on the List! 🚀",
-            "message": "<h2>Welcome to CAP! 🎉</h2><p>Thanks for joining our waiting list. You’re now in line to try the Cardano Analytics Platform first.</p><h3>What’s next?</h3><ul><li>📢 We’ll email you updates about launch and new features.</li><li>🔗 Share your referral link: <a href='{referral_link}'>Invite & Earn</a>.</li><li>📊 When access opens, sign in here: <a href='{app_url}'>Open CAP</a>.</li></ul><p>See you inside soon!</p>"
-        },
-        "pt": {
-            "title": "Você está na lista! 🚀",
-            "message": "<h2>Bem-vindo à CAP! 🎉</h2><p>Obrigado por entrar na nossa lista de espera. Você está na fila para experimentar primeiro a nossa Cardano Analytics Platform.</p><h3>O que vem a seguir?</h3><ul><li>📢 Enviaremos atualizações sobre o lançamento e novos recursos.</li><li>🔗 Compartilhe seu link de indicação: <a href='{referral_link}'>Convide e Ganhe</a>.</li><li>📊 Quando o acesso abrir, entre por aqui: <a href='{app_url}'>Abrir CAP</a>.</li></ul><p>Nos vemos em breve!</p>"
-        }
-    },
-    "user_registration": {
-        "en": {
-            "title": "Confirm your email for CAP",
-            "hello": "Hi",
-            "instructions": "Click the button below to confirm your email and finish your signup.",
-            "confirm": "Confirm email",
-            "footer": "If you didn’t request this, you can ignore this email."
-        },
-        "pt": {
-            "title": "Confirme seu e-mail para a CAP",
-            "hello": "Olá",
-            "instructions": "Clique no botão abaixo para confirmar seu e-mail e concluir seu cadastro.",
-            "confirm": "Confirmar e-mail",
-            "footer": "Se você não solicitou isto, basta ignorar este e-mail."
-        }
-    },
-    "user_confirmation_resent": {
-        "en": {
-            "title": "We resent your confirmation email",
-            "lead": "We sent you a new confirmation email. Please check your inbox (and spam folder).",
-            "help": "If you don’t see it, try again in a few minutes or contact support.",
-            "footer": "This is an automated message from the Cardano Analytics Platform (CAP)."
-        },
-        "pt": {
-            "title": "Reenviamos seu e-mail de confirmação",
-            "lead": "Enviamos um novo e-mail de confirmação. Verifique sua caixa de entrada (e o spam).",
-            "help": "Se ainda não aparecer, tente novamente em alguns minutos ou contate o suporte.",
-            "footer": "Mensagem automática da Cardano Analytics Platform (CAP)."
-        }
-    },
-    "user_confirmed": {
-        "en": {
-            "title": "Welcome to CAP!",
-            "lead": "Your email has been successfully confirmed.",
-            "next": "You can now sign in and start exploring analytics, queries, and dashboards.",
-            "footer": "Thanks for joining the Cardano Analytics Platform (CAP)."
-        },
-        "pt": {
-            "title": "Bem-vindo(a) à CAP!",
-            "lead": "Seu e-mail foi confirmado com sucesso.",
-            "next": "Agora você pode entrar e começar a explorar análises, consultas e dashboards.",
-            "footer": "Obrigado por se juntar à Cardano Analytics Platform (CAP)."
-        }
-    },
-    "oauth_login": {
-        "en": {
-            "title": "New sign-in notification",
-            "lead": "A new sign-in just occurred via",
-            "tip": "If this wasn’t you, please reset your password and check your account activity.",
-            "footer": "Security notice from the Cardano Analytics Platform (CAP)."
-        },
-        "pt": {
-            "title": "Novo login detectado",
-            "lead": "Um novo login ocorreu via",
-            "tip": "Se não foi você, redefina sua senha e verifique a atividade da conta.",
-            "footer": "Aviso de segurança da Cardano Analytics Platform (CAP)."
-        }
-    },
-    "wallet_login": {
-        "en": {
-            "title": "New wallet sign-in",
-            "lead": "A sign-in was made using your Cardano wallet:",
-            "tip": "If you don’t recognize this, review your sessions and secure your account.",
-            "footer": "Security notice from the Cardano Analytics Platform (CAP)."
-        },
-        "pt": {
-            "title": "Novo login por carteira",
-            "lead": "Um login foi feito usando sua carteira Cardano:",
-            "tip": "Se você não reconhece, revise suas sessões e proteja sua conta.",
-            "footer": "Aviso de segurança da Cardano Analytics Platform (CAP)."
-        }
+    "pt": {
+      "footer_note": "Você recebeu este e-mail porque está na lista de espera da CAP.",
+      "unsubscribe": "Cancelar inscrição"
     }
+  },
+  "waiting_list_confirmation": {
+    "en": {
+      "title": "You're on the List",
+      "message": "<h2>Welcome to CAP</h2><p>Thanks for joining the CAP waitlist. You’re now in line to get early access to the Cardano Analytics Platform.</p><h3>What’s next?</h3><ul style=\"margin: 12px 0 0 0; padding-left: 18px;\"><li style=\"margin: 0 0 8px 0;\">We’ll email you updates about the launch and upcoming features.</li><li style=\"margin: 0 0 8px 0;\">Join our Telegram channel: <a href=\"https://t.me/cardanoanalytics\" style=\"color:#2563eb; text-decoration:none;\">t.me/cardanoanalytics</a></li><li style=\"margin: 0;\">Feel free to share your referral link with friends who may be interested: <a href=\"{referral_link}\" style=\"color:#2563eb; text-decoration:none;\">Invite friends</a>.</li></ul><p style=\"margin: 16px 0 0 0;\">We’re excited to have you with us.</p>"
+    },
+    "pt": {
+      "title": "Você está na lista",
+      "message": "<h2>Bem-vindo à CAP</h2><p>Obrigado por entrar na lista de espera da CAP. Você está na fila para ter acesso antecipado à Cardano Analytics Platform.</p><h3>O que vem a seguir?</h3><ul style=\"margin: 12px 0 0 0; padding-left: 18px;\"><li style=\"margin: 0 0 8px 0;\">Enviaremos atualizações sobre o lançamento e novos recursos.</li><li style=\"margin: 0 0 8px 0;\">Entre no nosso canal no Telegram: <a href=\"https://t.me/cardanoanalytics\" style=\"color:#2563eb; text-decoration:none;\">t.me/cardanoanalytics</a></li><li style=\"margin: 0;\">Se quiser, compartilhe seu link de convite com amigos que possam se interessar: <a href=\"{referral_link}\" style=\"color:#2563eb; text-decoration:none;\">Convidar amigos</a>.</li></ul><p style=\"margin: 16px 0 0 0;\">Ficamos felizes em ter você com a gente.</p>"
+    }
+  },
+  "user_registration": {
+    "en": {
+      "title": "Confirm your email for CAP",
+      "hello": "Hi",
+      "instructions": "Click the button below to confirm your email and finish your signup.",
+      "confirm": "Confirm email",
+      "footer": "If you didn’t request this, you can ignore this email."
+    },
+    "pt": {
+      "title": "Confirme seu e-mail para a CAP",
+      "hello": "Olá",
+      "instructions": "Clique no botão abaixo para confirmar seu e-mail e concluir seu cadastro.",
+      "confirm": "Confirmar e-mail",
+      "footer": "Se você não solicitou isto, basta ignorar este e-mail."
+    }
+  },
+  "user_confirmation_resent": {
+    "en": {
+      "title": "We resent your confirmation email",
+      "lead": "We sent you a new confirmation email. Please check your inbox (and spam folder).",
+      "help": "If you don’t see it, try again in a few minutes or contact support.",
+      "footer": "This is an automated message from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "title": "Reenviamos seu e-mail de confirmação",
+      "lead": "Enviamos um novo e-mail de confirmação. Verifique sua caixa de entrada (e o spam).",
+      "help": "Se ainda não aparecer, tente novamente em alguns minutos ou contate o suporte.",
+      "footer": "Mensagem automática da Cardano Analytics Platform (CAP)."
+    }
+  },
+  "user_confirmed": {
+    "en": {
+      "title": "Welcome to CAP!",
+      "lead": "Your email has been successfully confirmed.",
+      "next": "You can now sign in and start exploring analytics, queries, and dashboards.",
+      "footer": "Thanks for joining the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "title": "Bem-vindo(a) à CAP!",
+      "lead": "Seu e-mail foi confirmado com sucesso.",
+      "next": "Agora você pode entrar e começar a explorar análises, consultas e dashboards.",
+      "footer": "Obrigado por se juntar à Cardano Analytics Platform (CAP)."
+    }
+  },
+  "oauth_login": {
+    "en": {
+      "title": "New sign-in notification",
+      "lead": "A new sign-in just occurred via",
+      "tip": "If this wasn’t you, please reset your password and check your account activity.",
+      "footer": "Security notice from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "title": "Novo login detectado",
+      "lead": "Um novo login ocorreu via",
+      "tip": "Se não foi você, redefina sua senha e verifique a atividade da conta.",
+      "footer": "Aviso de segurança da Cardano Analytics Platform (CAP)."
+    }
+  },
+  "wallet_login": {
+    "en": {
+      "title": "New wallet sign-in",
+      "lead": "A sign-in was made using your Cardano wallet:",
+      "tip": "If you don’t recognize this, review your sessions and secure your account.",
+      "footer": "Security notice from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "title": "Novo login por carteira",
+      "lead": "Um login foi feito usando sua carteira Cardano:",
+      "tip": "Se você não reconhece, revise suas sessões e proteja sua conta.",
+      "footer": "Aviso de segurança da Cardano Analytics Platform (CAP)."
+    }
+  }
 }

@@ -10,8 +10,11 @@ from cap.database.session import get_db
 from cap.database.model import User
 from cap.services.admin_alerts_service import maybe_notify_admins_new_user
 from cap.core.security import (
-    hash_password, verify_password, make_access_token,
-    generate_unique_username, new_confirmation_token
+    hash_password,
+    verify_password,
+    make_access_token,
+    generate_unique_username,
+    new_confirmation_token,
 )
 from cap.core.google_oauth import get_userinfo_from_access_token_or_idtoken
 
@@ -19,7 +22,7 @@ from cap.core.google_oauth import get_userinfo_from_access_token_or_idtoken
 try:
     from cap.mailing.event_triggers import (
         on_user_registered,        # existing in CAP (confirm-your-email)
-        on_waiting_list_joined,    # notify user joined waiting list (not used here)
+        on_waiting_list_joined,    # notify user joined waiting list
         on_confirmation_resent,    # notify user that a new confirmation email was sent
         on_user_confirmed,         # notify / log that user confirmed their email
         on_oauth_login,            # notify / log OAuth login
@@ -28,13 +31,16 @@ try:
 except Exception:
     # Fallbacks to avoid breaking imports if optional triggers aren't defined yet.
     def on_user_registered(*args, **kwargs): pass
+    def on_waiting_list_joined(*args, **kwargs): pass
     def on_confirmation_resent(*args, **kwargs): pass
     def on_user_confirmed(*args, **kwargs): pass
     def on_oauth_login(*args, **kwargs): pass
     def on_wallet_login(*args, **kwargs): pass
 
+
 route_prefix = "/api/v1"
 router = APIRouter(prefix=route_prefix, tags=["auth"])
+
 
 # ---- Pydantic shapes ----
 class WalletClaimEmailIn(BaseModel):
@@ -44,19 +50,23 @@ class WalletClaimEmailIn(BaseModel):
     ref: str | None = ""
     language: str | None = "en"
 
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str
     language: str | None = "en"
+
 
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
     remember_me: bool = False
 
+
 class ResendIn(BaseModel):
     email: EmailStr
     language: str | None = "en"
+
 
 class GoogleIn(BaseModel):
     token: str
@@ -65,37 +75,47 @@ class GoogleIn(BaseModel):
     language: str | None = "en"
     ref: str | None = ""
 
+
 class CardanoIn(BaseModel):
     address: str
     remember_me: bool = True
     language: str | None = "en"
     ref: str | None = ""
 
-def _ensure_waitlist_row(db: Session, email: str, ref: str = "", language: str = "en") -> None:
+
+def _ensure_waitlist_row(
+    db: Session, email: str, ref: str = "", language: str = "en"
+) -> bool:
     """
     Insert into waiting_list if not exists.
-    This keeps OAuth "signup" behavior aligned with /wait_list but without failing on duplicates.
+    Returns True if inserted, False if already existed / skipped.
     """
     e = (email or "").strip().lower()
     if not e:
-        return
+        return False
 
     exists = db.execute(
         text("SELECT 1 FROM waiting_list WHERE email = :e"),
         {"e": e},
     ).first()
     if exists:
-        return
+        return False
 
     db.execute(
         text("INSERT INTO waiting_list (email, ref, language) VALUES (:e, :r, :l)"),
         {"e": e, "r": ref or "", "l": (language or "en").strip().lower()},
     )
     db.commit()
+    return True
+
 
 # ---- Auth: Claim e-mail (for wallet) ----
 @router.post("/auth/wallet_claim_email")
-def wallet_claim_email(data: WalletClaimEmailIn, db: Session = Depends(get_db)):
+def wallet_claim_email(
+    data: WalletClaimEmailIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.user_id == data.user_id).first()
     if not user:
         raise HTTPException(404, detail="userNotFound")
@@ -103,30 +123,39 @@ def wallet_claim_email(data: WalletClaimEmailIn, db: Session = Depends(get_db)):
     if not user.wallet_address or user.wallet_address != data.wallet_address:
         raise HTTPException(400, detail="walletMismatch")
 
+    email_norm = (str(data.email or "").strip().lower()) if data.email else ""
+    if not email_norm:
+        raise HTTPException(400, detail="invalidEmailFormat")
+
     # prevent stealing an email already owned by another user
-    existing = db.query(User).filter(User.email == data.email).first()
+    existing = db.query(User).filter(User.email == email_norm).first()
     if existing and existing.user_id != user.user_id:
         raise HTTPException(400, detail="userExistsError")
 
-    # attach email if missing (or same email)
-    user.email = data.email
+    # Attach email
+    user.email = email_norm
     db.commit()
 
-    # add to waiting list (idempotent)
-    before = db.execute(
-        text("SELECT 1 FROM waiting_list WHERE email = :e"),
-        {"e": data.email.strip().lower()},
-    ).first()
-
-    _ensure_waitlist_row(
+    inserted = _ensure_waitlist_row(
         db,
-        email=data.email,
+        email=email_norm,
         ref=(data.ref or ""),
         language=(data.language or "en"),
     )
 
-    # return status that lets frontend show success vs already
-    if before:
+    # Trigger waitlist email ONLY when this is a new waitlist entry
+    if inserted:
+        try:
+            on_waiting_list_joined(
+                to=[email_norm],
+                language=(data.language or "en"),
+                referral_link="",
+            )
+        except Exception as mail_err:
+            print(f"[WAITLIST] Mail trigger failed for {email_norm}: {mail_err}")
+
+    # Return status that lets frontend show success vs already
+    if not inserted:
         raise HTTPException(418, detail="alreadyOnList")
 
     return {"status": "waitlisted", "id": user.user_id, "email": user.email}
@@ -163,17 +192,16 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     base = str(request.base_url).rstrip("/")
     activation_link = f"{base}/{route_prefix}/confirm/{token}"
 
-
     # Send confirmation email
-    # Uses CAP mailing service (Resend + Jinja templates + i18n). :contentReference[oaicite:2]{index=2}
     on_user_registered(
         to=[data.email],
         language=(data.language or "en"),
-        username=new_user.username or data.email.split('@')[0],
+        username=new_user.username or data.email.split("@")[0],
         activation_link=activation_link,
     )
 
     return {"redirect": "/login?confirmed=false"}
+
 
 # ---- Confirm email ----
 @router.get("/confirm/{token}")
@@ -191,6 +219,7 @@ def confirm_email(token: str, db: Session = Depends(get_db)):
 
     return RedirectResponse(url="/login?confirmed=true")
 
+
 # ---- Resend confirmation ----
 @router.post("/resend_confirmation")
 def resend_confirmation(data: ResendIn, request: Request, db: Session = Depends(get_db)):
@@ -205,14 +234,12 @@ def resend_confirmation(data: ResendIn, request: Request, db: Session = Depends(
     user.confirmation_token = token
     db.commit()
 
-    base = str(request.base_url).rstrip("/")
-    activation_link = f"{base}/{route_prefix}/confirm/{token}"
-
     # You may choose to send the full "confirm your email" again here:
     # on_user_registered([...]) — or use a lighter "confirmation resent" notice:
     on_confirmation_resent(to=[data.email], language=(data.language or "en"))
 
     return {"message": "resent"}
+
 
 # ---- Login (email/password) ----
 @router.post("/login")
@@ -242,11 +269,14 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "access_token": token,
     }
 
+
 # ---- Google OAuth (access_token from client) ----
 @router.post("/auth/google")
-def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
+def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db)):
     try:
-        info = get_userinfo_from_access_token_or_idtoken(data.token, getattr(data, "token_type", None))
+        info = get_userinfo_from_access_token_or_idtoken(
+            data.token, getattr(data, "token_type", None)
+        )
 
         google_id = info["sub"]
         email = info.get("email")
@@ -259,14 +289,16 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
         user = db.query(User).filter(User.google_id == google_id).first()
 
         if not user:
-            username = generate_unique_username(db, User, preferred=(display_name or email.split("@")[0]))
+            username = generate_unique_username(
+                db, User, preferred=(display_name or email.split("@")[0])
+            )
             user = User(
                 google_id=google_id,
                 email=email,
                 username=username,
                 display_name=display_name,
                 avatar=avatar,
-                is_confirmed=False,   # CHANGED: do not auto-confirm
+                is_confirmed=False,  # do not auto-confirm
                 is_admin=False,
             )
             db.add(user)
@@ -285,7 +317,23 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
 
         # If not confirmed, put on waitlist and do not issue token
         if not bool(user.is_confirmed):
-            _ensure_waitlist_row(db, email=email, ref=(data.ref or ""), language=(data.language or "en"))
+            inserted = _ensure_waitlist_row(
+                db,
+                email=email,
+                ref=(data.ref or ""),
+                language=(data.language or "en"),
+            )
+
+            if inserted:
+                try:
+                    on_waiting_list_joined(
+                        to=[email],
+                        language=(data.language or "en"),
+                        referral_link="",
+                    )
+                except Exception as mail_err:
+                    print(f"[WAITLIST] Mail trigger failed for {email}: {mail_err}")
+
             return {
                 "status": "pending_confirmation",
                 "id": user.user_id,
@@ -312,6 +360,7 @@ def auth_google(data: GoogleIn, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(400, detail=str(e))
 
+
 # ---- Cardano wallet auth (simplified flow) ----
 @router.post("/auth/cardano")
 def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
@@ -331,7 +380,7 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
             username=username,
             wallet_address=data.address,
             display_name=display_name,
-            is_confirmed=False,   # CHANGED: do not auto-confirm
+            is_confirmed=False,  # do not auto-confirm
             is_admin=False,
         )
         db.add(user)
@@ -351,7 +400,11 @@ def cardano_auth(data: CardanoIn, db: Session = Depends(get_db)):
     token = make_access_token(str(user.user_id), remember=data.remember_me)
 
     if user.email:
-        on_wallet_login(to=[user.email], language=(data.language or "en"), wallet_address=data.address)
+        on_wallet_login(
+            to=[user.email],
+            language=(data.language or "en"),
+            wallet_address=data.address,
+        )
 
     return {
         "id": user.user_id,
