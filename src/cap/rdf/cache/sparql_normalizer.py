@@ -315,10 +315,15 @@ class SPARQLNormalizer:
                 continue
             if self._is_inside_bind_if(text, match):
                 continue
+
+            # Skip if this is part of SPARQL syntax (GROUP BY, ORDER BY, etc.)
+            literal_content = match.group(1).strip()
+            if re.match(r'^(GROUP|ORDER|FILTER|BIND|OPTIONAL)\s+BY', literal_content, re.IGNORECASE):
+                continue
+
             placeholder = f"<<STR_{self.counters.str}>>"
             self.counters.str += 1
             self.placeholder_map[placeholder] = match.group(0)
-            # Use slicing instead of replace to target exact position
             text = text[:match.start()] + placeholder + text[match.end():]
 
         return text
