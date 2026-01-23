@@ -114,6 +114,27 @@ def _detect_ada_variables(sparql_query: str) -> set[str]:
         if len(ada_vars) == previous_count:
             break
 
+    # Step 3: Detect variables that might be ADA based on token name binding
+    # Pattern: ?currency b:hasTokenName ?tokenName
+    token_name_bindings = re.findall(
+        r'\?(\w+)\s+(?:b:)?hasTokenName\s+\?(\w+)',
+        query_text,
+        re.IGNORECASE
+    )
+
+    # Find value variables associated with these currencies
+    for currency_var, token_name_var in token_name_bindings:
+        # Look for hasValue patterns with this currency variable
+        # Pattern: ?tokenState b:hasCurrency ?currency ; b:hasValue ?value
+        value_pattern = rf'\?(\w+)\s+(?:b:)?hasCurrency\s+\?{currency_var}\s*[;,]\s*(?:b:)?hasValue\s+\?(\w+)'
+        value_matches = re.findall(value_pattern, query_text, re.IGNORECASE)
+
+        for _, value_var in value_matches:
+            # Mark this value variable as potentially ADA
+            # It will be checked at runtime against tokenName
+            ada_vars.add(value_var)
+            logger.info(f"Added potential ADA variable: {value_var} (linked to token name via {currency_var})")
+
     logger.info(f"Final detected ADA variables after propagation: {ada_vars}")
     return ada_vars
 
@@ -258,6 +279,13 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
     if not binding:
         return result
 
+    # Check once if this binding has "Cardano ADA" as tokenName
+    has_cardano_ada_token = False
+    if 'tokenName' in binding:
+        token_name_obj = binding['tokenName']
+        token_name_value = token_name_obj.get('value', '') if isinstance(token_name_obj, dict) else str(token_name_obj)
+        has_cardano_ada_token = token_name_value.strip().lower() == 'cardano ada'
+
     for var_name, value_obj in binding.items():
         if not isinstance(value_obj, dict):
             result[var_name] = value_obj
@@ -270,10 +298,17 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
         # Convert based on datatype
         converted_value = _convert_value(value, datatype, value_type)
 
-        # Handle ADA conversion
+        # Handle ADA conversion - prioritize explicit ada_variables detection
         if var_name in ada_variables and isinstance(converted_value, str):
             try:
                 # Check if it's a numeric value
+                float(converted_value)
+                converted_value = _convert_lovelace_to_ada(converted_value)
+            except (ValueError, TypeError):
+                pass  # Keep original value if not numeric
+        # Also check if this binding has "Cardano ADA" as tokenName for numeric fields
+        elif has_cardano_ada_token and isinstance(converted_value, str) and var_name != 'tokenName':
+            try:
                 float(converted_value)
                 converted_value = _convert_lovelace_to_ada(converted_value)
             except (ValueError, TypeError):
