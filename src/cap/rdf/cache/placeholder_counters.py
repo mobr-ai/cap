@@ -26,6 +26,8 @@ class PlaceholderCounters:
     duration: int = 0
     definition: int = 0
     quantifier: int = 0
+    utxo_ref: int = 0
+    address: int = 0
 
     def update_from_placeholder(self, placeholder) -> None:
         """Update counter based on placeholder type."""
@@ -66,5 +68,11 @@ class PlaceholderCounters:
             elif placeholder.startswith("<<QUANT_"):
                 idx = int(placeholder.replace('<<QUANT_', '').replace('>>', ''))
                 self.quantifier = max(self.quantifier, idx + 1)
+            elif placeholder.startswith("<<UTXO_REF_"):
+                idx = int(placeholder.replace('<<UTXO_REF_', '').replace('>>', ''))
+                self.utxo_ref = max(self.utxo_ref, idx + 1)
+            elif placeholder.startswith("<<ADDRESS_"):
+                idx = int(placeholder.replace('<<ADDRESS_', '').replace('>>', ''))
+                self.address = max(self.address, idx + 1)
         except (AttributeError, ValueError) as e:
             logger.warning(f"Failed to parse index from {placeholder}: {e}")

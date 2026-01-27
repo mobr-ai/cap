@@ -74,6 +74,8 @@ class SPARQLNormalizer:
         normalized = self._extract_inject_statements(normalized)
         normalized = self._extract_currency_uris(normalized)
         normalized = self._extract_pool_ids(normalized)
+        normalized = self._extract_utxo_refs(normalized)
+        normalized = self._extract_addresses(normalized)
         normalized = self._extract_uris(normalized)
         normalized = self._extract_temporal_patterns(normalized)
         normalized = self._extract_order_clauses(normalized)
@@ -181,6 +183,46 @@ class SPARQLNormalizer:
 
         return text
 
+    def _extract_utxo_refs(self, text: str) -> str:
+        """Extract UTXO references (txhash#index)."""
+        utxo_pattern = r'["\']?([a-f0-9]{64})#(\d+)["\']?'
+        matches = list(re.finditer(utxo_pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+
+            tx_hash = match.group(1)
+            tx_index = match.group(2)
+            placeholder = f"<<UTXO_REF_{self.counters.utxo_ref}>>"
+            self.counters.utxo_ref += 1
+
+            # Store as separate components for SPARQL VALUES
+            self.placeholder_map[placeholder] = f'{tx_hash}#{tx_index}'
+
+            text = text[:match.start()] + placeholder + text[match.end():]
+
+        return text
+
+    def _extract_addresses(self, text: str) -> str:
+        """Extract Cardano addresses."""
+        address_pattern = r'["\']?(addr1[a-z0-9]{50,}|stake1[a-z0-9]{50,})["\']?'
+        matches = list(re.finditer(address_pattern, text, re.IGNORECASE))
+
+        for match in reversed(matches):
+            if self._is_inside_placeholder(text, match):
+                continue
+
+            address = match.group(1)
+            placeholder = f"<<ADDRESS_{self.counters.address}>>"
+            self.counters.address += 1
+
+            self.placeholder_map[placeholder] = f'"{address}"'
+
+            text = text[:match.start()] + placeholder + text[match.end():]
+
+        return text
+
     def _extract_temporal_patterns(self, text: str) -> str:
         """Extract temporal patterns (years, periods)."""
 
@@ -273,10 +315,12 @@ class SPARQLNormalizer:
                 continue
             if self._is_inside_bind_if(text, match):
                 continue
+            if self._is_inside_optional_block(text, match):
+                continue
+
             placeholder = f"<<STR_{self.counters.str}>>"
             self.counters.str += 1
             self.placeholder_map[placeholder] = match.group(0)
-            # Use slicing instead of replace to target exact position
             text = text[:match.start()] + placeholder + text[match.end():]
 
         return text
@@ -310,6 +354,36 @@ class SPARQLNormalizer:
 
         # If paren_count > 0, we're still inside the BIND(IF(...))
         return paren_count > 0
+
+    def _is_inside_optional_block(self, text: str, match: re.Match) -> bool:
+        """Check if match is inside an OPTIONAL {...} block."""
+        before_text = text[:match.start()]
+
+        # Find all OPTIONAL blocks before this position
+        optional_starts = []
+        for m in re.finditer(r'OPTIONAL\s*\{', before_text, re.IGNORECASE):
+            optional_starts.append(m.end() - 1)  # Position of the opening brace
+
+        if not optional_starts:
+            return False
+
+        # For each OPTIONAL start, count braces to see if we're still inside
+        for opt_start in optional_starts:
+            brace_count = 1  # Start with the opening brace
+            i = opt_start + 1
+
+            while i < match.start() and brace_count > 0:
+                if text[i] == '{':
+                    brace_count += 1
+                elif text[i] == '}':
+                    brace_count -= 1
+                i += 1
+
+            # If this OPTIONAL block is still open at our match position, we're inside it
+            if brace_count > 0:
+                return True
+
+        return False
 
     def _extract_limit_offset(self, text: str) -> str:
         """Extract LIMIT and OFFSET values."""

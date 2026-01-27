@@ -122,7 +122,7 @@ def _validate_and_fix_sparql(query: str, nl_query: str) -> tuple[bool, str, list
     fixed_query = query
 
     # Step 1: Pre-validation fixes for common GROUP BY issues
-    fixed_query = _fix_group_by_aggregation(fixed_query, issues)
+    #fixed_query = _fix_group_by_aggregation(fixed_query, issues)
 
     # Step 2: Try syntax validation
     try:
