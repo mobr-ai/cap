@@ -1,11 +1,11 @@
 {
   "base_email": {
     "en": {
-      "footer_note": "You received this email because you're on the CAP waitlist.",
+      "footer_note": "You received this email because it relates to your CAP account or activity.",
       "unsubscribe": "Unsubscribe"
     },
     "pt": {
-      "footer_note": "Você recebeu este e-mail porque está na lista de espera da CAP.",
+      "footer_note": "Você recebeu este e-mail porque ele se relaciona à sua conta ou atividade na CAP.",
       "unsubscribe": "Cancelar inscrição"
     }
   },
@@ -89,6 +89,110 @@
       "lead": "Um login foi feito usando sua carteira Cardano:",
       "tip": "Se você não reconhece, revise suas sessões e proteja sua conta.",
       "footer": "Aviso de segurança da Cardano Analytics Platform (CAP)."
+    }
+  },
+  "user_email_verified": {
+    "en": {
+      "preheader": "Your email address has been successfully verified.",
+      "title": "Email verified",
+      "lead": "Thanks! Your email address has been successfully verified.",
+      "next": "If you have access enabled, you can now sign in and start using CAP.",
+      "cta_label": "Open CAP",
+      "footer": "This is an automated message from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "preheader": "Seu endereço de e-mail foi verificado com sucesso.",
+      "title": "E-mail verificado",
+      "lead": "Obrigado! Seu endereço de e-mail foi verificado com sucesso.",
+      "next": "Se o seu acesso estiver habilitado, você já pode entrar e começar a usar a CAP.",
+      "cta_label": "Abrir CAP",
+      "footer": "Mensagem automática da Cardano Analytics Platform (CAP)."
+    }
+  },
+  "user_access_granted": {
+    "en": {
+      "preheader": "Your CAP account is now active.",
+      "title": "Access granted",
+      "lead": "Your account has been approved and is now active.",
+      "next": "You can sign in and start exploring analytics, queries, and dashboards.",
+      "cta_label": "Open CAP",
+      "footer": "Welcome aboard — this message was sent by the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "preheader": "Sua conta CAP agora está ativa.",
+      "title": "Acesso liberado",
+      "lead": "Sua conta foi aprovada e agora está ativa.",
+      "next": "Você já pode entrar e começar a explorar análises, consultas e dashboards.",
+      "cta_label": "Abrir CAP",
+      "footer": "Bem-vindo(a) — mensagem enviada pela Cardano Analytics Platform (CAP)."
+    }
+  },
+  "waitlist_promoted": {
+    "en": {
+      "preheader": "Good news: your CAP access is now available.",
+      "title": "You’re in",
+      "lead": "Good news, your waitlist request has been approved.",
+      "next": "You can now sign in and start using CAP.",
+      "cta_label": "Open CAP",
+      "footer": "This is an automated message from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "preheader": "Boas notícias: seu acesso à CAP já está disponível.",
+      "title": "Acesso liberado",
+      "lead": "Boas notícias, seu pedido na lista de espera foi aprovado.",
+      "next": "Agora você já pode entrar e começar a usar a CAP.",
+      "cta_label": "Abrir CAP",
+      "footer": "Mensagem automática da Cardano Analytics Platform (CAP)."
+    }
+  },
+  "admin_user_confirmed": {
+    "en": {
+      "preheader": "A user has just been confirmed/approved in your CAP instance.",
+      "title": "User confirmed",
+      "lead": "A user account has just been confirmed/approved on {app_name}.",
+      "username_label": "Username",
+      "email_label": "Email",
+      "source_label": "Source",
+      "source_password": "Email & password",
+      "source_google": "Google OAuth",
+      "source_cardano": "Cardano wallet",
+      "source_waitlist": "Waitlist",
+      "manage_hint": "You can review the user’s details and permissions in the admin panel.",
+      "manage_link_label": "Open CAP",
+      "footer": "You’re receiving this message because admin notifications are enabled."
+    },
+    "pt": {
+      "preheader": "Um usuário acabou de ser confirmado/aprovado na sua instância da CAP.",
+      "title": "Usuário confirmado",
+      "lead": "Uma conta de usuário acabou de ser confirmada/aprovada no {app_name}.",
+      "username_label": "Usuário",
+      "email_label": "E-mail",
+      "source_label": "Origem",
+      "source_password": "E-mail e senha",
+      "source_google": "Google OAuth",
+      "source_cardano": "Carteira Cardano",
+      "source_waitlist": "Lista de espera",
+      "manage_hint": "Você pode revisar os detalhes e permissões do usuário no painel de admin.",
+      "manage_link_label": "Abrir CAP",
+      "footer": "Você está recebendo esta mensagem porque as notificações de admin estão habilitadas."
+    }
+  },
+  "user_access_revoked": {
+    "en": {
+      "preheader": "Your CAP account access has been updated.",
+      "title": "Access updated",
+      "lead": "Your account access has been revoked or disabled at this time.",
+      "help": "If you believe this is a mistake, please contact support.",
+      "cta_label": "Open CAP",
+      "footer": "This is an automated message from the Cardano Analytics Platform (CAP)."
+    },
+    "pt": {
+      "preheader": "O acesso da sua conta CAP foi atualizado.",
+      "title": "Acesso atualizado",
+      "lead": "O acesso da sua conta foi revogado ou desabilitado no momento.",
+      "help": "Se você acredita que isso é um engano, por favor contate o suporte.",
+      "cta_label": "Abrir CAP",
+      "footer": "Mensagem automática da Cardano Analytics Platform (CAP)."
     }
   }
 }

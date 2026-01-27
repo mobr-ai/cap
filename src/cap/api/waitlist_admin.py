@@ -7,13 +7,26 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from cap.core.auth_dependencies import get_current_admin_user
 from cap.database.model import User
 from cap.database.session import get_db
+
+# Mailing triggers
+from cap.mailing.event_triggers import (
+  on_waitlist_promoted,
+  # If you prefer to also send a generic "access granted" email,
+  # you can enable it below (but beware of double emails).
+  # on_user_access_granted,
+)
+
+# Admin alerts (config-driven)
+from cap.services.admin_alerts_service import (
+  maybe_notify_admins_user_confirmed,
+)
 
 router = APIRouter(prefix="/api/v1/admin/wait_list", tags=["waitlist_admin"])
 
@@ -56,6 +69,7 @@ class CreateUserFromWaitlistOut(BaseModel):
 # -----------------------------
 
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+USERNAME_ALLOWED_RE = re.compile(r"[^a-z0-9_]+")
 
 
 def _normalize_email(raw: str) -> str:
@@ -101,6 +115,52 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
   }
 
 
+def _email_to_username_base(email: str) -> str:
+  """
+  Derive a stable username base from email local-part:
+  - lower
+  - replace invalid chars with underscore
+  - collapse underscores
+  - trim to a reasonable size
+  """
+  local = (email.split("@", 1)[0] if email else "").strip().lower()
+  local = USERNAME_ALLOWED_RE.sub("_", local)
+  local = re.sub(r"_+", "_", local).strip("_")
+  if not local:
+    local = "user"
+  # keep reasonably short (avoid UI overflow / DB limits)
+  return local[:24]
+
+
+def _ensure_username(db: Session, user: User) -> bool:
+  """
+  Ensure `user.username` is set and unique.
+  Returns True if it changed the user.
+  """
+  current = (getattr(user, "username", None) or "").strip()
+  if current:
+    return False
+
+  base = _email_to_username_base(getattr(user, "email", "") or "")
+  candidate = base
+
+  # Try a few suffixes to avoid collisions.
+  # We purposely avoid random here for determinism in dev/test.
+  for i in range(0, 200):
+    if i > 0:
+      candidate = f"{base}{i}"
+      candidate = candidate[:30]  # keep within typical limits
+
+    exists = db.scalar(select(User.user_id).where(User.username == candidate))
+    if not exists:
+      user.username = candidate
+      return True
+
+  # Fallback if something pathological happens
+  user.username = f"{base}{user.user_id or ''}"[:30]
+  return True
+
+
 def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -> tuple[User, str]:
   """
   Returns (user, status): status in {"exists","created","updated"}.
@@ -111,6 +171,11 @@ def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -
     if refer_user_id and not getattr(user, "refer_id", None):
       user.refer_id = refer_user_id
       changed = True
+
+    # backfill username if missing
+    if _ensure_username(db, user):
+      changed = True
+
     if changed:
       db.add(user)
       db.commit()
@@ -120,9 +185,21 @@ def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -
 
   try:
     user = User(email=email, refer_id=refer_user_id)
+
+    # assign username for newly created waitlist users
+    _ensure_username(db, user)
+
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # In case username fallback relies on user_id, ensure it’s set
+    if (getattr(user, "username", None) or "").strip() == "user":
+      if _ensure_username(db, user):
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
     return user, "created"
   except IntegrityError:
     db.rollback()
@@ -130,6 +207,14 @@ def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -
     user = db.scalar(select(User).where(User.email == email))
     if not user:
       raise
+
+    # even in race, ensure username is not blank
+    changed = _ensure_username(db, user)
+    if changed:
+      db.add(user)
+      db.commit()
+      db.refresh(user)
+
     return user, "exists"
   except SQLAlchemyError:
     db.rollback()
@@ -272,19 +357,43 @@ def create_user_from_waitlist(
     raise HTTPException(status_code=404, detail="Waitlist entry not found")
 
   ref = (row.get("ref") or "").strip()
+  lang = (row.get("language") or "en").strip() or "en"
   refer_user_id = _parse_ref_to_user_id(ref)
 
   try:
     user, status_str = _get_or_create_user(db, normalized, refer_user_id=refer_user_id)
 
+    # Track transition for notifications (avoid duplicates)
+    was_confirmed = bool(user.is_confirmed)
+    will_confirm = bool(payload.confirm)
+
     # optionally confirm
-    if bool(payload.confirm) and not user.is_confirmed:
+    if will_confirm and not was_confirmed:
       user.is_confirmed = True
       db.add(user)
       db.commit()
       db.refresh(user)
 
-    # remove from waitlist
+      # ----------------------------
+      # User-facing: waitlist approved
+      # ----------------------------
+      if user.email:
+        on_waitlist_promoted(
+          to=[user.email],
+          language=lang,
+          app_url=None,
+        )
+
+      # ----------------------------
+      # Admin-facing: "user confirmed" (config bucket)
+      # ----------------------------
+      maybe_notify_admins_user_confirmed(
+        db=db,
+        user=user,
+        source="waitlist_admin",
+      )
+
+    # remove from waitlist (always attempt, regardless of confirm)
     res = db.execute(
       text("DELETE FROM waiting_list WHERE email = :e"),
       {"e": normalized},

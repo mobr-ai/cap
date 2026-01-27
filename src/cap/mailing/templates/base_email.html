@@ -11,13 +11,53 @@
     />
     <meta name="color-scheme" content="light dark" />
     <meta name="supported-color-schemes" content="light dark" />
-    <title>{{ app_name|default('CAP') }}</title>
+    <title>{{ app_name|default("CAP") }}</title>
+
     <style>
-      /* Some clients respect <style>; we still inline critical stuff below */
       :root {
         color-scheme: light dark;
-        supported-color-schemes: light dark;
       }
+
+      /* Badge colors (light mode baseline) */
+      .type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font:
+          600 12px/1.2 -apple-system,
+          BlinkMacSystemFont,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        color: #111827;
+        background: rgba(255, 255, 255, 0.7);
+      }
+      .type-auth {
+        background: rgba(37, 99, 235, 0.12);
+        border-color: rgba(37, 99, 235, 0.28);
+        color: #6e768b;
+      }
+      .type-security {
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.28);
+        color: #8d5252;
+      }
+      .type-admin {
+        background: rgba(139, 92, 246, 0.12);
+        border-color: rgba(139, 92, 246, 0.28);
+        color: #7e67a0;
+      }
+      .type-neutral {
+        background: rgba(17, 24, 39, 0.06);
+        border-color: rgba(17, 24, 39, 0.12);
+        color: #c6cad1;
+      }
+
       @media (prefers-color-scheme: dark) {
         .bg-body {
           background-color: #0b1220 !important;
@@ -41,9 +81,33 @@
         .divider {
           border-color: #233152 !important;
         }
+
+        /* Badge colors (dark mode) */
+        .type-badge {
+          color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.18) !important;
+          background: rgba(255, 255, 255, 0.1) !important;
+        }
+        .type-auth {
+          background: rgba(96, 165, 250, 0.18) !important;
+          border-color: rgba(96, 165, 250, 0.35) !important;
+        }
+        .type-security {
+          background: rgba(251, 191, 36, 0.16) !important;
+          border-color: rgba(251, 191, 36, 0.35) !important;
+        }
+        .type-admin {
+          background: rgba(167, 139, 250, 0.16) !important;
+          border-color: rgba(167, 139, 250, 0.35) !important;
+        }
+        .type-neutral {
+          background: rgba(255, 255, 255, 0.14) !important;
+          border-color: rgba(255, 255, 255, 0.22) !important;
+        }
       }
     </style>
   </head>
+
   <body class="bg-body" style="margin: 0; padding: 0; background: #f3f4f6">
     <!-- Preheader (hidden) -->
     <div
@@ -62,7 +126,8 @@
 
     <!--[if mso]>
     <center>
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td>
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
+        <tr><td>
     <![endif]-->
 
     <table
@@ -107,6 +172,7 @@
                   "
                 />
                 {% endif %}
+
                 <div
                   style="
                     font:
@@ -121,9 +187,24 @@
                     margin-top: 10px;
                   "
                 >
-                  {% block header_title %}{{ app_name|default('CAP') }}{%
+                  {% block header_title %}{{ app_name|default("CAP") }}{%
                   endblock %}
                 </div>
+
+                {% if template_type %} {% set _tt = (template_type|string)|lower
+                %} {% if _tt == "auth" %} {% set _badge_class = "type-auth" %}
+                {% elif _tt == "security" %} {% set _badge_class =
+                "type-security" %} {% elif _tt == "admin" %} {% set _badge_class
+                = "type-admin" %} {% else %} {% set _badge_class =
+                "type-neutral" %} {% endif %}
+
+                <div
+                  class="type-badge {{ _badge_class }}"
+                  style="margin-top: 6px"
+                >
+                  {{ _tt }}
+                </div>
+                {% endif %}
               </td>
             </tr>
 
@@ -178,9 +259,10 @@
                 "
               >
                 <div>
-                  {{ translations.footer_note or "This notification was sent by
-                  the Cardano Analytics Platform." }}
+                  {{ translations.footer_note or "You received this email
+                  because it relates to your CAP account or activity." }}
                 </div>
+
                 {% if unsubscribe_url %}
                 <div style="margin-top: 8px">
                   <a
@@ -210,7 +292,7 @@
     </table>
 
     <!--[if mso]>
-    </td></tr></table>
+        </td></tr></table>
     </center>
     <![endif]-->
   </body>

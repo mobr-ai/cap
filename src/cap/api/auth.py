@@ -1,5 +1,5 @@
 # cap/src/cap/api/auth.py
-import hashlib
+import hashlib, os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
@@ -40,6 +40,20 @@ except Exception:
 
 route_prefix = "/api/v1"
 router = APIRouter(prefix=route_prefix, tags=["auth"])
+
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL")  # e.g. "https://cap.mobr.ai"
+
+def _stable_base_url(request: Request) -> str:
+    """Prefer PUBLIC_BASE_URL to avoid localhost/0.0.0.0 links; fallback to request base_url."""
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+def _make_referral_link(base_url: str, user_id: int | None) -> str:
+    """Build /signup?ref=u<user_id> or plain /signup if absent."""
+    if user_id:
+        return f"{base_url}/signup?ref=u{user_id}"
+    return f"{base_url}/signup"
 
 
 # ---- Pydantic shapes ----
@@ -146,10 +160,13 @@ def wallet_claim_email(
     # Trigger waitlist email ONLY when this is a new waitlist entry
     if inserted:
         try:
+            base_url = _stable_base_url(request)
+            referral_link = _make_referral_link(base_url, getattr(user, "user_id", None))
+
             on_waiting_list_joined(
                 to=[email_norm],
                 language=(data.language or "en"),
-                referral_link="",
+                referral_link=referral_link,
             )
         except Exception as mail_err:
             print(f"[WAITLIST] Mail trigger failed for {email_norm}: {mail_err}")
@@ -279,34 +296,61 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
         )
 
         google_id = info["sub"]
-        email = info.get("email")
+        email = (info.get("email") or "").strip().lower()
         display_name = info.get("name") or ""
         avatar = info.get("picture", "")
 
         if not email:
             raise HTTPException(400, detail="missingGoogleEmail")
 
+        # 1) Prefer lookup by google_id
         user = db.query(User).filter(User.google_id == google_id).first()
 
+        # 2) If not found, try to link to an existing user by email
         if not user:
-            username = generate_unique_username(
-                db, User, preferred=(display_name or email.split("@")[0])
-            )
-            user = User(
-                google_id=google_id,
-                email=email,
-                username=username,
-                display_name=display_name,
-                avatar=avatar,
-                is_confirmed=False,  # do not auto-confirm
-                is_admin=False,
-            )
-            db.add(user)
-            db.commit()
+            user = db.query(User).filter(User.email == email).first()
 
-            maybe_notify_admins_new_user(db, user, source="google")
+            if user:
+                # If this email is already bound to a different Google account, block
+                if user.google_id and user.google_id != google_id:
+                    raise HTTPException(400, detail="oauthExistsError")
+
+                # Link this existing account to Google
+                user.google_id = google_id
+
+                # Keep profile fields fresh (don’t overwrite if you don’t want to)
+                if display_name and not user.display_name:
+                    user.display_name = display_name
+                if avatar and not user.avatar:
+                    user.avatar = avatar
+
+                # Ensure username exists
+                if not user.username:
+                    user.username = generate_unique_username(
+                        db, User, preferred=(display_name or email.split("@")[0])
+                    )
+
+                db.commit()
+            else:
+                # 3) No user by google_id or email -> create
+                username = generate_unique_username(
+                    db, User, preferred=(display_name or email.split("@")[0])
+                )
+                user = User(
+                    google_id=google_id,
+                    email=email,
+                    username=username,
+                    display_name=display_name,
+                    avatar=avatar,
+                    is_confirmed=False,  # do not auto-confirm
+                    is_admin=False,
+                )
+                db.add(user)
+                db.commit()
+                maybe_notify_admins_new_user(db, user, source="google")
+
         else:
-            # Keep profile fields fresh
+            # Existing google_id user: keep profile fields fresh
             if email and not user.email:
                 user.email = email
             if display_name and not user.display_name:
@@ -326,19 +370,17 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
 
             if inserted:
                 try:
+                    base_url = _stable_base_url(request)
+                    referral_link = _make_referral_link(base_url, getattr(user, "user_id", None))
                     on_waiting_list_joined(
                         to=[email],
                         language=(data.language or "en"),
-                        referral_link="",
+                        referral_link=referral_link,
                     )
                 except Exception as mail_err:
                     print(f"[WAITLIST] Mail trigger failed for {email}: {mail_err}")
 
-            return {
-                "status": "pending_confirmation",
-                "id": user.user_id,
-                "email": user.email,
-            }
+            return {"status": "pending_confirmation", "id": user.user_id, "email": user.email}
 
         # Confirmed users can login normally
         token = make_access_token(str(user.user_id), remember=data.remember_me)
@@ -355,6 +397,7 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
             "is_admin": getattr(user, "is_admin", False),
             "access_token": token,
         }
+
     except HTTPException:
         raise
     except Exception as e:

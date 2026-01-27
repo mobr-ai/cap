@@ -1,4 +1,5 @@
 # cap/src/cap/api/user_admin.py
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,6 +17,14 @@ from cap.database.model import (
 )
 from cap.database.session import get_db
 from cap.core.auth_dependencies import get_current_admin_user
+from cap.mailing.event_triggers import (
+    on_user_access_granted,
+    on_user_access_revoked,
+)
+from cap.services.admin_alerts_service import (
+    maybe_notify_admins_user_confirmed,
+)
+
 
 router = APIRouter(prefix="/api/v1/admin/users", tags=["user_admin"])
 
@@ -262,16 +271,59 @@ def set_user_confirmed_flag(
 ):
     """
     Set or unset the is_confirmed flag for a user.
+
+    This represents admin approval / revocation of access.
     """
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.is_confirmed = payload.is_confirmed
+    was_confirmed = bool(user.is_confirmed)
+    now_confirmed = bool(payload.is_confirmed)
+
+    # No-op guard (avoid duplicate mails)
+    if was_confirmed == now_confirmed:
+        return _user_to_dict(user)
+
+    user.is_confirmed = now_confirmed
 
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # ----------------------------
+    # User-facing notifications
+    # ----------------------------
+    if user.email:
+        if not was_confirmed and now_confirmed:
+            # Admin granted access
+            on_user_access_granted(
+                to=[user.email],
+                language="en",  # User has no language field yet
+                app_url=None,
+            )
+        elif was_confirmed and not now_confirmed:
+            # Admin revoked access
+            on_user_access_revoked(
+                to=[user.email],
+                language="en",
+                app_url=None,
+            )
+
+    # ----------------------------
+    # Admin-facing notification (new config bucket)
+    # ----------------------------
+    if not was_confirmed and now_confirmed:
+        try:
+            maybe_notify_admins_user_confirmed(
+                db=db,
+                user=user,
+                source="user_admin",
+            )
+        except Exception:
+             # log, but do not fail the endpoint
+
+            logging.exception("[admin_alerts] user_confirmed notification failed")
 
     return _user_to_dict(user)
 

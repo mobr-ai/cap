@@ -1,3 +1,5 @@
+# cap/src/cap/api/waitlist.py
+
 from __future__ import annotations
 
 import os
@@ -13,13 +15,16 @@ from sqlalchemy.orm import Session
 from cap.database.session import get_db
 from cap.database.model import User
 from cap.mailing.event_triggers import on_waiting_list_joined
+from cap.services.admin_alerts_service import maybe_notify_admins_waitlist
 
 router = APIRouter(prefix="/api/v1", tags=["waitlist"])
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL")  # i.e. "https://cap.mobr.ai"
+
 
 class WaitIn(BaseModel):
     email: EmailStr
@@ -28,15 +33,25 @@ class WaitIn(BaseModel):
     uid: Optional[int] = None
     wallet: Optional[str] = None
 
+
 # Keep a simple injection guard
 INJECTION_CHARS = set('<>"\';&(){}\\')
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+
+
+def _make_referral_link(base_url: str, user_id: Optional[int]) -> str:
+    """Build /signup?ref=u<user_id> or plain /signup if absent."""
+    if user_id:
+        return f"{base_url}/signup?ref=u{user_id}"
+    return f"{base_url}/signup"
+
 
 def _stable_base_url(request: Request) -> str:
     """Prefer PUBLIC_BASE_URL to avoid 0.0.0.0 links; fallback to request base_url."""
     if PUBLIC_BASE_URL:
         return PUBLIC_BASE_URL.rstrip("/")
     return str(request.base_url).rstrip("/")
+
 
 def _parse_ref(ref: Optional[str]) -> Optional[int]:
     """
@@ -56,6 +71,7 @@ def _parse_ref(ref: Optional[str]) -> Optional[int]:
     if ref.isdigit():
         return int(ref)
     return None
+
 
 def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -> User:
     """
@@ -83,16 +99,12 @@ def _get_or_create_user(db: Session, email: str, refer_user_id: Optional[int]) -
         db.rollback()
         raise
 
-def _make_referral_link(base_url: str, user_id: Optional[int]) -> str:
-    """Build /signup?ref=u<user_id> or plain /signup if absent."""
-    if user_id:
-        return f"{base_url}/signup?ref=u{user_id}"
-    return f"{base_url}/signup"
 
 @router.post("/wait_list", status_code=status.HTTP_201_CREATED)
 def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
     email = data.email.strip().lower()
     language = (data.language or "en").strip().lower()
+    ref_raw = (data.ref or "").strip()
 
     # Basic sanity checks (redundant to EmailStr, kept intentionally)
     if any(c in INJECTION_CHARS for c in email):
@@ -110,7 +122,7 @@ def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=418, detail="alreadyOnList")
 
     # Ensure we have a User and attach optional referrer
-    refer_user_id = _parse_ref(data.ref)
+    refer_user_id = _parse_ref(ref_raw)
     try:
         # If wallet flow provided a uid (or wallet), try to bind email to that user
         user = None
@@ -130,11 +142,8 @@ def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
             else:
                 # Wallet already has an email; if different, it's a wallet-email conflict (not a generic user-exists)
                 if user.email != email:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="walletEmailAlreadySet"
-                    )
-                
+                    raise HTTPException(status_code=409, detail="walletEmailAlreadySet")
+
         user = _get_or_create_user(db, email=email, refer_user_id=refer_user_id)
     except SQLAlchemyError as e:
         # Don't block waitlist on user-create errors
@@ -142,13 +151,17 @@ def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
         user = None
 
     # Insert on waitlist
-    db.execute(
-        text("INSERT INTO waiting_list (email, ref, language) VALUES (:e, :r, :l)"),
-        {"e": email, "r": data.ref or "", "l": language},
-    )
-    db.commit()
+    try:
+        db.execute(
+            text("INSERT INTO waiting_list (email, ref, language) VALUES (:e, :r, :l)"),
+            {"e": email, "r": ref_raw, "l": language},
+        )
+        db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
-    # Build referral link and fire-and-forget email
+    # Build referral link and fire-and-forget user email
     base_url = _stable_base_url(request)
     referral_link = _make_referral_link(base_url, getattr(user, "user_id", None))
 
@@ -160,6 +173,19 @@ def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
         )
     except Exception as mail_err:
         # Do not fail the API if mailing fails; just log
-        print(f"[WAITLIST] Mail trigger failed for {email}: {mail_err}")
+        print(f"[WAITLIST] user mail trigger failed for {email}: {mail_err}")
+
+    # Fire-and-forget admin notification (if enabled in admin settings)
+    try:
+        maybe_notify_admins_waitlist(
+            db=db,
+            email=email,
+            ref=ref_raw,
+            language=language,
+            source="waitlist",
+        )
+    except Exception as admin_mail_err:
+        # Do not fail the API if admin mailing fails; just log
+        print(f"[WAITLIST] admin alert trigger failed for {email}: {admin_mail_err}")
 
     return {"message": "ok"}

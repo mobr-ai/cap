@@ -1,0 +1,41 @@
+{# src/cap/mailing/templates/user_access_granted.html #} {% extends
+"base_email.html" %} {% block preheader %} {{ translations.preheader or "Your
+CAP account is now active." }} {% endblock %} {% block content %}
+<h2 style="margin: 0 0 12px 0">{{ translations.title or "Access granted" }}</h2>
+
+<p style="margin: 0 0 12px 0">
+  {{ translations.lead or "Your account has been approved and is now active." }}
+</p>
+
+<p style="margin: 0 0 16px 0">
+  {{ translations.next or "You can sign in and start exploring analytics,
+  queries, and dashboards." }}
+</p>
+
+{% if app_url %}
+<p style="margin: 0 0 16px 0">
+  <a
+    href="{{ app_url }}"
+    class="btn"
+    style="
+      display: inline-block;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background-color: #2563eb;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      line-height: 1.2;
+    "
+  >
+    {{ translations.cta_label or "Open CAP" }}
+  </a>
+</p>
+{% endif %}
+
+<p style="color: #6b7280; font-size: 12px; margin: 0">
+  {{ translations.footer or "Welcome aboard — this message was sent by the
+  Cardano Analytics Platform (CAP)." }}
+</p>
+{% endblock %}

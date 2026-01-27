@@ -1,3 +1,5 @@
+# cap/src/services/admin_alerts_service.py
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -8,10 +10,12 @@ from cap.database.model import AdminSetting, User
 from cap.mailing.event_triggers import (
     on_admin_user_created,
     on_admin_waitlist_created,
+    on_admin_user_confirmed,
 )
 
 NEW_USER_CONFIG_KEY = "new_user_notifications"
 WAITLIST_CONFIG_KEY = "waitlist_notifications"
+USER_CONFIRMED_CONFIG_KEY = "user_confirmed_notifications"
 
 
 def _get_config(db: Session, key: str) -> dict:
@@ -90,7 +94,7 @@ def maybe_notify_admins_new_user(
 
 
 # ---------------------------
-# Waitlist notifications (NEW)
+# Waitlist notifications
 # ---------------------------
 
 def get_waitlist_notification_config(db: Session) -> dict:
@@ -130,3 +134,44 @@ def maybe_notify_admins_waitlist(
         waitlist_ref=ref,
         source=source,
     )
+
+
+# ---------------------------
+# User confirmed notifications (ADMIN BUCKET)
+# ---------------------------
+
+def get_user_confirmed_notification_config(db: Session) -> dict:
+    return _get_config(db, USER_CONFIRMED_CONFIG_KEY)
+
+
+def update_user_confirmed_notification_config(db: Session, enabled: bool, recipients: List[str]) -> dict:
+    cfg = {"enabled": bool(enabled), "recipients": _normalize_recipients(recipients)}
+    return _set_config(db, USER_CONFIRMED_CONFIG_KEY, cfg)
+
+
+def maybe_notify_admins_user_confirmed(
+    db: Session,
+    user: User,
+    source: str,
+    language: Optional[str] = None,
+) -> None:
+    """
+    Call this right after a user is confirmed (admin approval / access granted).
+    Reads config from admin_setting and, if enabled, fires the mail trigger.
+    """
+    cfg = _get_config(db, USER_CONFIRMED_CONFIG_KEY)
+    if not cfg.get("enabled") or not cfg.get("recipients"):
+        return
+
+    to_list = cfg["recipients"]
+    # username = getattr(user, "username", "") or ""
+    # email = getattr(user, "email", "") or ""
+    # user_id = getattr(user, "user_id", None)
+
+    on_admin_user_confirmed(
+        to=to_list,
+        language=(language or "en").strip() or "en",
+        confirmed_user_email=user.email,
+        source=source,
+    )
+

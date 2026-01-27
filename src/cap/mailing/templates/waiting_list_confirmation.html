@@ -1,4 +1,13 @@
 {# src/cap/mailing/templates/waiting_list_confirmation.html #} {% extends
-"base_email.html" %} {% block content %} {{
-translations['message'].format(referral_link=referral_link, app_url=app_url) |
-safe }} {% endblock %}
+"base_email.html" %} {% block content %} {# Build referral link reliably from
+available context #} {% set _base = (public_base_url or app_url or "") %} {% set
+_ref = (ref or waitlist_ref or "") %} {% set _ref = (_ref|string).strip() %} {%
+set _base = (_base|string).strip() %} {# Ensure base has no trailing slash #} {%
+if _base.endswith("/") %} {% set _base = _base[:-1] %} {% endif %} {# If backend
+already provided referral_link, keep it; else build it #} {% if referral_link %}
+{% set _invite = referral_link %} {% elif _base and _ref %} {# Use
+signup?ref=... convention (matches your app's flow) #} {% set _invite = _base ~
+"/signup?ref=" ~ _ref %} {% else %} {% set _invite = "" %} {% endif %} {#
+Provide app_url fallback #} {% set _app = (app_url or public_base_url or "") %}
+{{ translations["message"].format(referral_link=_invite, app_url=_app) | safe }}
+{% endblock %}
