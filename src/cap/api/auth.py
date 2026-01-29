@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from cap.database.session import get_db
 from cap.database.model import User
+from cap.mailing.event_triggers import on_user_access_granted
 from cap.services.admin_alerts_service import maybe_notify_admins_new_user
 from cap.core.security import (
     hash_password,
@@ -57,6 +58,11 @@ def _make_referral_link(base_url: str, user_id: int | None) -> str:
 
 
 # ---- Pydantic shapes ----
+class ResendSetupLinkIn(BaseModel):
+    email: EmailStr
+    language: str | None = "en"
+
+
 class WalletClaimEmailIn(BaseModel):
     user_id: int
     wallet_address: str
@@ -95,6 +101,13 @@ class CardanoIn(BaseModel):
     remember_me: bool = True
     language: str | None = "en"
     ref: str | None = ""
+
+
+class SetPasswordIn(BaseModel):
+    token: str
+    password: str
+    remember_me: bool = False
+
 
 
 def _ensure_waitlist_row(
@@ -191,9 +204,11 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(400, detail="userExistsError")
 
     token = new_confirmation_token()
+    email_local = data.email.split("@")[0]
+
     new_user = User(
         email=data.email,
-        username=(data.email.split("@")[0])[:30],
+        username=generate_unique_username(db, User, preferred=email_local),
         password_hash=hash_password(data.password),
         confirmation_token=token,
         is_confirmed=False,
@@ -237,6 +252,87 @@ def confirm_email(token: str, db: Session = Depends(get_db)):
     return RedirectResponse(url="/login?confirmed=true")
 
 
+# ---- Re-send setup link in case it expires ----
+@router.post("/auth/resend_setup_link")
+def resend_setup_link(data: ResendSetupLinkIn, request: Request, db: Session = Depends(get_db)):
+    email_norm = (str(data.email or "").strip().lower()) if data.email else ""
+    if not email_norm:
+        raise HTTPException(400, detail="invalidEmailFormat")
+
+    user = db.query(User).filter(User.email == email_norm).first()
+    if not user:
+        raise HTTPException(404, detail="userNotFound")
+
+    # Must already be approved
+    if not bool(user.is_confirmed):
+        raise HTTPException(403, detail="accessNotGranted")
+
+    # If Google user, they should use Google login
+    if user.google_id:
+        raise HTTPException(400, detail="oauthExistsError")
+
+    # If password is already set, they can just login
+    if user.password_hash:
+        raise HTTPException(400, detail="passwordAlreadySet")
+
+    # Create a fresh token (reuse your existing generator)
+    token = new_confirmation_token()
+    user.confirmation_token = token
+    db.commit()
+    db.refresh(user)
+
+    base_url = _stable_base_url(request)
+    setup_url = f"{base_url}/login?state=setpass&token={token}"
+
+    # Send the same "access granted" email but with setup_url CTA
+    on_user_access_granted(
+        to=[email_norm],
+        language=(data.language or "en"),
+        app_url=base_url,
+        setup_url=setup_url,
+    )
+
+    return {"status": "sent"}
+
+# ---- Define user password for approved accounts ----
+@router.post("/auth/set_password")
+def set_password(data: SetPasswordIn, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.confirmation_token == data.token).first()
+    if not user:
+        raise HTTPException(400, detail="invalidOrExpiredToken")
+
+    # Must be approved already (pre-alpha gate)
+    if not user.is_confirmed:
+        raise HTTPException(403, detail="accessNotGranted")
+
+    # Block if this account is Google-based
+    if user.google_id:
+        raise HTTPException(400, detail="oauthExistsError")
+
+    # Minimal password validation
+    pw = (data.password or "").strip()
+    if len(pw) < 8:
+        raise HTTPException(400, detail="weakPassword")
+
+    user.password_hash = hash_password(pw)
+    user.confirmation_token = None
+    db.commit()
+    db.refresh(user)
+
+    token = make_access_token(str(user.user_id), remember=data.remember_me)
+    return {
+        "id": user.user_id,
+        "username": user.username,
+        "wallet_address": user.wallet_address,
+        "display_name": user.display_name,
+        "email": user.email,
+        "avatar": user.avatar,
+        "settings": user.settings,
+        "is_admin": getattr(user, "is_admin", False),
+        "access_token": token,
+    }
+
+
 # ---- Resend confirmation ----
 @router.post("/resend_confirmation")
 def resend_confirmation(data: ResendIn, request: Request, db: Session = Depends(get_db)):
@@ -261,20 +357,30 @@ def resend_confirmation(data: ResendIn, request: Request, db: Session = Depends(
 # ---- Login (email/password) ----
 @router.post("/login")
 def login(data: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if user and user.google_id:
-        # prevent password login if Google account exists for this email
-        raise HTTPException(400, detail="oauthExistsError")
+    email_norm = (str(data.email or "").strip().lower()) if data.email else ""
+    if not email_norm:
+        raise HTTPException(401, detail="loginError")
 
-    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
+    user = db.query(User).filter(User.email == email_norm).first()
+    if not user:
         raise HTTPException(401, detail="loginError")
 
     if not user.is_confirmed:
         raise HTTPException(403, detail="confirmationError")
 
+    # If user has no password set, they cannot use password login.
+    # This also covers google-only accounts (unless you later add "set password" for them).
+    if not user.password_hash:
+        if user.google_id:
+            raise HTTPException(400, detail="oauthExistsError")
+        raise HTTPException(403, detail="passwordNotSet")
+
+    if not verify_password(data.password, user.password_hash):
+        raise HTTPException(401, detail="loginError")
+
     token = make_access_token(str(user.user_id), remember=data.remember_me)
 
-    return {
+    resp = {
         "id": user.user_id,
         "username": user.username,
         "wallet_address": user.wallet_address,
@@ -285,6 +391,12 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "is_admin": getattr(user, "is_admin", False),
         "access_token": token,
     }
+
+    # If linked with Google, include a friendly notice for the frontend
+    if user.google_id:
+        resp["notice"] = "googleLinked"
+
+    return resp
 
 
 # ---- Google OAuth (access_token from client) ----
@@ -327,14 +439,14 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
                 # Ensure username exists
                 if not user.username:
                     user.username = generate_unique_username(
-                        db, User, preferred=(display_name or email.split("@")[0])
+                        db, User, preferred=(email.split("@")[0] or display_name)
                     )
 
                 db.commit()
             else:
                 # 3) No user by google_id or email -> create
                 username = generate_unique_username(
-                    db, User, preferred=(display_name or email.split("@")[0])
+                    db, User, preferred=(email.split("@")[0] or display_name)
                 )
                 user = User(
                     google_id=google_id,

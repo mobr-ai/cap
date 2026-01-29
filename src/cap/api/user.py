@@ -5,11 +5,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Header
 from starlette.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+
 from cap.database.session import get_db
 from cap.database.model import User
 from cap.core.auth_dependencies import get_current_user
+from cap.core.security import generate_unique_username
 
 router = APIRouter(prefix="/api/v1/user", tags=["user"])
 
@@ -19,6 +22,120 @@ router = APIRouter(prefix="/api/v1/user", tags=["user"])
 ALLOWED_MIME = {"image/png", "image/jpeg", "image/webp"}
 MAX_BYTES = 2 * 1024 * 1024  # 2 MB
 
+
+# -----------------------------
+# Request models
+# -----------------------------
+class UsernameIn(BaseModel):
+    username: str
+
+
+class DisplayNameIn(BaseModel):
+    display_name: str
+
+
+# -----------------------------
+# Username / Display name
+# -----------------------------
+@router.post("/validate_username")
+def validate_username(
+    data: UsernameIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns whether the provided username is available *as typed*.
+    We do not silently accept a different normalized value here; instead
+    we return a suggested value when normalization changes it.
+    """
+    raw = (data.username or "").strip()
+    if not raw:
+        return {"available": False, "reason": "empty"}
+
+    # Normalize using canonical rules + uniqueness checks
+    suggested = generate_unique_username(db, User, preferred=raw)
+
+    # If canonical normalization changed it, it's not valid "as typed"
+    # (could be invalid chars/format OR collision causing suffix)
+    if suggested != raw.lower():
+        # Check if suggested is already taken by someone else (rare but possible
+        # if raw.lower() differs and suggested is also occupied)
+        existing = db.scalar(select(User).where(User.username == suggested))
+        if existing and existing.user_id != current_user.user_id:
+            return {"available": False, "reason": "taken", "suggested": suggested}
+
+        return {"available": False, "reason": "normalized", "suggested": suggested}
+
+    # Check availability for the exact value
+    existing = db.scalar(select(User).where(User.username == raw.lower()))
+    if existing and existing.user_id != current_user.user_id:
+        return {"available": False, "reason": "taken"}
+
+    return {"available": True}
+
+
+@router.post("/username")
+def update_username(
+    data: UsernameIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    raw = (data.username or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="invalidUsername")
+
+    # Canonical normalization + uniqueness
+    new_username = generate_unique_username(db, User, preferred=raw)
+
+    # If user asked for X but canonical becomes Y (due to collisions/format),
+    # we still accept and return Y (frontend should reflect the saved value).
+    current_user.username = new_username
+
+    # Keep display_name precedence behavior as requested:
+    # display_name remains the primary label. We only set it if it's missing.
+    if not current_user.display_name:
+        current_user.display_name = new_username
+
+    db.add(current_user)
+    db.commit()
+
+    return {"username": current_user.username, "display_name": current_user.display_name}
+
+
+@router.post("/display_name")
+def update_display_name(
+    data: DisplayNameIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    name = (data.display_name or "").strip()
+
+    # Allow clearing display name (so UI falls back to username/email)
+    if not name:
+        current_user.display_name = None
+        db.add(current_user)
+        db.commit()
+        return {"display_name": None}
+
+    # Minimal safety: length bound to your DB column (30)
+    if len(name) > 30:
+        raise HTTPException(status_code=400, detail="displayNameTooLong")
+
+    # Optional: block control chars
+    for ch in name:
+        if ord(ch) < 32 or ord(ch) == 127:
+            raise HTTPException(status_code=400, detail="invalidDisplayName")
+
+    current_user.display_name = name
+    db.add(current_user)
+    db.commit()
+
+    return {"display_name": current_user.display_name}
+
+
+# -----------------------------
+# Avatar
+# -----------------------------
 @router.post("/{user_id}/avatar")
 async def upload_avatar(
     user_id: int,
@@ -53,6 +170,7 @@ async def upload_avatar(
 
     return {"url": f"/user/{user_id}/avatar?v={etag}"}
 
+
 @router.get("/{user_id}/avatar")
 def get_avatar(
     user_id: int,
@@ -78,6 +196,7 @@ def get_avatar(
         headers=headers,
     )
 
+
 @router.delete("/{user_id}/avatar")
 def delete_avatar(
     user_id: int,
@@ -99,11 +218,16 @@ def delete_avatar(
     db.commit()
     return {"ok": True}
 
+
+# -----------------------------
+# Account delete (anonymize)
+# -----------------------------
 def _generate_anonymous_username(user_id: int) -> str:
     # Unique, stable-ish placeholder that satisfies your USERNAME_REGEX
     # e.g. deleted_12345_20251031
     ts = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"deleted_{user_id}_{ts}"
+
 
 @router.delete("/{user_id}")
 def delete_user_account(
@@ -124,10 +248,6 @@ def delete_user_account(
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    # If other tables have non-nullable FKs pointing to user, handle them here
-    # (e.g., set to None or a "system user"). Since only User model is provided,
-    # we restrict to anonymizing this row.
 
     anon_username = _generate_anonymous_username(user_id)
 
@@ -154,9 +274,6 @@ def delete_user_account(
 
         db.add(user)
         db.commit()
-
-        # Note: JWT invalidation is handled client-side by clearing storage.
-        # If we ever maintain a server-side token denylist, add the current JTI there.
 
         return {"message": "User deleted, content preserved", "username": anon_username}
     except Exception as e:

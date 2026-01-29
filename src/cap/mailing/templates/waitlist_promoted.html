@@ -8,6 +8,42 @@ news: your CAP access is now available." }} {% endblock %} {% block content %}
   }}
 </p>
 
+{% if setup_url %}
+<p style="margin: 0 0 16px 0">
+  {{ translations.setup or "To finish setup, please set a password for your
+  account." }}
+</p>
+
+<p style="margin: 0 0 16px 0">
+  <a
+    href="{{ setup_url }}"
+    class="btn"
+    style="
+      display: inline-block;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background-color: #2563eb;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      line-height: 1.2;
+    "
+  >
+    {{ translations.setup_cta_label or "Set your password" }}
+  </a>
+</p>
+
+{% if app_url %}
+<p style="margin: 0 0 16px 0">
+  <a
+    href="{{ app_url }}"
+    style="color: #2563eb; text-decoration: none; font-size: 14px"
+  >
+    {{ translations.secondary_cta_label or "Open CAP" }}
+  </a>
+</p>
+{% endif %} {% else %}
 <p style="margin: 0 0 16px 0">
   {{ translations.next or "You can now sign in and start using CAP." }}
 </p>
@@ -32,7 +68,7 @@ news: your CAP access is now available." }} {% endblock %} {% block content %}
     {{ translations.cta_label or "Open CAP" }}
   </a>
 </p>
-{% endif %}
+{% endif %} {% endif %}
 
 <p style="color: #6b7280; font-size: 12px; margin: 0">
   {{ translations.footer or "This is an automated message from the Cardano

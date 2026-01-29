@@ -3,7 +3,6 @@
 Mailing triggers for CAP.
 
 Thin wrappers around send_async_email so API/business code stays tidy.
-As CAP grows, more triggers should be added here (alerts, dashboards, shares, etc.).
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import os
 from typing import Iterable, Mapping, Any
 
 from .email_service import send_async_email
+
 
 # -------------------------
 # Helpers / defaults
@@ -26,14 +26,19 @@ def _lang_or_default(lang: str | None) -> str:
         return "pt"
     return "en"
 
+
 def _public_base_url() -> str:
     """Read PUBLIC_BASE_URL once, fallback to production hostname."""
     return os.getenv("PUBLIC_BASE_URL", "https://cap.mobr.ai").rstrip("/")
 
+
 def _app_url() -> str:
-    """Canonical app entry point (used in templates)."""
-    # Adjust route to dashboard/home in the future
-    return f"{_public_base_url()}/signup"
+    """
+    Canonical app entry point (used in templates).
+    Keep it stable; templates may link to app_url even in pre-alpha.
+    """
+    return f"{_public_base_url()}"
+
 
 def _send(
     template: str,
@@ -43,7 +48,6 @@ def _send(
     template_type: str | None = None,
 ) -> None:
     payload = dict(ctx)
-
     if template_type:
         payload["template_type"] = template_type
 
@@ -71,7 +75,7 @@ def on_waiting_list_joined(
     Template: waiting_list_confirmation
     Vars:
       - referral_link (str)
-      - app_url (str)  # used by translations to link back to CAP
+      - app_url (str)
     """
     _send(
         template="waiting_list_confirmation",
@@ -82,6 +86,7 @@ def on_waiting_list_joined(
             "app_url": app_url or _app_url(),
         },
     )
+
 
 def on_user_registered(
     to: Iterable[str] | str,
@@ -104,6 +109,7 @@ def on_user_registered(
         ctx={"username": username, "activation_link": activation_link},
     )
 
+
 def on_confirmation_resent(
     to: Iterable[str] | str,
     language: str | None = "en",
@@ -115,6 +121,7 @@ def on_confirmation_resent(
     """
     _send("user_confirmation_resent", to, language, ctx={})
 
+
 def on_user_confirmed(
     to: Iterable[str] | str,
     language: str | None = "en",
@@ -125,6 +132,7 @@ def on_user_confirmed(
     Template: user_confirmed
     """
     _send("user_confirmed", to, language, ctx={})
+
 
 def on_oauth_login(
     to: Iterable[str] | str,
@@ -140,6 +148,7 @@ def on_oauth_login(
     """
     _send("oauth_login", to, language, ctx={"provider": provider}, template_type="auth")
 
+
 def on_wallet_login(
     to: Iterable[str] | str,
     language: str | None = "en",
@@ -153,6 +162,7 @@ def on_wallet_login(
       - wallet_address (str)
     """
     _send("wallet_login", to, language, ctx={"wallet_address": wallet_address}, template_type="security")
+
 
 def on_admin_user_created(
     to: Iterable[str] | str,
@@ -168,7 +178,8 @@ def on_admin_user_created(
     Vars:
       - new_user_email (str)
       - new_user_username (str)
-      - source (str)  # 'password', 'google', 'cardano', etc.
+      - source (str)
+      - app_url (str)
     """
     _send(
         template="admin_user_created",
@@ -180,8 +191,9 @@ def on_admin_user_created(
             "source": source or "password",
             "app_url": _app_url(),
         },
-        template_type="admin"
+        template_type="admin",
     )
+
 
 def on_admin_waitlist_created(
     to: Iterable[str] | str,
@@ -197,7 +209,7 @@ def on_admin_waitlist_created(
     Vars:
       - waitlist_email (str)
       - waitlist_ref (str)
-      - source (str)  # 'waitlist', 'admin-test', etc.
+      - source (str)
       - app_url (str)
     """
     _send(
@@ -212,6 +224,7 @@ def on_admin_waitlist_created(
         },
         template_type="admin",
     )
+
 
 def on_user_email_verified(
     to: Iterable[str] | str,
@@ -230,7 +243,7 @@ def on_user_email_verified(
         template="user_email_verified",
         to=to,
         language=language,
-        ctx={"app_url": app_url or _app_url()}
+        ctx={"app_url": app_url or _app_url()},
     )
 
 
@@ -238,20 +251,24 @@ def on_user_access_granted(
     to: Iterable[str] | str,
     language: str | None = "en",
     app_url: str | None = None,
+    setup_url: str | None = None,
 ) -> None:
     """
     Admin approved the user (or system granted access).
-    Meaning: user can now access CAP (login allowed).
 
     Template: user_access_granted
     Vars:
       - app_url (str)
+      - setup_url (str|None)  # if present, user must set password first
     """
     _send(
         template="user_access_granted",
         to=to,
         language=language,
-        ctx={"app_url": app_url or _app_url()}
+        ctx={
+            "app_url": app_url or _app_url(),
+            "setup_url": (setup_url or "").strip() or None,
+        },
     )
 
 
@@ -259,20 +276,24 @@ def on_waitlist_promoted(
     to: Iterable[str] | str,
     language: str | None = "en",
     app_url: str | None = None,
+    setup_url: str | None = None,
 ) -> None:
     """
     User moved from waitlist to active access.
-    Meaning: waitlist promotion event (often same as access granted, but explicit).
 
     Template: waitlist_promoted
     Vars:
       - app_url (str)
+      - setup_url (str|None)  # if present, user must set password first
     """
     _send(
         template="waitlist_promoted",
         to=to,
         language=language,
-        ctx={"app_url": app_url or _app_url()},
+        ctx={
+            "app_url": app_url or _app_url(),
+            "setup_url": (setup_url or "").strip() or None,
+        },
     )
 
 
@@ -284,7 +305,7 @@ def on_admin_user_confirmed(
     confirmed_user_username: str = "",
     confirmed_user_id: int | None = None,
     source: str = "admin",
-    **_ignored,  # optional safety
+    **_ignored,
 ) -> None:
     """
     Notify admins that an admin confirmed/approved a user.
@@ -293,18 +314,18 @@ def on_admin_user_confirmed(
     Vars:
       - confirmed_user_email (str)
       - confirmed_user_username (str)
+      - confirmed_user_id (int|None)
       - source (str)
-      - app_url (str)
     """
     _send(
         template="admin_user_confirmed",
         to=to,
         language=language,
         ctx={
-        "confirmed_user_email": confirmed_user_email,
-        "confirmed_user_username": confirmed_user_username,
-        "confirmed_user_id": confirmed_user_id,
-        "source": source,
+            "confirmed_user_email": confirmed_user_email,
+            "confirmed_user_username": confirmed_user_username,
+            "confirmed_user_id": confirmed_user_id,
+            "source": source,
         },
         template_type="admin",
     )
@@ -318,7 +339,6 @@ def on_user_access_revoked(
 ) -> None:
     """
     Optional future: access disabled/revoked.
-    This helps later if we add user disable/bans.
 
     Template: user_access_revoked
     Vars:
@@ -333,5 +353,5 @@ def on_user_access_revoked(
             "support_email": support_email or "",
             "app_url": app_url or _app_url(),
         },
-        template_type="security"
+        template_type="security",
     )

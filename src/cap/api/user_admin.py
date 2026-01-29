@@ -1,12 +1,17 @@
 # cap/src/cap/api/user_admin.py
 import logging
+import secrets
+import re
 from datetime import datetime, timezone
 from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func, delete
 from sqlalchemy.exc import IntegrityError
+
+from cap.core.security import generate_unique_username
 from cap.database.model import (
     User,
     Dashboard,
@@ -25,30 +30,63 @@ from cap.services.admin_alerts_service import (
     maybe_notify_admins_user_confirmed,
 )
 
-
 router = APIRouter(prefix="/api/v1/admin/users", tags=["user_admin"])
 
+APP_URL = "https://cap.mobr.ai"
+
+
+# ---------- Helpers ----------
+
+def _looks_like_placeholder_username(u: User) -> bool:
+    uname = (u.username or "").strip().lower()
+    if not uname:
+        return True
+    # Your observed pattern: "CAP User39"
+    if uname.startswith("cap user"):
+        return True
+    return False
+
+def _preferred_username_from_email(email: str) -> str:
+    local = (email.split("@")[0] if email else "").strip().lower()
+    local = re.sub(r"[^a-z0-9_]+", "_", local)
+    local = re.sub(r"_+", "_", local).strip("_")
+    return (local or "user")[:30]
 
 # ---------- Schemas ----------
 
 class AdminFlagUpdate(BaseModel):
-  # Used by POST /{user_id}/admin
-  is_admin: bool
+    is_admin: bool
 
 
 class ConfirmedFlagUpdate(BaseModel):
-  # Used by POST /{user_id}/confirmed
-  is_confirmed: bool
+    is_confirmed: bool
 
 
 class AdminFlagsUpdate(BaseModel):
-  # Used by PATCH /{user_id} for combined updates
-  is_admin: Optional[bool] = None
-  is_confirmed: Optional[bool] = None
+    is_admin: Optional[bool] = None
+    is_confirmed: Optional[bool] = None
+
+
+def _needs_password_setup(u: User) -> bool:
+    return bool(
+        getattr(u, "email", None)
+        and not getattr(u, "google_id", None)
+        and not getattr(u, "password_hash", None)
+    )
+
+
+def _ensure_setup_token(db: Session, u: User) -> str:
+    token = (getattr(u, "confirmation_token", None) or "").strip()
+    if token:
+        return token
+    u.confirmation_token = secrets.token_urlsafe(32)
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u.confirmation_token
 
 
 def _user_to_dict(u: User) -> dict:
-    # Keep this minimal & consistent with what you expose elsewhere
     return {
         "user_id": u.user_id,
         "email": u.email,
@@ -64,15 +102,11 @@ def _user_to_dict(u: User) -> dict:
 
 
 def _generate_anonymous_username(user_id: int) -> str:
-    # Use timezone-aware UTC timestamp (recommended replacement for utcnow())
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"deleted_{user_id}_{ts}"
 
 
 def _is_anonymized(user: User) -> bool:
-    """
-    Heuristic to detect anonymized users.
-    """
     return (
         user.email is None
         and user.username is not None
@@ -81,13 +115,8 @@ def _is_anonymized(user: User) -> bool:
 
 
 def _anonymize_user(user: User) -> None:
-    """
-    Clear PII and auth data but keep the row for FK integrity.
-    Mirrors the behavior of delete_user_account in cap/api/user.py.
-    """
     anon_username = _generate_anonymous_username(user.user_id)
 
-    # PII / credentials
     user.email = None
     user.password_hash = None
     user.google_id = None
@@ -95,21 +124,17 @@ def _anonymize_user(user: User) -> None:
     user.display_name = None
     user.is_confirmed = False
     user.confirmation_token = None
-    user.is_admin = False  # deleted users must not remain admins
+    user.is_admin = False
 
-    # Public profile / settings
     user.username = anon_username
     user.settings = "{}"
     user.refer_id = None
 
-    # Avatar data + URL
     user.avatar = None
     user.avatar_blob = None
     user.avatar_mime = None
     user.avatar_etag = None
 
-
-# ---------- Endpoints: Users ----------
 
 @router.get("/")
 def list_users(
@@ -119,11 +144,6 @@ def list_users(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    List users with basic pagination and search.
-
-    Only accessible to admins.
-    """
     stmt = select(User)
 
     if search:
@@ -136,32 +156,22 @@ def list_users(
             )
         )
 
-    # total count for pagination (respecting search)
     count_stmt = stmt.with_only_columns(func.count()).order_by(None)
     total = db.scalar(count_stmt) or 0
 
-    # global stats (ignore search, look at all users)
-    total_users = db.scalar(
-        select(func.count()).select_from(User)
-    ) or 0
-
+    total_users = db.scalar(select(func.count()).select_from(User)) or 0
     total_admins = db.scalar(
-        select(func.count())
-        .select_from(User)
-        .where(User.is_admin.is_(True))
+        select(func.count()).select_from(User).where(User.is_admin.is_(True))
     ) or 0
-
     total_confirmed = db.scalar(
-        select(func.count())
-        .select_from(User)
-        .where(User.is_confirmed.is_(True))
+        select(func.count()).select_from(User).where(User.is_confirmed.is_(True))
     ) or 0
 
     stmt = stmt.order_by(User.user_id).limit(limit).offset(offset)
     users = db.scalars(stmt).all()
 
     return {
-        "total": total,  # total matching the search (for pagination)
+        "total": total,
         "limit": limit,
         "offset": offset,
         "items": [_user_to_dict(u) for u in users],
@@ -180,15 +190,9 @@ def get_user_detail(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    Get a single user's details.
-
-    Only accessible to admins.
-    """
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     return _user_to_dict(user)
 
 
@@ -199,22 +203,12 @@ def update_user_admin_flags(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    Update admin-related flags for a user (is_admin, is_confirmed).
-
-    Guardrails:
-    - Prevent an admin from removing their own admin flag.
-    """
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Prevent self-demotion
     if user.user_id == admin.user_id and payload.is_admin is False:
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot remove your own admin privileges",
-        )
+        raise HTTPException(status_code=400, detail="You cannot remove your own admin privileges")
 
     if payload.is_admin is not None:
         user.is_admin = payload.is_admin
@@ -236,22 +230,12 @@ def set_user_admin_flag(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    Set or unset the is_admin flag for a user.
-
-    Guardrails:
-    - Prevent an admin from removing their own admin flag.
-    """
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Prevent self-demotion
     if user.user_id == admin.user_id and payload.is_admin is False:
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot remove your own admin privileges",
-        )
+        raise HTTPException(status_code=400, detail="You cannot remove your own admin privileges")
 
     user.is_admin = payload.is_admin
 
@@ -269,11 +253,6 @@ def set_user_confirmed_flag(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    Set or unset the is_confirmed flag for a user.
-
-    This represents admin approval / revocation of access.
-    """
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -281,37 +260,56 @@ def set_user_confirmed_flag(
     was_confirmed = bool(user.is_confirmed)
     now_confirmed = bool(payload.is_confirmed)
 
-    # No-op guard (avoid duplicate mails)
     if was_confirmed == now_confirmed:
         return _user_to_dict(user)
 
     user.is_confirmed = now_confirmed
 
+    # Normalize username when approving waitlist users
+    if now_confirmed and user.email:
+        email_local = user.email.split("@")[0]
+
+        # Normalize if missing or placeholder
+        if not user.username or user.username.lower().startswith("cap user"):
+            user.username = generate_unique_username(
+                db,
+                User,
+                preferred=email_local,
+            )
+
+        # Optional: also set display_name if empty
+        if not user.display_name:
+            user.display_name = email_local
+
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    setup_url: Optional[str] = None
+    if (not was_confirmed) and now_confirmed and _needs_password_setup(user):
+        token = _ensure_setup_token(db, user)
+        setup_url = f"{APP_URL}/login?state=setpass&token={token}"
 
     # ----------------------------
     # User-facing notifications
     # ----------------------------
     if user.email:
         if not was_confirmed and now_confirmed:
-            # Admin granted access
             on_user_access_granted(
                 to=[user.email],
-                language="en",  # User has no language field yet
-                app_url=None,
+                language="en",
+                app_url=APP_URL,
+                setup_url=setup_url,
             )
         elif was_confirmed and not now_confirmed:
-            # Admin revoked access
             on_user_access_revoked(
                 to=[user.email],
                 language="en",
-                app_url=None,
+                app_url=APP_URL,
             )
 
     # ----------------------------
-    # Admin-facing notification (new config bucket)
+    # Admin-facing notification
     # ----------------------------
     if not was_confirmed and now_confirmed:
         try:
@@ -321,11 +319,12 @@ def set_user_confirmed_flag(
                 source="user_admin",
             )
         except Exception:
-             # log, but do not fail the endpoint
-
             logging.exception("[admin_alerts] user_confirmed notification failed")
 
-    return _user_to_dict(user)
+    out = _user_to_dict(user)
+    if setup_url:
+        out["setup_url"] = setup_url
+    return out
 
 
 @router.delete("/{user_id}")
@@ -334,29 +333,13 @@ def admin_delete_user_account(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
-    """
-    Admin-triggered deletion flow for a user.
-
-    Two-stage behavior:
-    1) First deletion: anonymize user but keep row & content.
-    2) Second deletion (on already anonymized user): hard delete the user row.
-
-    Guardrails:
-    - Admins may not delete themselves here (use self-delete flow instead).
-    - Admins may not delete the last remaining admin.
-    """
-    # Guardrail: cannot delete self from admin endpoint
     if admin.user_id == user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Admins may not delete themselves via this endpoint.",
-        )
+        raise HTTPException(status_code=400, detail="Admins may not delete themselves via this endpoint.")
 
     user = db.scalar(select(User).where(User.user_id == user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Guardrail: cannot delete the last remaining admin
     if user.is_admin:
         remaining_admins = db.scalar(
             select(func.count())
@@ -365,92 +348,54 @@ def admin_delete_user_account(
             .where(User.user_id != user.user_id)
         ) or 0
         if remaining_admins <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete the last remaining admin.",
-            )
+            raise HTTPException(status_code=400, detail="Cannot delete the last remaining admin.")
 
     def _is_anonymized(u: User) -> bool:
-        # Heuristic: anonymized accounts have no email and a "deleted_user_" username prefix
-        # (aligns with how we set it below)
         uname = (u.username or "").strip()
         return (u.email is None) and uname.startswith("deleted_user_")
 
     try:
-        # Stage 1: anonymize
         if not _is_anonymized(user):
             ts = int(datetime.now(timezone.utc).timestamp())
 
-            # Clear identifiers / credentials
             user.email = None
             user.password_hash = None
             user.google_id = None
             user.wallet_address = None
 
-            # Clear profile fields
             user.display_name = None
             user.settings = None
 
-            # Clear avatar storage fields
             user.avatar_blob = None
             user.avatar_mime = None
             user.avatar_etag = None
             user.avatar = None
 
-            # Revoke privileges / confirmation
             user.is_admin = False
             user.is_confirmed = False
             user.confirmation_token = None
 
-            # Keep username unique and deterministic enough for debugging
             user.username = f"deleted_user_{user.user_id}_{ts}"
 
             db.add(user)
             db.commit()
             db.refresh(user)
 
-            return {
-                "status": "anonymized",
-                "user_id": user.user_id,
-            }
+            return {"status": "anonymized", "user_id": user.user_id}
 
-        # Stage 2: already anonymized -> hard delete related data and user
-        # IMPORTANT ORDER:
-        # 1) conversations first (cascades conversation_message + conversation_artifact)
-        # 2) then other user-owned tables
-        # 3) then query_metrics
-        # 4) then user
-        db.execute(
-            delete(Conversation).where(Conversation.user_id == user.user_id)
-        )
-
-        db.execute(
-            delete(SharedImage).where(SharedImage.user_id == user.user_id)
-        )
-
-        db.execute(
-            delete(DashboardMetrics).where(DashboardMetrics.user_id == user.user_id)
-        )
-        db.execute(
-            delete(Dashboard).where(Dashboard.user_id == user.user_id)
-        )
-
-        db.execute(
-            delete(QueryMetrics).where(QueryMetrics.user_id == user.user_id)
-        )
+        db.execute(delete(Conversation).where(Conversation.user_id == user.user_id))
+        db.execute(delete(SharedImage).where(SharedImage.user_id == user.user_id))
+        db.execute(delete(DashboardMetrics).where(DashboardMetrics.user_id == user.user_id))
+        db.execute(delete(Dashboard).where(Dashboard.user_id == user.user_id))
+        db.execute(delete(QueryMetrics).where(QueryMetrics.user_id == user.user_id))
 
         db.delete(user)
         db.commit()
 
-        return {
-            "status": "deleted",
-            "user_id": user_id,
-        }
+        return {"status": "deleted", "user_id": user_id}
 
     except IntegrityError as exc:
         db.rollback()
-
-        # Optional: expose the FK table/constraint in the error message when available (Postgres)
         detail = "Cannot fully delete user because other records still reference this account."
         orig = getattr(exc, "orig", None)
         diag = getattr(orig, "diag", None)
@@ -462,11 +407,8 @@ def admin_delete_user_account(
                 parts.append(f"constraint={diag.constraint_name}")
             if parts:
                 detail = f"{detail} ({', '.join(parts)})"
-
         raise HTTPException(status_code=400, detail=detail) from exc
 
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
