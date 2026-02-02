@@ -284,6 +284,7 @@ class OllamaClient:
                 span.set_attribute("sparql_length", len(content))
                 return content
 
+    @staticmethod
     def _categorize_query(user_query: str, result_type: str) -> str:
         """
         Categorizes a natural language query into result types:
@@ -322,6 +323,77 @@ class OllamaClient:
 
         return new_type
 
+    @staticmethod
+    def format_kv(user_query: str, sparql_query:str, kv_results: dict) -> str:
+        result_type = kv_results["result_type"]
+        result_type = OllamaClient._categorize_query(user_query, result_type)
+        if result_type != "":
+            kv_results["result_type"] = result_type
+
+            # Convert to Vega format for chart types
+            if result_type in ["bar_chart", "pie_chart", "line_chart", "scatter_chart", "bubble_chart", "treemap", "heatmap", "table"]:
+                vega_data = VegaUtil.convert_to_vega_format(
+                    kv_results,
+                    user_query,
+                    sparql_query
+                )
+
+                # Determine columns based on chart type
+                columns = []
+                if kv_results.get("data"):
+                    if isinstance(kv_results.get("data"), list):
+                        columns = list(kv_results["data"][0].keys())
+                    elif isinstance(kv_results.get("data"), dict):
+                        columns = list(kv_results["data"].keys())
+
+                # Check if we have series labels from vega conversion (for line charts)
+                series_labels = vega_data.get("_series_labels")
+                label_key = vega_data.get("_label_key")
+                x_key = vega_data.get("_x_key")
+                y_keys = vega_data.get("_y_keys", [])
+
+                if series_labels and label_key:
+                    # Build formatted columns: [x_label, y_label, ...series_labels]
+                    formatted_columns = []
+
+                    # Add x-axis label
+                    if x_key:
+                        formatted_columns.append(VegaUtil._format_column_name(x_key))
+
+                    # Add y-axis labels (do we need this?)
+                    for y_key in y_keys:
+                        pass
+
+                    # Add series labels (replacing the label_key column)
+                    formatted_columns.extend(series_labels)
+                else:
+                    # Standard case: format all column names OR use metadata columns
+                    metadata_columns = vega_data.get("_columns")
+                    if metadata_columns:
+                        formatted_columns = metadata_columns
+                    else:
+                        formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
+
+                # Remove internal metadata from vega_data
+                vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
+
+                output_data = {
+                    "result_type": result_type,
+                    "data": vega_data,
+                    "metadata": {
+                        "count": kv_results.get("count", 0),
+                        "columns": formatted_columns
+                    }
+                }
+                kv_formatted = json.dumps(output_data, indent=2)
+                logger.info(f"output_data: \n {kv_formatted}")
+            else:
+                kv_formatted = json.dumps(kv_results, indent=2)
+        else:
+            kv_formatted = json.dumps(kv_results, indent=2)
+
+        return kv_formatted
+
 
     async def contextualize_answer(
         self,
@@ -349,76 +421,9 @@ class OllamaClient:
             result_type = ""
             if kv_results:
                 try:
-                    result_type = kv_results["result_type"]
-                    result_type = OllamaClient._categorize_query(user_query, result_type)
-                    if result_type != "":
-                        kv_results["result_type"] = result_type
-
-                        # Convert to Vega format for chart types
-                        if result_type in ["bar_chart", "pie_chart", "line_chart", "scatter_chart", "bubble_chart", "treemap", "heatmap", "table"]:
-                            vega_data = VegaUtil.convert_to_vega_format(
-                                kv_results,
-                                user_query,
-                                sparql_query
-                            )
-
-                            # Determine columns based on chart type
-                            columns = []
-                            if kv_results.get("data"):
-                                if isinstance(kv_results.get("data"), list):
-                                    columns = list(kv_results["data"][0].keys())
-                                elif isinstance(kv_results.get("data"), dict):
-                                    columns = list(kv_results["data"].keys())
-
-                            # Check if we have series labels from vega conversion (for line charts)
-                            series_labels = vega_data.get("_series_labels")
-                            label_key = vega_data.get("_label_key")
-                            x_key = vega_data.get("_x_key")
-                            y_keys = vega_data.get("_y_keys", [])
-
-                            if series_labels and label_key:
-                                # Build formatted columns: [x_label, y_label, ...series_labels]
-                                formatted_columns = []
-
-                                # Add x-axis label
-                                if x_key:
-                                    formatted_columns.append(VegaUtil._format_column_name(x_key))
-
-                                # Add y-axis labels (do we need this?)
-                                for y_key in y_keys:
-                                    pass
-
-                                # Add series labels (replacing the label_key column)
-                                formatted_columns.extend(series_labels)
-                            else:
-                                # Standard case: format all column names OR use metadata columns
-                                metadata_columns = vega_data.get("_columns")
-                                if metadata_columns:
-                                    formatted_columns = metadata_columns
-                                else:
-                                    formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
-
-                            # Remove internal metadata from vega_data
-                            vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
-
-                            output_data = {
-                                "result_type": result_type,
-                                "data": vega_data,
-                                "metadata": {
-                                    "count": kv_results.get("count", 0),
-                                    "columns": formatted_columns
-                                }
-                            }
-                            kv_formatted = json.dumps(output_data, indent=2)
-                            logger.info(f"output_data: \n {kv_formatted}")
-                        else:
-                            kv_formatted = json.dumps(kv_results, indent=2)
-                    else:
-                        kv_formatted = json.dumps(kv_results, indent=2)
-
+                    kv_formatted = OllamaClient.format_kv()
                     logger.info(f"Sending data to feed widget: \n   {kv_formatted}")
-
-                    yield f"kv_results:{kv_formatted}\n\n"
+                    yield f"kv_results: {kv_formatted}\n\n"
 
                 except Exception as e:
                     logger.warning(f"KV results formatting failed: {e}")
@@ -495,6 +500,7 @@ class OllamaClient:
             ):
                 yield chunk
 
+
     async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
         """Use similar queries as few-shot examples."""
         top_n = 5
@@ -516,6 +522,7 @@ class OllamaClient:
             examples=messages,
             existing_prompt=prompt
         )
+
 
     def _add_history(
         self,

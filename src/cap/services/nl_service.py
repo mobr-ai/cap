@@ -15,11 +15,62 @@ from cap.services.sparql_service import execute_sparql
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 from cap.util.sparql_util import detect_and_parse_sparql
 from cap.util.sparql_result_processor import convert_sparql_to_kv, format_for_llm
-from cap.services.ollama_client import get_ollama_client
-from cap.services.redis_nl_client import get_redis_nl_client
+from cap.services.ollama_client import get_ollama_client, OllamaClient
+from cap.services.redis_nl_client import get_redis_nl_client, RedisNLClient
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
+
+
+async def nlq_to_sparql(
+        user_query: str,
+        redis_client: RedisNLClient,
+        ollama: OllamaClient,
+        conversation_history: list[dict]
+    ):
+
+    normalized = QueryNormalizer.normalize(user_query)
+    cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
+
+    sparql_query = ""
+    sparql_queries = None
+
+    if cached_data:
+        logger.info(f"Cache HIT for {user_query} -> {normalized}")
+        cached_sparql = cached_data["sparql_query"]
+        is_sequential = cached_data.get("is_sequential", False)
+
+        try:
+            if is_sequential:
+                sparql_queries = json.loads(cached_sparql)
+            else:
+                sparql_query = cached_sparql
+            sparql_valid = True
+        except (json.JSONDecodeError, TypeError):
+            is_sequential = False
+            sparql_query = cached_sparql
+            sparql_valid = True
+    else:
+        logger.info(f"Cache MISS for {user_query} -> {normalized}")
+
+        try:
+            raw_sparql_response = await ollama.nl_to_sparql(
+                natural_query=user_query,
+                conversation_history=conversation_history
+            )
+            is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response, user_query)
+
+            if is_sequential:
+                sparql_queries = sparql_content
+            else:
+                sparql_query = sparql_content
+
+            sparql_valid = bool(sparql_content)
+        except Exception as e:
+            logger.error(f"SPARQL generation error: {e}", exc_info=True)
+            sparql_valid = False
+
+    return normalized, sparql_query, sparql_queries, is_sequential, sparql_valid
 
 async def query_with_stream_response(
     query, context, db=None, user=None, conversation_history=None):
@@ -45,52 +96,15 @@ async def query_with_stream_response(
             logger.info(f"Context: {context}")
             user_query = f"{context}\n\n{query}"
 
-        normalized = QueryNormalizer.normalize(user_query)
-        cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
-
-        sparql_query = ""
-        sparql_queries = None
-
         # Stage 1: NL to SPARQL
         llm_start = time.time()
         logger.info("Stage 1: convert NL to SPARQL")
-
-        if cached_data:
-            logger.info(f"Cache HIT for {user_query} -> {normalized}")
-            cached_sparql = cached_data["sparql_query"]
-            is_sequential = cached_data.get("is_sequential", False)
-
-            try:
-                if is_sequential:
-                    sparql_queries = json.loads(cached_sparql)
-                else:
-                    sparql_query = cached_sparql
-                sparql_valid = True
-            except (json.JSONDecodeError, TypeError):
-                is_sequential = False
-                sparql_query = cached_sparql
-                sparql_valid = True
-        else:
-            logger.info(f"Cache MISS for {user_query} -> {normalized}")
-            yield StatusMessage.generating_sparql()
-
-            try:
-                raw_sparql_response = await ollama.nl_to_sparql(
-                    natural_query=user_query,
-                    conversation_history=conversation_history
-                )
-                is_sequential, sparql_content = detect_and_parse_sparql(raw_sparql_response, user_query)
-
-                if is_sequential:
-                    sparql_queries = sparql_content
-                else:
-                    sparql_query = sparql_content
-
-                sparql_valid = bool(sparql_content)
-            except Exception as e:
-                logger.error(f"SPARQL generation error: {e}", exc_info=True)
-                error_msg = str(e)
-                sparql_valid = False
+        normalized, sparql_query, sparql_queries, is_sequential, sparql_valid = await nlq_to_sparql(
+            user_query=user_query,
+            redis_client=redis_client,
+            ollama=ollama,
+            conversation_history=conversation_history
+        )
 
         llm_latency_ms = int((time.time() - llm_start) * 1000)
 
