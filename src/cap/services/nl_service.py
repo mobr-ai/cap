@@ -8,6 +8,7 @@ import time
 import json
 import asyncio
 from opentelemetry import trace
+from fastapi.exceptions import HTTPException
 
 from cap.util.status_message import StatusMessage
 from cap.services.metrics_service import MetricsService
@@ -149,7 +150,7 @@ async def query_with_stream_response(
                 # Success, exit retry loop
                 break
 
-            except Exception as exec_error:
+            except (Exception, HTTPException) as exec_error:
                 error_msg = str(exec_error)
                 logger.error(f"SPARQL execution error (attempt {retry_count + 1}/{max_retries + 1}): {error_msg}", exc_info=True)
 
