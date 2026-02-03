@@ -165,13 +165,11 @@ async def query_with_stream_response(
                 logger.warning(f"Retrying with error feedback (attempt {retry_count + 1}/{max_retries + 1})")
                 yield StatusMessage.processing_query()
 
-                # Add error feedback to conversation
-                if conversation_history is None:
-                    conversation_history = []
-
+                # Create new conversation history with error feedback (don't mutate original)
+                conversation_history = list(conversation_history) if conversation_history else []
                 conversation_history.append({
                     "role": "user",
-                    "content": f"The SPARQL query you generated failed with this error:\n\n{error_msg}\n\nPlease analyze the error and generate a corrected SPARQL query. Original question: {query}"
+                    "content": f"The SPARQL query you generated failed with this error:\n\n{str(error_msg)}\n\nPlease analyze the error and generate a corrected SPARQL query. Original question: {query}"
                 })
 
         sparql_latency_ms = int((time.time() - sparql_start) * 1000) if sparql_start else 0
@@ -193,7 +191,7 @@ async def query_with_stream_response(
                 kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query_str)
                 formatted_results = format_for_llm(kv_results, max_items=10000)
 
-            context_stream = ollama.contextualize_answer(
+            context_stream = ollama.generate_answer_with_context(
                 user_query=user_query,
                 sparql_query=sparql_query_str,
                 sparql_results=formatted_results,

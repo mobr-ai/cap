@@ -189,7 +189,7 @@ Be conversational and clear. Format dates nicely."""
         print("\nGenerating contextualized answer:\n")
         print("-" * 70)
 
-        async for chunk in client.contextualize_answer(
+        async for chunk in client.generate_answer_with_context(
             user_query=user_query,
             sparql_query=sparql_query,
             sparql_results=sparql_results,
@@ -321,7 +321,7 @@ LIMIT 1
 
         answer_system_prompt = "Explain Cardano data clearly and conversationally."
 
-        async for chunk in client.contextualize_answer(
+        async for chunk in client.generate_answer_with_context(
             user_query=user_question,
             sparql_query=mock_sparql,
             sparql_results=mock_results,

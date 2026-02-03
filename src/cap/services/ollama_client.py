@@ -395,7 +395,7 @@ class OllamaClient:
         return kv_formatted
 
 
-    async def contextualize_answer(
+    async def generate_answer_with_context(
         self,
         user_query: str,
         sparql_query: str,
