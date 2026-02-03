@@ -108,9 +108,9 @@ class NLQueryTester:
         print("="*60)
 
         try:
-            resp = await NLQueryTester.get_kvr_from_query(query=query)
+            resp, resp_type = await NLQueryTester.get_kvr_from_query(query=query)
 
-            print(resp)
+            print(resp, resp_type)
             return True
 
         except Exception as e:

@@ -392,7 +392,7 @@ class OllamaClient:
         else:
             kv_formatted = json.dumps(kv_results, indent=2)
 
-        return kv_formatted
+        return kv_formatted, result_type
 
 
     async def generate_answer_with_context(
@@ -421,7 +421,7 @@ class OllamaClient:
             result_type = ""
             if kv_results:
                 try:
-                    kv_formatted = OllamaClient.format_kv(
+                    kv_formatted, result_type = OllamaClient.format_kv(
                         user_query=user_query,
                         sparql_query=sparql_query,
                         kv_results=kv_results
