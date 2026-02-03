@@ -421,7 +421,11 @@ class OllamaClient:
             result_type = ""
             if kv_results:
                 try:
-                    kv_formatted = OllamaClient.format_kv()
+                    kv_formatted = OllamaClient.format_kv(
+                        user_query=user_query,
+                        sparql_query=sparql_query,
+                        kv_results=kv_results
+                    )
                     logger.info(f"Sending data to feed widget: \n   {kv_formatted}")
                     yield f"kv_results: {kv_formatted}\n\n"
 
