@@ -6,8 +6,8 @@ import logging
 import re
 from opentelemetry import trace
 from typing import Any
+from fastapi.exceptions import HTTPException
 
-from cap.util.status_message import StatusMessage
 from cap.rdf.triplestore import TriplestoreClient
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ async def execute_sparql(sparql_query: str, is_sequential: bool, sparql_queries:
             has_data = bool(sparql_results and sparql_results.get('results', {}).get('bindings'))
 
         except Exception as e:
-            logger.error(f"Sequential SPARQL execution error: {e}", exc_info=True)
+            logger.error(f"Sequential SPARQL execution error: {e}")
             error_msg = str(e)
             has_data = False
 
@@ -41,8 +41,14 @@ async def execute_sparql(sparql_query: str, is_sequential: bool, sparql_queries:
 
             has_data = result_count > 0
 
+        except HTTPException as http_err:
+            # Convert HTTPException to regular exception to prevent propagation
+            logger.error(f"SPARQL execution error (HTTP {http_err.status_code}): {http_err.detail}")
+            logger.error(f"    SPARQL: {sparql_query}")
+            error_msg = f"{http_err.status_code}: {http_err.detail}"
+            has_data = False
         except Exception as e:
-            logger.error(f"SPARQL execution error: {e}", exc_info=True)
+            logger.error(f"SPARQL execution error: {e}")
             logger.error(f"    SPARQL: {sparql_query}")
             error_msg = str(e)
             has_data = False

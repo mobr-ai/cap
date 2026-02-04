@@ -94,5 +94,5 @@ class SimilarityService:
 
             except Exception as e:
                 span.set_attribute("error", str(e))
-                logger.error(f"Failed to find similar queries: {e}", exc_info=True)
+                logger.error(f"Failed to find similar queries: {e}")
                 return []

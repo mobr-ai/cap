@@ -111,7 +111,7 @@ class VegaUtil:
                 return {"values": []}
 
         except Exception as e:
-            logger.error(f"Error converting to Vega format: {e}", exc_info=True)
+            logger.error(f"Error converting to Vega format: {e}")
             return {"values": []}
 
     @staticmethod

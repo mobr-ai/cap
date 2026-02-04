@@ -8,7 +8,6 @@ import time
 import json
 import asyncio
 from opentelemetry import trace
-from fastapi.exceptions import HTTPException
 
 from cap.util.status_message import StatusMessage
 from cap.services.metrics_service import MetricsService
@@ -68,7 +67,7 @@ async def nlq_to_sparql(
 
             sparql_valid = bool(sparql_content)
         except Exception as e:
-            logger.error(f"SPARQL generation error: {e}", exc_info=True)
+            logger.error(f"SPARQL generation error: {e}")
             sparql_valid = False
 
     return normalized, sparql_query, sparql_queries, is_sequential, sparql_valid
@@ -150,9 +149,9 @@ async def query_with_stream_response(
                 # Success, exit retry loop
                 break
 
-            except (Exception, HTTPException) as exec_error:
+            except Exception as exec_error:
                 error_msg = str(exec_error)
-                logger.error(f"SPARQL execution error (attempt {retry_count + 1}/{max_retries + 1}): {error_msg}", exc_info=True)
+                logger.error(f"SPARQL execution error (attempt {retry_count + 1}/{max_retries + 1}): {error_msg}")
 
                 # If from cache or max retries reached, re-raise
                 if was_from_cache or retry_count >= max_retries:
@@ -206,14 +205,14 @@ async def query_with_stream_response(
                 yield chunk
 
         except Exception as e:
-            logger.error(f"Contextualization error: {e}", exc_info=True)
+            logger.error(f"Contextualization error: {e}")
             error_msg = str(e)
             yield StatusMessage.error(f"Error generating answer: {str(e)}")
 
         yield StatusMessage.data_done()
 
     except Exception as e:
-        logger.error(f"Pipeline error: {e}", exc_info=True)
+        logger.error(f"Pipeline error: {e}")
         error_msg = str(e)
         has_data = False
         yield StatusMessage.error(f"Unexpected error: {str(e)}")
@@ -244,7 +243,7 @@ async def query_with_stream_response(
                 error_message=error_msg
             )
         except Exception as metrics_error:
-            logger.error(f"Failed to record metrics: {metrics_error}", exc_info=True)
+            logger.error(f"Failed to record metrics: {metrics_error}")
 
 async def stream_with_timeout_messages(
     stream_generator,
@@ -292,7 +291,7 @@ async def stream_with_timeout_messages(
 
     except Exception as e:
         # Log unexpected errors
-        logger.error(f"Error in stream wrapper: {e}", exc_info=True)
+        logger.error(f"Error in stream wrapper: {e}")
         # Yield error message to client if still connected
         try:
             yield f"error: Stream error: {str(e)}\n"

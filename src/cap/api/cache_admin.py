@@ -74,7 +74,7 @@ async def precache_from_file_path(request: PrecacheRequest):
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Pre-caching error: {e}", exc_info=True)
+            logger.error(f"Pre-caching error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/precache/upload", response_model=PrecacheStats)
@@ -126,7 +126,7 @@ async def precache_from_upload(
                     logger.warning(f"Failed to delete temp file {tmp_path}: {e}")
 
         except Exception as e:
-            logger.error(f"Upload pre-caching error: {e}", exc_info=True)
+            logger.error(f"Upload pre-caching error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -172,7 +172,7 @@ async def clear_cache():
             }
 
         except Exception as e:
-            logger.error(f"Cache clear error: {e}", exc_info=True)
+            logger.error(f"Cache clear error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/info")
@@ -222,7 +222,7 @@ async def get_cache_info():
             }
 
         except Exception as e:
-            logger.error(f"Cache info error: {e}", exc_info=True)
+            logger.error(f"Cache info error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -248,5 +248,5 @@ async def get_cache_info():
             }
 
         except Exception as e:
-            logger.error(f"Cache nl error: {e}", exc_info=True)
+            logger.error(f"Cache nl error: {e}")
             raise HTTPException(status_code=500, detail=str(e))

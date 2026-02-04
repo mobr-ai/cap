@@ -19,7 +19,7 @@ async def get_etl_status():
     try:
         return await etl_service.get_status()
     except Exception as e:
-        logger.error(f"Error getting ETL status: {str(e)}", exc_info=True)
+        logger.error(f"Error getting ETL status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("start")
@@ -43,7 +43,7 @@ async def start_etl(
         logger.error(f"ETL start error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected ETL start error: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected ETL start error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("stop")
@@ -53,7 +53,7 @@ async def stop_etl():
         await etl_service.stop_etl()
         return {"message": "ETL pipeline stopped"}
     except Exception as e:
-        logger.error(f"ETL stop error: {str(e)}", exc_info=True)
+        logger.error(f"ETL stop error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("reset")
@@ -66,5 +66,5 @@ async def reset_etl(entity_types: list[str] = None):
         logger.error(f"ETL reset error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected ETL reset error: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected ETL reset error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

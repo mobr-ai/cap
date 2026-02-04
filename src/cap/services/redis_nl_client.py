@@ -211,7 +211,7 @@ class RedisNLClient:
 
             except Exception as e:
                 span.set_attribute("error", str(e))
-                logger.error(f"Failed to retrieve cached query: {e}", exc_info=True)
+                logger.error(f"Failed to retrieve cached query: {e}")
                 return None
 
     def _restore_sparql(
@@ -374,13 +374,13 @@ class RedisNLClient:
                             stats["failed"] += 1
                             error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
                             stats["errors"].append(error_msg)
-                            logger.error(error_msg, exc_info=True)
+                            logger.error(error_msg)
 
                     except Exception as e:
                         stats["failed"] += 1
                         error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
                         stats["errors"].append(error_msg)
-                        logger.error(error_msg, exc_info=True)
+                        logger.error(error_msg)
 
                 logger.info(
                     f"Pre-caching completed: {stats['cached_successfully']} cached, "
@@ -398,7 +398,7 @@ class RedisNLClient:
             except Exception as e:
                 error_msg = f"Error during pre-caching: {str(e)}"
                 span.set_attribute("error", error_msg)
-                logger.error(error_msg, exc_info=True)
+                logger.error(error_msg)
                 stats["errors"].append(error_msg)
                 return stats
 

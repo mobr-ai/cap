@@ -45,7 +45,7 @@ async def get_sync_data():
         except HTTPException as e:
             raise e
         except Exception as e:
-            logger.error(f"get_sync_data execution error: {str(e)}", exc_info=True)
+            logger.error(f"get_sync_data execution error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/query", response_model=QueryResponse)
@@ -82,7 +82,7 @@ async def execute_query(request: QueryRequest):
         except HTTPException as e:
             raise e
         except Exception as e:
-            logger.error(f"SPARQL query execution error: {str(e)}", exc_info=True)
+            logger.error(f"SPARQL query execution error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/graphs", response_model=SuccessResponse)
@@ -97,7 +97,7 @@ async def create_graph(request: GraphCreateRequest):
         except HTTPException as e:
             raise e
         except Exception as e:
-            logger.error(f"Graph creation error: {str(e)}", exc_info=True)
+            logger.error(f"Graph creation error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/graphs/{graph_uri:path}")
@@ -121,7 +121,7 @@ async def read_graph(graph_uri: str):
         logger.error(f"[READ] HTTP error: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[READ] Unexpected error: {str(e)}", exc_info=True)
+        logger.error(f"[READ] Unexpected error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.patch("/graphs/{graph_uri:path}")
@@ -156,7 +156,7 @@ async def update_graph(graph_uri: str, update_request: GraphUpdateRequest):
         logger.error(f"[UPDATE] HTTP error: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[UPDATE] Unexpected error: {str(e)}", exc_info=True)
+        logger.error(f"[UPDATE] Unexpected error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/graphs/{graph_uri:path}")
@@ -180,5 +180,5 @@ async def delete_graph(graph_uri: str):
         logger.error(f"[DELETE] HTTP error: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[DELETE] Unexpected error: {str(e)}", exc_info=True)
+        logger.error(f"[DELETE] Unexpected error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
