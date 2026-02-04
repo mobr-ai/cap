@@ -2,7 +2,7 @@
 Vega util to convert data to vega format.
 """
 import logging
-from typing import Any
+from typing import Any, Tuple, List, Optional
 from opentelemetry import trace
 from collections import Counter
 
@@ -20,8 +20,91 @@ class VegaUtil:
         'epoch', 'epochNumber', 'x', 'index', 'blockHeight', 'blockNumber',
         'name', 'label', 'category'
     ]
+
     @staticmethod
-    def _get_x_candidates(first_item:dict, keys:list) -> list:
+    def _is_numeric_value(value: Any) -> bool:
+        """
+        Determine if a value should be treated as numeric for visualization purposes.
+
+        This is the central logic for distinguishing numeric values from categorical/temporal values.
+
+        Args:
+            value: The value to check (can be nested dict, str, int, float, etc.)
+
+        Returns:
+            True if the value should be treated as numeric, False if categorical/temporal
+        """
+        # Extract actual value from nested structures
+        if isinstance(value, dict):
+            value = value.get('value', value.get('ada', value.get('lovelace', None)))
+
+        # Native numeric types are always numeric
+        if isinstance(value, (int, float)):
+            return True
+
+        # Handle string values
+        if isinstance(value, str):
+            clean_val = value.strip()
+
+            # Empty strings are not numeric
+            if not clean_val:
+                return False
+
+            # Date-like strings (contains date separators) are categorical
+            if '-' in clean_val or '/' in clean_val:
+                return False
+
+            # Time-like strings (contains time separators) are categorical
+            if ':' in clean_val:
+                return False
+
+            # Very short strings (1-2 chars) are likely categorical codes
+            # e.g., "00", "01", "Q1", "A", etc.
+            if len(clean_val) <= 2:
+                return False
+
+            # Try to parse as float
+            try:
+                float_val = float(clean_val)
+                # If successful and contains decimal point or scientific notation, it's numeric
+                # Otherwise it might be a categorical ID (e.g., "12345" for an account number)
+                return '.' in clean_val or 'e' in clean_val.lower() or 'E' in clean_val
+            except ValueError:
+                return False
+
+        # Everything else is not numeric
+        return False
+
+    @staticmethod
+    def _classify_fields(data: list[dict]) -> Tuple[List[str], List[str]]:
+        """
+        Classify all fields in the data as either categorical or numeric.
+
+        Args:
+            data: List of data items
+
+        Returns:
+            Tuple of (categorical_keys, numeric_keys)
+        """
+        if not data:
+            return [], []
+
+        first_item = data[0]
+        categorical_keys = []
+        numeric_keys = []
+
+        for key in first_item.keys():
+            value = first_item[key]
+
+            if VegaUtil._is_numeric_value(value):
+                numeric_keys.append(key)
+            else:
+                categorical_keys.append(key)
+
+        return categorical_keys, numeric_keys
+
+    @staticmethod
+    def _get_x_candidates(first_item: dict, keys: list) -> list:
         x_candidates = VegaUtil.x_candidates.copy()
 
         # Extend x_candidates with any keys containing 'date' or having datetime values
@@ -128,16 +211,9 @@ class VegaUtil:
             # Value field is typically numeric - find first numeric field that's not the category
             value_key = None
             for k in keys:
-                if k != category_key:
-                    try:
-                        # Check if values are numeric
-                        val = first_item[k]
-                        if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).isdigit()):
-                            value_key = k
-                            break
-                    except Exception as e:
-                        logger.warning(f"Failed to convert value for {category_key}: {e}")
-                        continue
+                if k != category_key and VegaUtil._is_numeric_value(first_item[k]):
+                    value_key = k
+                    break
 
             if not value_key:
                 value_key = keys[-1] if len(keys) > 1 else keys[0]
@@ -378,31 +454,7 @@ class VegaUtil:
         # All other numeric fields are series
         series_keys = []
         for k in keys:
-            is_numeric = False
-            if k != x_key:
-                val = first_item[k]
-
-                # Handle nested dicts
-                if isinstance(val, dict):
-                    val = val.get('ada', val.get('lovelace', val.get('value', None)))
-
-                # Check if numeric
-                try:
-                    if val is not None:
-                        if isinstance(val, (int, float)):
-                            is_numeric = True
-                        elif isinstance(val, str):
-                            if val.replace('.', '', 1).replace('-', '', 1).isdigit():
-                                is_numeric = True
-                            else:
-                                float(val)
-                                is_numeric = True
-
-                except Exception as e:
-                    logger.warning(f"Failed to check if {k} is numeric: {e}")
-                    continue
-
-            if is_numeric:
+            if k != x_key and VegaUtil._is_numeric_value(first_item[k]):
                 series_keys.append(k)
 
         # If no series keys found, skip this conversion
@@ -475,18 +527,7 @@ class VegaUtil:
         keys = list(first_item.keys())
 
         # Find x and y fields (first two numeric fields)
-        numeric_keys = []
-        for k in keys:
-            val = first_item[k]
-            if isinstance(val, dict):
-                val = val.get('value', val.get('ada', val.get('lovelace', None)))
-            try:
-                if val is not None and isinstance(val, (int, float)):
-                    numeric_keys.append(k)
-                elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
-                    numeric_keys.append(k)
-            except:
-                continue
+        numeric_keys = [k for k in keys if VegaUtil._is_numeric_value(first_item[k])]
 
         if len(numeric_keys) < 2:
             logger.warning("Need at least 2 numeric fields for scatter chart")
@@ -546,18 +587,7 @@ class VegaUtil:
         keys = list(first_item.keys())
 
         # Find three numeric fields for x, y, and size
-        numeric_keys = []
-        for k in keys:
-            val = first_item[k]
-            if isinstance(val, dict):
-                val = val.get('value', val.get('ada', val.get('lovelace', None)))
-            try:
-                if val is not None and isinstance(val, (int, float)):
-                    numeric_keys.append(k)
-                elif isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit():
-                    numeric_keys.append(k)
-            except:
-                continue
+        numeric_keys = [k for k in keys if VegaUtil._is_numeric_value(first_item[k])]
 
         if len(numeric_keys) < 3:
             logger.warning("Need at least 3 numeric fields for bubble chart")
@@ -627,22 +657,12 @@ class VegaUtil:
         # Find name/label and size fields
         name_key = next((k for k in keys if k.lower() in ['name', 'label', 'category', 'group', 'policyid', 'policy', 'token']), keys[0])
 
-        # Find numeric field for size
+        # Find numeric field for size - use centralized numeric detection
         size_key = None
         for k in keys:
-            if k != name_key:
-                val = first_item[k]
-                if isinstance(val, dict):
-                    val = val.get('value', val.get('ada', val.get('lovelace', None)))
-                try:
-                    if val is not None and isinstance(val, (int, float)):
-                        size_key = k
-                        break
-                    elif isinstance(val, str) and val.replace('.', '', 1).isdigit():
-                        size_key = k
-                        break
-                except:
-                    continue
+            if k != name_key and VegaUtil._is_numeric_value(first_item[k]):
+                size_key = k
+                break
 
         if not size_key:
             size_key = keys[-1] if len(keys) > 1 else keys[0]
@@ -699,32 +719,16 @@ class VegaUtil:
         first_item = data[0]
         keys = list(first_item.keys())
 
-        # Find x and y categorical fields and a numeric value field
-        categorical_keys = []
-        numeric_key = None
-
-        for k in keys:
-            val = first_item[k]
-            if isinstance(val, dict):
-                val = val.get('value', val.get('ada', val.get('lovelace', None)))
-
-            try:
-                if val is not None and isinstance(val, (int, float)):
-                    if not numeric_key:
-                        numeric_key = k
-                elif isinstance(val, str):
-                    if not val.replace('.', '', 1).replace('-', '', 1).isdigit():
-                        categorical_keys.append(k)
-            except:
-                categorical_keys.append(k)
+        # Use centralized field classification
+        categorical_keys, numeric_keys = VegaUtil._classify_fields(data)
 
         if len(categorical_keys) < 2:
-            logger.warning("Need at least 2 categorical fields for heatmap")
+            logger.warning(f"Need at least 2 categorical fields for heatmap, found {len(categorical_keys)}: {categorical_keys}")
             return {"values": []}
 
         x_key = categorical_keys[0]
         y_key = categorical_keys[1]
-        value_key = numeric_key if numeric_key else keys[-1]
+        value_key = numeric_keys[0] if numeric_keys else keys[-1]
 
         values = []
         for item in data:
