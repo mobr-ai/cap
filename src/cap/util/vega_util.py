@@ -1,6 +1,7 @@
 """
 Vega util to convert data to vega format.
 """
+import re
 import logging
 from typing import Any, Tuple, List, Optional
 from opentelemetry import trace
@@ -120,6 +121,239 @@ class VegaUtil:
         return x_candidates
 
     @staticmethod
+    def _parse_coordinate_assignments(user_query: str, data: list[dict]) -> dict[str, Optional[str]]:
+        """
+        Parse user query to extract explicit coordinate assignments (x, y, z, size, color, etc.).
+
+        This function analyzes the user's natural language query to identify which data fields
+        should be mapped to which visual encoding channels (coordinates, size, color, etc.).
+
+        Examples:
+            "x = TPS, y = average fee" -> {"x": "TPS", "y": "average fee"}
+            "bubble size = total volume" -> {"size": "total volume"}
+            "positioned by votes and voters" -> {"x": "votes", "y": "voters"}
+            "color by category" -> {"color": "category"}
+
+        Args:
+            user_query: The natural language query from the user
+            data: The data list to match field names against
+
+        Returns:
+            Dictionary mapping coordinate names to field identifiers from the query
+        """
+        if not user_query or not data:
+            return {}
+
+        # Normalize query for parsing
+        query_lower = user_query.lower()
+
+        # Dictionary to store coordinate assignments
+        coordinates = {}
+
+        # Pattern 1: Direct assignments with "=" or "as" (e.g., "x = field name", "use y as volume")
+        # Improved to handle multiple assignments better, including "x = A and y = B" format
+        assignment_pattern = r'(?:use\s+)?(?:bubble\s+)?(?P<coord>x|y|z|size|color|colour|radius)\s*(?:=|as)\s*(?P<field>[^,=]+?)(?=\s+and\s+(?:use\s+)?(?:bubble\s+)?(?:x|y|z|size|color)|[,.\n]|and\s+bubble|$)'
+
+        for match in re.finditer(assignment_pattern, query_lower):
+            coord_name = match.group('coord').strip()
+            field_desc = match.group('field').strip()
+
+            # Clean up the field description
+            field_desc = re.sub(r'\s+and\s*$', '', field_desc)  # Remove trailing "and"
+            field_desc = field_desc.strip()
+
+            # Normalize coordinate name
+            if coord_name == 'colour':
+                coord_name = 'color'
+            if coord_name == 'radius':
+                coord_name = 'size'
+
+            coordinates[coord_name] = field_desc
+
+        # Pattern 2: "positioned by X and Y" or "positioned by X, Y"
+        positioned_pattern = r'positioned\s+by\s+(?P<fields>[^,.\n]+?)(?=[,.\n]|and\s+(?:bubble\s+)?size|with\s+(?:bubble\s+)?size|$)'
+        positioned_match = re.search(positioned_pattern, query_lower)
+
+        if positioned_match:
+            fields_text = positioned_match.group('fields').strip()
+            # Split by "and" or commas
+            field_parts = re.split(r'\s+and\s+|,\s*', fields_text)
+
+            # Assign to x and y coordinates
+            if len(field_parts) >= 1 and 'x' not in coordinates:
+                coordinates['x'] = field_parts[0].strip()
+            if len(field_parts) >= 2 and 'y' not in coordinates:
+                coordinates['y'] = field_parts[1].strip()
+
+        # Pattern 3: "bubble size showing/from X" or "with bubble size showing X"
+        bubble_size_patterns = [
+            r'(?:bubble\s+)?size\s+(?:showing|from|representing|indicating)\s+(?P<field>[^,.\n]+?)(?=[,.\n]|$)',
+            r'with\s+(?:bubble\s+)?size\s+(?:showing|from|representing|indicating)\s+(?P<field>[^,.\n]+?)(?=[,.\n]|$)'
+        ]
+
+        for pattern in bubble_size_patterns:
+            bubble_match = re.search(pattern, query_lower)
+            if bubble_match and 'size' not in coordinates:
+                coordinates['size'] = bubble_match.group('field').strip()
+                break
+
+        # Pattern 4: "colored by X" or "color-coded by X"
+        color_patterns = [
+            r'(?:colored|colou?red|color[- ]coded)\s+by\s+(?P<field>[^,.\n]+?)(?=[,.\n]|$)',
+            r'(?:by\s+)?colou?r\s+(?:of\s+)?(?P<field>[^,.\n]+?)(?=[,.\n]|$)'
+        ]
+
+        for pattern in color_patterns:
+            color_match = re.search(pattern, query_lower)
+            if color_match and 'color' not in coordinates:
+                coordinates['color'] = color_match.group('field').strip()
+                break
+
+        return coordinates
+
+    @staticmethod
+    def _match_coordinate_to_field(coordinate_desc: str, data: list[dict],
+                                   exclude_keys: Optional[List[str]] = None) -> Optional[str]:
+        """
+        Match a coordinate description from the query to an actual field in the data.
+
+        This function uses fuzzy matching to find the best field in the data that corresponds
+        to a user's description of what they want plotted on a coordinate.
+
+        Examples:
+            "transfer count" might match "transferCount" or "transfer_count"
+            "unique sending accounts" might match "uniqueSenders" or "senderCount"
+            "total votes" might match "totalVotes" or "voteCount"
+
+        Args:
+            coordinate_desc: Description of the coordinate from the user query
+            data: The data list containing the fields
+            exclude_keys: List of keys to exclude from matching (already assigned coordinates)
+
+        Returns:
+            The best matching field key, or None if no good match found
+        """
+        if not data or not coordinate_desc:
+            return None
+
+        exclude_keys = exclude_keys or []
+        first_item = data[0]
+        available_keys = [k for k in first_item.keys() if k not in exclude_keys]
+
+        if not available_keys:
+            return None
+
+        # Normalize the description
+        desc_lower = coordinate_desc.lower().strip()
+        desc_words = set(re.findall(r'\w+', desc_lower))
+
+        best_match = None
+        best_score = 0
+
+        for key in available_keys:
+            key_lower = key.lower()
+
+            # Score based on various matching criteria
+            score = 0
+
+            # Exact match (highest priority)
+            if key_lower == desc_lower:
+                score = 1000
+
+            # Key contains the full description
+            elif desc_lower in key_lower or key_lower in desc_lower:
+                score = 100
+
+            # Word-based matching
+            else:
+                # Split camelCase and snake_case
+                key_words = set(re.findall(r'[a-z]+|[A-Z][a-z]*', key))
+                key_words = {w.lower() for w in key_words if w}
+
+                # Count matching words
+                matching_words = desc_words & key_words
+                if matching_words:
+                    score = len(matching_words) * 10
+
+                    # Bonus if all description words are in the key
+                    if desc_words <= key_words:
+                        score += 50
+
+            # Special handling for common terms
+            if score > 0:
+                # Boost score for semantic matches
+                semantic_matches = [
+                    (['count', 'number', 'total'], ['count', 'num', 'total']),
+                    (['unique', 'distinct'], ['unique', 'distinct']),
+                    (['average', 'avg', 'mean'], ['average', 'avg', 'mean']),
+                    (['volume', 'amount', 'sum'], ['volume', 'amount', 'sum', 'total']),
+                    (['fee', 'fees', 'cost'], ['fee', 'fees', 'cost']),
+                    (['size', 'magnitude'], ['size', 'count', 'total']),
+                ]
+
+                for desc_terms, key_terms in semantic_matches:
+                    if any(term in desc_lower for term in desc_terms):
+                        if any(term in key_lower for term in key_terms):
+                            score += 20
+
+            if score > best_score:
+                best_score = score
+                best_match = key
+
+        # Only return a match if we have a reasonable score
+        return best_match if best_score >= 10 else None
+
+    @staticmethod
+    def _apply_coordinate_mapping(data: list[dict], coordinate_map: dict[str, str]) -> dict[str, str]:
+        """
+        Apply coordinate mapping from parsed query to actual data fields.
+
+        This function takes the coordinate assignments extracted from the user query
+        and matches them to actual field names in the data.
+
+        Args:
+            data: The data list containing the fields
+            coordinate_map: Mapping from coordinate names to descriptions from query
+
+        Returns:
+            Dictionary mapping coordinate names to actual field keys in the data
+        """
+        if not coordinate_map or not data:
+            return {}
+
+        field_assignments = {}
+        used_keys = []
+
+        # Priority order for assignment (x, y, z, size, color, etc.)
+        priority_order = ['x', 'y', 'z', 'size', 'color']
+
+        # First pass: assign priority coordinates
+        for coord_name in priority_order:
+            if coord_name in coordinate_map:
+                field_key = VegaUtil._match_coordinate_to_field(
+                    coordinate_map[coord_name],
+                    data,
+                    exclude_keys=used_keys
+                )
+                if field_key:
+                    field_assignments[coord_name] = field_key
+                    used_keys.append(field_key)
+
+        # Second pass: assign any remaining coordinates
+        for coord_name, coord_desc in coordinate_map.items():
+            if coord_name not in field_assignments:
+                field_key = VegaUtil._match_coordinate_to_field(
+                    coord_desc,
+                    data,
+                    exclude_keys=used_keys
+                )
+                if field_key:
+                    field_assignments[coord_name] = field_key
+                    used_keys.append(field_key)
+
+        return field_assignments
+
+    @staticmethod
     def _format_column_name(column_name: str) -> str:
         """
         Convert camelCase/variable names to human-readable format.
@@ -204,16 +438,26 @@ class VegaUtil:
             first_item = data[0]
             keys = list(first_item.keys())
 
-            # Identify category (x-axis) and value (y-axis) fields
-            category_candidates = VegaUtil._get_x_candidates(first_item, keys)
-            category_key = next((k for k in keys if k.lower() in [c.lower() for c in category_candidates]), keys[0])
+            # Parse coordinate assignments from user query
+            coordinate_map = VegaUtil._parse_coordinate_assignments(user_query, data)
+            field_assignments = VegaUtil._apply_coordinate_mapping(data, coordinate_map)
+
+            # Determine category (x-axis) and value (y-axis) keys
+            # Priority: user-specified coordinates > heuristic detection
+            category_key = field_assignments.get('x')
+            value_key = field_assignments.get('y')
+
+            # Fallback to heuristic if not specified
+            if not category_key:
+                category_candidates = VegaUtil._get_x_candidates(first_item, keys)
+                category_key = next((k for k in keys if k.lower() in [c.lower() for c in category_candidates]), keys[0])
 
             # Value field is typically numeric - find first numeric field that's not the category
-            value_key = None
-            for k in keys:
-                if k != category_key and VegaUtil._is_numeric_value(first_item[k]):
-                    value_key = k
-                    break
+            if not value_key:
+                for k in keys:
+                    if k != category_key and VegaUtil._is_numeric_value(first_item[k]):
+                        value_key = k
+                        break
 
             if not value_key:
                 value_key = keys[-1] if len(keys) > 1 else keys[0]
@@ -447,15 +691,30 @@ class VegaUtil:
         first_item = data[0]
         keys = list(first_item.keys())
 
-        # Identify x-axis field (typically time-based or sequential)
-        x_candidates = VegaUtil._get_x_candidates(first_item, keys)
-        x_key = next((k for k in keys if k.lower() in [c.lower() for c in x_candidates]), keys[0])
+        # Parse coordinate assignments from user query
+        coordinate_map = VegaUtil._parse_coordinate_assignments(user_query, data)
+        field_assignments = VegaUtil._apply_coordinate_mapping(data, coordinate_map)
 
-        # All other numeric fields are series
+        # Determine x-axis field (typically time-based or sequential)
+        # Priority: user-specified coordinates > heuristic detection
+        x_key = field_assignments.get('x')
+
+        if not x_key:
+            x_candidates = VegaUtil._get_x_candidates(first_item, keys)
+            x_key = next((k for k in keys if k.lower() in [c.lower() for c in x_candidates]), keys[0])
+
+        # All other numeric fields are series (or user-specified y)
         series_keys = []
-        for k in keys:
-            if k != x_key and VegaUtil._is_numeric_value(first_item[k]):
-                series_keys.append(k)
+        y_key = field_assignments.get('y')
+
+        if y_key:
+            # User specified y coordinate, use that as the primary series
+            series_keys = [y_key]
+        else:
+            # Auto-detect: all numeric fields except x_key
+            for k in keys:
+                if k != x_key and VegaUtil._is_numeric_value(first_item[k]):
+                    series_keys.append(k)
 
         # If no series keys found, skip this conversion
         if not series_keys:
@@ -526,22 +785,41 @@ class VegaUtil:
         first_item = data[0]
         keys = list(first_item.keys())
 
-        # Find x and y fields (first two numeric fields)
+        # Parse coordinate assignments from user query
+        coordinate_map = VegaUtil._parse_coordinate_assignments(user_query, data)
+        field_assignments = VegaUtil._apply_coordinate_mapping(data, coordinate_map)
+
+        # Determine x and y keys
+        # Priority: user-specified coordinates > heuristic detection
+        x_key = field_assignments.get('x')
+        y_key = field_assignments.get('y')
+
+        # Find numeric fields for fallback
         numeric_keys = [k for k in keys if VegaUtil._is_numeric_value(first_item[k])]
 
-        if len(numeric_keys) < 2:
-            logger.warning("Need at least 2 numeric fields for scatter chart")
+        # Fallback to heuristic if coordinates not specified
+        used_keys = [k for k in [x_key, y_key] if k is not None]
+        available_numeric = [k for k in numeric_keys if k not in used_keys]
+
+        if not x_key and available_numeric:
+            x_key = available_numeric[0]
+            available_numeric = available_numeric[1:]
+
+        if not y_key and available_numeric:
+            y_key = available_numeric[0]
+
+        if not (x_key and y_key):
+            logger.warning(f"Need at least 2 numeric fields for scatter chart. Found: x={x_key}, y={y_key}")
             return {"values": []}
 
-        x_key = numeric_keys[0]
-        y_key = numeric_keys[1]
-
-        # Optional: find category field for coloring
-        category_key = None
-        for k in keys:
-            if k not in numeric_keys and isinstance(first_item[k], str):
-                category_key = k
-                break
+        # Optional: find category field for coloring (from query or heuristic)
+        category_key = field_assignments.get('color')
+        if not category_key:
+            # Heuristic: first non-numeric, non-coordinate field
+            for k in keys:
+                if k not in [x_key, y_key] and not VegaUtil._is_numeric_value(first_item[k]):
+                    category_key = k
+                    break
 
         values = []
         for item in data:
@@ -586,23 +864,49 @@ class VegaUtil:
         first_item = data[0]
         keys = list(first_item.keys())
 
-        # Find three numeric fields for x, y, and size
+        # Parse coordinate assignments from user query
+        coordinate_map = VegaUtil._parse_coordinate_assignments(user_query, data)
+        field_assignments = VegaUtil._apply_coordinate_mapping(data, coordinate_map)
+
+        # Determine x, y, and size keys
+        # Priority: user-specified coordinates > heuristic detection
+        x_key = field_assignments.get('x')
+        y_key = field_assignments.get('y')
+        size_key = field_assignments.get('size')
+
+        # Find numeric fields for fallback
         numeric_keys = [k for k in keys if VegaUtil._is_numeric_value(first_item[k])]
 
-        if len(numeric_keys) < 3:
-            logger.warning("Need at least 3 numeric fields for bubble chart")
+        # Filter out already assigned keys from numeric_keys for fallback selection
+        used_keys = [k for k in [x_key, y_key, size_key] if k is not None]
+        available_numeric = [k for k in numeric_keys if k not in used_keys]
+
+        # Fallback to heuristic if coordinates not specified
+        if not x_key and available_numeric:
+            x_key = available_numeric[0]
+            available_numeric = available_numeric[1:]
+
+        if not y_key and available_numeric:
+            y_key = available_numeric[0]
+            available_numeric = available_numeric[1:]
+
+        if not size_key and available_numeric:
+            size_key = available_numeric[0]
+            available_numeric = available_numeric[1:]
+
+        # Validate we have at least 3 numeric fields
+        if not (x_key and y_key and size_key):
+            logger.warning(f"Need at least 3 numeric fields for bubble chart. Found: x={x_key}, y={y_key}, size={size_key}")
             return {"values": []}
 
-        x_key = numeric_keys[0]
-        y_key = numeric_keys[1]
-        size_key = numeric_keys[2]
-
-        # Optional: find category/label field
-        label_key = None
-        for k in keys:
-            if k not in numeric_keys:
-                label_key = k
-                break
+        # Optional: find category/label field (from query or heuristic)
+        label_key = field_assignments.get('color')  # Color can be used as label
+        if not label_key:
+            # Heuristic: first non-numeric field
+            for k in keys:
+                if k not in [x_key, y_key, size_key] and not VegaUtil._is_numeric_value(first_item[k]):
+                    label_key = k
+                    break
 
         values = []
         for item in data:
@@ -719,16 +1023,39 @@ class VegaUtil:
         first_item = data[0]
         keys = list(first_item.keys())
 
-        # Use centralized field classification
+        # Parse coordinate assignments from user query
+        coordinate_map = VegaUtil._parse_coordinate_assignments(user_query, data)
+        field_assignments = VegaUtil._apply_coordinate_mapping(data, coordinate_map)
+
+        # Determine x, y, and value keys
+        # Priority: user-specified coordinates > heuristic detection
+        x_key = field_assignments.get('x')
+        y_key = field_assignments.get('y')
+        value_key = field_assignments.get('z')  # z often used for heatmap intensity
+
+        # Use centralized field classification for fallback
         categorical_keys, numeric_keys = VegaUtil._classify_fields(data)
 
-        if len(categorical_keys) < 2:
-            logger.warning(f"Need at least 2 categorical fields for heatmap, found {len(categorical_keys)}: {categorical_keys}")
-            return {"values": []}
+        # Fallback to heuristic if coordinates not specified
+        used_keys = [k for k in [x_key, y_key, value_key] if k is not None]
+        available_categorical = [k for k in categorical_keys if k not in used_keys]
+        available_numeric = [k for k in numeric_keys if k not in used_keys]
 
-        x_key = categorical_keys[0]
-        y_key = categorical_keys[1]
-        value_key = numeric_keys[0] if numeric_keys else keys[-1]
+        if not x_key and available_categorical:
+            x_key = available_categorical[0]
+            available_categorical = available_categorical[1:]
+
+        if not y_key and available_categorical:
+            y_key = available_categorical[0]
+
+        if not value_key and available_numeric:
+            value_key = available_numeric[0]
+        elif not value_key and keys:
+            value_key = keys[-1]  # Last resort fallback
+
+        if not (x_key and y_key):
+            logger.warning(f"Need at least 2 categorical fields for heatmap. Found: x={x_key}, y={y_key}")
+            return {"values": []}
 
         values = []
         for item in data:
