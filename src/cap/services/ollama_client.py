@@ -454,6 +454,7 @@ class OllamaClient:
                 context_res = str(sparql_results)
 
             current_date = f"Current utc date and time: {datetime.now(timezone.utc)}."
+            current_his = None
             known_info = ""
             temperature = 0.1
             if "chart" in result_type or "table" in result_type:
@@ -472,6 +473,7 @@ class OllamaClient:
 
                 {self.contextualize_prompt}
                 """
+                current_his = conversation_history
 
             else:
                 known_info = f"""
@@ -489,7 +491,7 @@ class OllamaClient:
             # Prepare messages with history and all context
             prompt = self._add_history(
                 prompt=prompt,
-                conversation_history=conversation_history,
+                conversation_history=current_his,
             )
 
             logger.info(f"Prompting LLM (truncated): \n{prompt[:1000] + ('...' if len(prompt) > 1000 else '')}")
