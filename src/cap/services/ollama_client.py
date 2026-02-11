@@ -510,12 +510,12 @@ class OllamaClient:
                 yield chunk
 
             # Yield SPARQL query as metadata after the response
-            if sparql_query:
-                metadata = {
-                    "type": "metadata",
-                    "sparql_query": sparql_query
-                }
-                yield f"\n__METADATA__:{json.dumps(metadata)}"
+            # if sparql_query:
+            #     metadata = {
+            #         "type": "metadata",
+            #         "sparql_query": sparql_query
+            #     }
+            #     yield f"\n__METADATA__:{json.dumps(metadata)}"
 
     async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
         """Use similar queries as few-shot examples."""
