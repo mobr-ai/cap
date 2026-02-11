@@ -110,3 +110,36 @@ def convert_entity_to_cardanoscan_link(var_name: str, value: Any, sparql_query: 
             display_value = f"{value_clean[:8]}...{value_clean[-8:]}"
 
     return f'<a href="{url}" target="_blank" title="{value_clean}">{display_value}</a>'
+
+def convert_sparql_results_to_links(sparql_results: Any, sparql_query: str = "") -> Any:
+    """
+    Convert blockchain entities in SPARQL results to Cardanoscan links.
+
+    Args:
+        sparql_results: The SPARQL query results (can be dict, list, or other types)
+        sparql_query: The SPARQL query for ontology analysis
+
+    Returns:
+        Modified results with Cardanoscan links
+    """
+    if not sparql_results:
+        return sparql_results
+
+    # Handle list of results
+    if isinstance(sparql_results, list):
+        return [convert_sparql_results_to_links(item, sparql_query) for item in sparql_results]
+
+    # Handle dictionary results
+    if isinstance(sparql_results, dict):
+        converted = {}
+        for key, value in sparql_results.items():
+            # Skip nested structures that aren't actual result values
+            if isinstance(value, (dict, list)):
+                converted[key] = convert_sparql_results_to_links(value, sparql_query)
+            else:
+                # Convert the value using the existing function
+                converted[key] = convert_entity_to_cardanoscan_link(key, value, sparql_query)
+        return converted
+
+    # Return as-is for other types
+    return sparql_results

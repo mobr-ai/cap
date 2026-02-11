@@ -12,8 +12,8 @@ from opentelemetry import trace
 from cap.config import settings
 from cap.util.str_util import get_file_content
 from cap.util.vega_util import VegaUtil
+from cap.util.cardano_scan import convert_sparql_results_to_links
 from cap.util.sparql_util import detect_and_parse_sparql
-from cap.services.redis_nl_client import get_redis_nl_client
 from cap.services.msg_formatter import MessageFormatter
 from cap.services.similarity_service import SimilarityService
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
@@ -443,6 +443,7 @@ class OllamaClient:
                     span.set_attribute("format", "string")
                 # Otherwise, serialize dict to JSON
                 elif sparql_results:
+                    sparql_results = convert_sparql_results_to_links(sparql_results, sparql_query)
                     context_res = json.dumps(sparql_results, indent=2)
                     span.set_attribute("format", "dict")
                 else:
@@ -477,8 +478,10 @@ class OllamaClient:
 
             else:
                 known_info = f"""
-                    Answer with the following message:
-                    I do not have this information or I was not capable of retrieving it correctly. We would appreciate it if you could specify here what you wanted to do as a feature and we will try to make your prompt work asap.
+                    Answer with a text similar to the following message:
+                    I do not have this information or I was not capable of retrieving it correctly.
+                    We would appreciate it if you could specify here what you wanted to do as a feature and we will try to make your prompt work asap.
+                    If you think this feature is already supported, try specifying the entire command in a unique prompt.
                 """
 
             # Format the prompt with query and results
@@ -506,11 +509,18 @@ class OllamaClient:
             ):
                 yield chunk
 
+            # Yield SPARQL query as metadata after the response
+            if sparql_query:
+                metadata = {
+                    "type": "metadata",
+                    "sparql_query": sparql_query
+                }
+                yield f"\n__METADATA__:{json.dumps(metadata)}"
 
     async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
         """Use similar queries as few-shot examples."""
         top_n = 5
-        min_similarity = 0.2
+        min_similarity = 0.0
 
         # Find similar cached queries and format as examples
         similar = await SimilarityService.find_similar_queries(

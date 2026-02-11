@@ -32,7 +32,7 @@ class SimilarityService:
     async def find_similar_queries(
         nl_query: str,
         top_n: int = 5,
-        min_similarity: float = 0.3
+        min_similarity: float = 0.0
     ) -> list[dict[str, Any]]:
         """
         Find top N most similar cached queries.
