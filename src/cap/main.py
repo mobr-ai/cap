@@ -31,6 +31,7 @@ from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
 from cap.api.user_admin import router as user_admin_router
 from cap.api.conversation import router as conversation_router
+from cap.api.conversation_admin import router as conversation_admin_router
 from cap.api.system_admin import router as system_router
 from cap.api.dashboard import router as dashboard_router
 from cap.api.share import router as share_router
@@ -240,6 +241,7 @@ def create_application() -> FastAPI:
     app.include_router(demo_router)
     app.include_router(notif_admin_router)
     app.include_router(conversation_router)
+    app.include_router(conversation_admin_router)
 
     return app
 

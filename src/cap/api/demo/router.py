@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from cap.database.session import get_db
-from cap.database.model import User
+from cap.database.model import User, QueryMetrics
 from cap.services.metrics_service import MetricsService
 from cap.services.conversation_persistence import (
     start_conversation_and_persist_user,
@@ -40,7 +40,6 @@ def _truthy(v) -> bool:
 
 
 def _scene_break_mode(req: DemoQueryRequest, scene: Optional[dict]) -> BreakSSEMode:
-    # Request override wins
     if req.break_sse_mode in ("concat_payload", "concat_raw"):
         return req.break_sse_mode
 
@@ -57,6 +56,18 @@ def _scene_break_mode(req: DemoQueryRequest, scene: Optional[dict]) -> BreakSSEM
     return None
 
 
+def _find_recent_demo_query_metrics_id(db: Session, user_id: Optional[int], nl_query: str) -> Optional[int]:
+    if not user_id:
+        return None
+    q = (
+        db.query(QueryMetrics)
+        .filter(QueryMetrics.user_id == user_id, QueryMetrics.nl_query == nl_query)
+        .order_by(QueryMetrics.created_at.desc(), QueryMetrics.id.desc())
+        .first()
+    )
+    return int(q.id) if q and q.id is not None else None
+
+
 @router.post("/nl/query")
 async def demo_nl_query(
     req: DemoQueryRequest,
@@ -70,6 +81,7 @@ async def demo_nl_query(
     user_msg = None
     persist = user is not None
     kv_results_dict = None
+    deferred_raw_kv: Optional[str] = None
 
     if persist:
         conversation, user_msg = start_conversation_and_persist_user(
@@ -100,13 +112,15 @@ async def demo_nl_query(
             time.sleep(ms / 1000.0)
 
     async def stream_demo() -> AsyncGenerator[bytes, None]:
+        nonlocal kv_results_dict, deferred_raw_kv
+
         yield b"status: Planning...\n"
         _sleep(delay_ms)
 
         yield b"status: Querying knowledge graph...\n"
         _sleep(delay_ms)
 
-        # KV block
+        # KV block (defer persistence until qid exists)
         if scene and scene.get("kv"):
             yield b"kv_results:\n"
             raw_kv = json.dumps(scene["kv"])
@@ -114,19 +128,8 @@ async def demo_nl_query(
             yield b"_kv_results_end_\n"
             _sleep(delay_ms)
 
-            if persist and conversation is not None:
-                try:
-                    persist_conversation_artifact_from_raw_kv(
-                        db=db,
-                        conversation=conversation,
-                        conversation_message_id=user_message_id,
-                        nl_query_id=None,
-                        raw_kv_payload=raw_kv,
-                    )
-                    kv_results_dict = scene["kv"]
-                except Exception as e:
-                    db.rollback()
-                    logger.error(f"Failed to persist demo artifact: {e}")
+            deferred_raw_kv = raw_kv
+            kv_results_dict = scene["kv"]
 
         yield b"status: Writing answer...\n"
         _sleep(delay_ms)
@@ -134,7 +137,6 @@ async def demo_nl_query(
         payloads = list(iter_sse_markdown_events(assistant_text or "", max_len=96))
 
         if break_mode and payloads:
-            # Choose a carrier payload that is NOT NL_TOKEN and not empty.
             carrier_idx = None
             for i in range(len(payloads) - 1, -1, -1):
                 p = payloads[i]
@@ -155,30 +157,15 @@ async def demo_nl_query(
                 carrier = payloads[carrier_idx]
 
                 if break_mode == "concat_payload":
-                    # data: <payload>data: [DONE]
                     yield f"data: {carrier}{DONE_SSE}\n".encode("utf-8")
                 else:
-                    # <payload>data: [DONE]  (malformed line)
                     yield f"{carrier}{DONE_SSE}\n".encode("utf-8")
         else:
             for payload in payloads:
                 yield f"data: {payload}\n".encode("utf-8")
 
-        # Persist assistant message BEFORE done
-        if persist and conversation is not None:
-            try:
-                persist_assistant_message_and_touch(
-                    db=db,
-                    conversation=conversation,
-                    content=assistant_text or "",
-                    nl_query_id=None,
-                )
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to persist demo assistant message: {e}")
-
         # Metrics (best-effort)
+        qid: Optional[int] = None
         try:
             total_ms = int((time.perf_counter() - t0) * 1000)
 
@@ -197,12 +184,44 @@ async def demo_nl_query(
                 user_id=(user.user_id if user else None),
                 error_message=None,
             )
+            db.commit()
+
+            qid = _find_recent_demo_query_metrics_id(db, (user.user_id if user else None), req.query)
         except Exception as e:
             db.rollback()
             logger.error(f"Failed to record demo query metrics: {e}")
 
-        # In normal mode we emit a proper SSE DONE marker.
-        # In break modes, DONE is already concatenated above.
+        # Persist messages/artifacts with proper nl_query_id
+        if persist and conversation is not None:
+            try:
+                if qid is not None and user_msg is not None:
+                    try:
+                        user_msg.nl_query_id = qid
+                        db.add(user_msg)
+                    except Exception:
+                        pass
+
+                if deferred_raw_kv and user_message_id is not None:
+                    persist_conversation_artifact_from_raw_kv(
+                        db=db,
+                        conversation=conversation,
+                        conversation_message_id=user_message_id,
+                        nl_query_id=qid,
+                        raw_kv_payload=deferred_raw_kv,
+                    )
+
+                persist_assistant_message_and_touch(
+                    db=db,
+                    conversation=conversation,
+                    content=assistant_text or "",
+                    nl_query_id=qid,
+                )
+
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to persist demo messages/artifacts: {e}")
+
         if not break_mode:
             yield b"data: [DONE]\n"
 
