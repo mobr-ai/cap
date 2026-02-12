@@ -34,6 +34,7 @@ def get_conversation_admin(
 
     return {
         "id": convo.id,
+        "user_id": convo.user_id,
         "title": convo.title,
         "created_at": convo.created_at.isoformat() if convo.created_at else None,
         "updated_at": convo.updated_at.isoformat() if convo.updated_at else None,
