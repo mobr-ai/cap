@@ -151,6 +151,9 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
             "stream": True,
+            "extra_body": {
+                "reasoning": {"enabled": False}
+            },
         }
 
         async with client.stream(
@@ -211,6 +214,9 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
             "stream": False,
+            "extra_body": {
+                "reasoning": {"enabled": False}
+            },
         }
 
         response = await client.post(
@@ -240,6 +246,9 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
             "stream": True,
+            "extra_body": {
+                "reasoning": {"enabled": False}
+            },
         }
 
         async with client.stream(
