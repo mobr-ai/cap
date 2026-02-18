@@ -47,12 +47,12 @@ class LLMClient:
         Initialize llm client.
 
         Args:
-            base_url: llm API base URL (default: http://localhost:11434)
+            base_url: llm API base URL (default: http://localhost:8000)
             llm_model: Model for converting NL to SPARQL
             timeout: Request timeout in seconds
         """
-        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
-        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "mobr/cap"))
+        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:8000")).rstrip("/")
+        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-14B-AWQ"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -108,6 +108,16 @@ class LLMClient:
             await self._client.aclose()
             self._client = None
 
+
+    async def health_check(self) -> bool:
+        try:
+            client = await self._get_nl_client()
+            r = await client.get(f"{self.base_url}/health")
+            return r.status_code == 200
+        except Exception:
+            return False
+
+
     async def generate_stream(
         self,
         prompt: str,
@@ -116,65 +126,57 @@ class LLMClient:
         temperature: float = 0.1
     ) -> AsyncIterator[str]:
         """
-        Generate streaming response from llm.
-
-        Args:
-            prompt: User's input prompt
-            model: Model name to use
-            system_prompt: Optional system prompt for context
-            temperature: Sampling temperature (0.0-1.0, lower = more deterministic)
-
-        Yields:
-            Chunks of generated text
+        vLLM OpenAI-compatible streaming Chat Completions.
+        Streams Server-Sent Events (SSE): lines start with 'data: ...' and end with 'data: [DONE]'.
         """
-        with tracer.start_as_current_span("generate_stream") as span:
-            client = await self._get_nl_client()
+        client = await self._get_nl_client()
 
-            request_data = {
-                "model": model,
-                "prompt": prompt,
-                "stream": True,
-                "options": {
-                    "temperature": temperature
-                }
-            }
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
-            if system_prompt:
-                request_data["system"] = system_prompt
+        request_data = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
 
-            try:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/api/generate",
-                    json=request_data,
-                    timeout=None
-                ) as response:
-                    response.raise_for_status()
+        async with client.stream(
+            "POST",
+            f"{self.base_url}/v1/chat/completions",
+            json=request_data,
+            timeout=None,
+        ) as response:
+            response.raise_for_status()
 
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
 
-                        try:
-                            chunk = json.loads(line)
+                # vLLM streams SSE: "data: {...}"
+                if line.startswith("data: "):
+                    payload = line[len("data: "):].strip()
+                else:
+                    continue
 
-                            if "response" in chunk:
-                                yield chunk["response"]
+                if payload == "[DONE]":
+                    break
 
-                            if chunk.get("done", False):
-                                break
+                try:
+                    chunk = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
 
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to decode JSON: {line}")
-                            continue
-
-            except httpx.HTTPStatusError as e:
-                logger.error(f"llm HTTP error: {e}")
-                raise
-
-            except Exception as e:
-                logger.error(f"llm streaming error: {e}")
-                raise
+                # OpenAI-style delta tokens
+                delta = (
+                    chunk.get("choices", [{}])[0]
+                        .get("delta", {})
+                        .get("content")
+                )
+                if delta:
+                    yield delta
 
 
     async def generate_complete(
@@ -185,57 +187,82 @@ class LLMClient:
         temperature: float = 0.1
     ) -> str:
         """
-        Generate complete (non-streaming) response from llm.
-
-        Args:
-            prompt: User's input prompt
-            model: Model name to use
-            system_prompt: Optional system prompt for context
-            temperature: Sampling temperature
-
-        Returns:
-            Complete generated text
+        vLLM OpenAI-compatible non-streaming Chat Completions.
         """
-        with tracer.start_as_current_span("generate_complete") as span:
-            span.set_attribute("model", model)
-            span.set_attribute("prompt_length", len(prompt))
+        client = await self._get_nl_client()
 
-            client = await self._get_nl_client()
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
-            request_data = {
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": temperature
-                }
-            }
+        request_data = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": False,
+        }
 
-            if system_prompt:
-                request_data["system"] = system_prompt
+        response = await client.post(
+            f"{self.base_url}/v1/chat/completions",
+            json=request_data,
+        )
+        response.raise_for_status()
 
-            try:
-                response = await client.post(
-                    f"{self.base_url}/api/generate",
-                    json=request_data
+        data = response.json()
+        return (
+            data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+        )
+
+
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.1
+    ) -> AsyncIterator[str]:
+        client = await self._get_nl_client()
+
+        request_data = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+
+        async with client.stream(
+            "POST",
+            f"{self.base_url}/v1/chat/completions",
+            json=request_data,
+            timeout=None,
+        ) as response:
+            response.raise_for_status()
+
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                if not line.startswith("data: "):
+                    continue
+
+                payload = line[len("data: "):].strip()
+                if payload == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+
+                delta = (
+                    chunk.get("choices", [{}])[0]
+                        .get("delta", {})
+                        .get("content")
                 )
-                response.raise_for_status()
+                if delta:
+                    yield delta
 
-                result = response.json()
-                generated_text = result.get("response", "")
-
-                span.set_attribute("response_length", len(generated_text))
-                return generated_text
-
-            except httpx.HTTPStatusError as e:
-                span.set_attribute("error", str(e))
-                logger.error(f"llm HTTP error: {e}")
-                raise
-
-            except Exception as e:
-                span.set_attribute("error", str(e))
-                logger.error(f"llm generation error: {e}")
-                raise
 
     async def nl_to_sparql(
         self,
@@ -576,94 +603,6 @@ class LLMClient:
         ])
 
         return f"{prompt}\nPrevious messages:\n{str_history}" if str_history else prompt
-
-
-    async def chat_stream(
-        self,
-        messages: list[dict],
-        model: str,
-        temperature: float = 0.1
-    ) -> AsyncIterator[str]:
-        """
-        Generate streaming response using llm chat endpoint.
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'
-            model: Model name to use
-            temperature: Sampling temperature
-
-        Yields:
-            Chunks of generated text
-        """
-        with tracer.start_as_current_span("chat_stream") as span:
-            client = await self._get_nl_client()
-
-            if messages and len(messages) > 1:
-                logger.info(f"Query with context:\n   {messages}")
-            else:
-                logger.info(f"Query without context:\n   {messages}")
-
-            request_data = {
-                "model": model,
-                "messages": messages,
-                "stream": True,
-                "options": {
-                    "temperature": temperature
-                }
-            }
-
-            try:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/api/chat",
-                    json=request_data,
-                    timeout=None
-                ) as response:
-                    response.raise_for_status()
-
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-
-                        try:
-                            chunk = json.loads(line)
-
-                            # Chat endpoint uses 'message' instead of 'response'
-                            if "message" in chunk and "content" in chunk["message"]:
-                                yield chunk["message"]["content"]
-
-                            if chunk.get("done", False):
-                                break
-
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to decode JSON: {line}")
-                            continue
-
-            except httpx.HTTPStatusError as e:
-                logger.error(f"llm HTTP error: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"llm streaming error: {e}")
-                raise
-
-
-    async def health_check(self) -> bool:
-        """
-        Check if llm service is available.
-
-        Returns:
-            True if service is healthy, False otherwise
-        """
-        try:
-            client = await self._get_nl_client()
-            response = await client.get(f"{self.base_url}/api/tags")
-            healthy = response.status_code == 200
-            if not healthy:
-                logger.warning(f"llm health check with invalid status code {response}")
-            return healthy
-        except Exception as e:
-            logger.warning(f"llm health check failed: {e}")
-            return False
 
 
 # Global client instance

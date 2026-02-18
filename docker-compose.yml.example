@@ -18,7 +18,7 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-      ollama:
+      vllm:
         condition: service_healthy
     networks:
       - app-network
@@ -94,13 +94,25 @@ services:
     networks:
       - app-network
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm
     ports:
-      - "11434:11434"
+      - "8001:8000"
+
     volumes:
-      - /home/cap/data/ollama:/root/.ollama
+      - /home/cap/data/huggingface:/root/.cache/huggingface
+
+    environment:
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+
+    command: >
+      --model Qwen/Qwen3-14B-AWQ
+      --dtype auto
+      --device cuda
+      --gpu-memory-utilization 1.00
+      --max-model-len 32768
+
     deploy:
       resources:
         reservations:
@@ -108,12 +120,14 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
-      start_period: 30s
+      start_period: 60s
+
     restart: unless-stopped
     networks:
       - app-network
