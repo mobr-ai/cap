@@ -6,6 +6,7 @@ Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 import logging
 import re
 from typing import Optional, AsyncGenerator, Tuple
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 from opentelemetry import trace
 
 from cap.database.session import get_db
-from cap.database.model import User, ConversationMessage
+from cap.database.model import User, ConversationMessage, QueryMetrics
 from cap.core.auth_dependencies import get_current_user_unconfirmed
 from cap.services.nl_service import query_with_stream_response
 from cap.services.redis_nl_client import get_redis_nl_client
@@ -227,6 +228,24 @@ async def natural_language_query(
         # -----------------------------------------------------------------
         # 2) Stream + persist artifacts + assistant message
         # -----------------------------------------------------------------
+        def _find_recent_query_metrics_id() -> Optional[int]:
+            if current_user is None:
+                return None
+
+            since = datetime.utcnow() - timedelta(minutes=10)
+
+            q = (
+                db.query(QueryMetrics)
+                .filter(
+                    QueryMetrics.user_id == current_user.user_id,
+                    QueryMetrics.nl_query == request.query,
+                    QueryMetrics.created_at >= since,
+                )
+                .order_by(QueryMetrics.created_at.desc(), QueryMetrics.id.desc())
+                .first()
+            )
+            return int(q.id) if q and q.id is not None else None
+
 
         async def stream_and_persist() -> AsyncGenerator[bytes, None]:
             NL_TOKEN = "__NL__"
@@ -459,21 +478,35 @@ async def natural_language_query(
                 async for out in flush_pending(force=True):
                     yield out
 
-            # 3) Persist assistant message (normalize once, at end)
+            # 3) Persist assistant message (normalize once, at end) + bind nl_query_id
             if persist and convo is not None:
                 assistant_text = "".join(assistant_buf)
-                if assistant_text:
-                    try:
+
+                try:
+                    # Late-bind QueryMetrics.id to conversation messages
+                    qid = _find_recent_query_metrics_id()
+
+                    if qid is not None and user_msg is not None:
+                        try:
+                            user_msg.nl_query_id = qid
+                            db.add(user_msg)
+                        except Exception:
+                            # If user_msg is detached for any reason, ignore safely
+                            pass
+
+                    if assistant_text:
                         persist_assistant_message_and_touch(
                             db=db,
                             conversation=convo,
                             content=assistant_text,
-                            nl_query_id=None,
+                            nl_query_id=qid,
                         )
-                        db.commit()
-                    except Exception as e:
-                        db.rollback()
-                        logger.error(f"Failed to persist assistant message: {e}")
+
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to persist assistant message: {e}")
+
 
         headers = {
             "Cache-Control": "no-cache",
