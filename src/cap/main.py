@@ -16,7 +16,6 @@ from cap.api.nl_query import router as nl_router
 from cap.telemetry import setup_telemetry, instrument_app
 from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
-from cap.etl.cdb.service import etl_service
 from cap.services.ollama_client import cleanup_ollama_client
 from cap.services.redis_nl_client import cleanup_redis_nl_client
 
@@ -27,7 +26,6 @@ from cap.api.auth import router as auth_router
 from cap.api.waitlist import router as wait_router
 from cap.api.waitlist_admin import router as wait_admin_router
 from cap.api.cache_admin import router as cache_router
-from cap.api.etl_admin import router as etl_router
 from cap.api.user import router as user_router
 from cap.api.user_admin import router as user_admin_router
 from cap.api.conversation import router as conversation_router
@@ -57,10 +55,6 @@ ALLOWED_ORIGINS = [o.strip() for o in ENV_CORS.split(",") if o.strip()] or DEFAU
 logger = logging.getLogger(__name__)
 logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 tracer = trace.get_tracer(__name__)
-
-# Configure ETL logging
-etl_logger = logging.getLogger("cap.etl")
-etl_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 
 # Set uvloop as the event loop policy
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -134,60 +128,13 @@ async def initialize_required_graphs(client: TriplestoreClient) -> None:
         logger.info("Graph initialization completed successfully")
 
 
-async def start_etl_service():
-    """Start the ETL service if configured to auto-start."""
-    if settings.ETL_AUTO_START:
-        try:
-            logger.info("Auto-starting ETL service...")
-            asyncio.create_task(
-                etl_service.start_etl(
-                    batch_size=settings.ETL_BATCH_SIZE,
-                    sync_interval=settings.ETL_SYNC_INTERVAL,
-                    continuous=settings.ETL_CONTINUOUS,
-                )
-            )
-            logger.info("ETL service auto-start task scheduled")
-        except Exception as e:
-            logger.error(f"Failed to auto-start ETL service: {e}")
-    else:
-        logger.info("ETL auto-start disabled. ETL service can be started manually.")
-
-
-async def stop_etl_service():
-    """Stop the ETL service gracefully."""
-    try:
-        logger.info("Stopping ETL service...")
-        await etl_service.stop_etl()
-        logger.info("ETL service stopped successfully")
-    except Exception as e:
-        logger.error(f"Error stopping ETL service: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with ETL integration."""
-    if settings.ETL_AUTO_START:
-        with tracer.start_as_current_span("application_startup") as span:
-            client = TriplestoreClient()
-
-            try:
-                # Initialize graphs
-                await initialize_required_graphs(client)
-                logger.info("Application startup completed successfully")
-
-                # Start ETL service
-                await start_etl_service()
-
-            except Exception as e:
-                span.set_attribute("startup_error", str(e))
-                logger.error(f"Application startup failed: {e}")
-                raise RuntimeError(f"Application startup failed: {e}")
-
+    """Application lifespan manager."""
     try:
         yield
     finally:
         # Shutdown
-        await stop_etl_service()
         await cleanup_ollama_client()
         await cleanup_redis_nl_client()
         logger.info("Application shutdown completed")
@@ -206,8 +153,8 @@ def create_application() -> FastAPI:
     setup_tracing()
     app = FastAPI(
         title="CAP",
-        description="Cardano Analytics Platform with ETL Pipeline and Natural Language Queries",
-        version="0.1.0",
+        description="Cardano Analytics Platform powered by LLM",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
@@ -232,7 +179,6 @@ def create_application() -> FastAPI:
     app.include_router(wait_router)
     app.include_router(wait_admin_router)
     app.include_router(cache_router)
-    app.include_router(etl_router)
     app.include_router(dashboard_router)
     app.include_router(share_router)
     app.include_router(system_router)
