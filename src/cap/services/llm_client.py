@@ -110,10 +110,20 @@ class LLMClient:
 
 
     async def health_check(self) -> bool:
+        """
+        vLLM OpenAI-compatible health check.
+        """
         try:
             client = await self._get_nl_client()
-            r = await client.get(f"{self.base_url}/health")
-            return r.status_code == 200
+
+            r = await client.get(f"{self.base_url}/v1/models")
+            r.raise_for_status()
+
+            data = r.json()
+            models = {m.get("id") for m in data.get("data", []) if isinstance(m, dict)}
+
+            return (self.llm_model in models) if self.llm_model else True
+
         except Exception:
             return False
 
