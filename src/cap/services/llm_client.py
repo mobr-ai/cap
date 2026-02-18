@@ -52,7 +52,7 @@ class LLMClient:
             timeout: Request timeout in seconds
         """
         self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:8000")).rstrip("/")
-        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-14B-AWQ"))
+        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-AWQ"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 

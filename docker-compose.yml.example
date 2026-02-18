@@ -95,8 +95,12 @@ services:
       - app-network
 
   vllm:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:cu130-nightly-5bff999d12dd061c102381b0c9c5d364c5953ea2
     container_name: vllm
+
+    ipc: host
+    gpus: all
+
     ports:
       - "8001:8000"
 
@@ -104,29 +108,41 @@ services:
       - /home/cap/data/huggingface:/root/.cache/huggingface
 
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      # Mint/Ubuntu typical driver lib locations (inside container when mounted by nvidia runtime)
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu/nvidia/current
 
-    command: >
-      --model Qwen/Qwen3-14B-AWQ
-      --dtype auto
-      --device cuda
-      --gpu-memory-utilization 1.00
-      --max-model-len 32768
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - >
+          set -euxo pipefail;
+          echo "=== nvidia-smi (inside container) ===";
+          nvidia-smi || true;
+          echo "=== libcuda candidates ===";
+          ldconfig -p | grep -E 'libcuda\.so|libnvidia-ml\.so' || true;
+          echo "=== show compat config ===";
+          ls -la /etc/ld.so.conf.d/ || true;
+          echo "=== remove cuda compat conf if present ===";
+          rm -f /etc/ld.so.conf.d/00-cuda-compat.conf || true;
+          ldconfig;
+          echo "=== libcuda after ldconfig ===";
+          ldconfig -p | grep -E 'libcuda\.so|libnvidia-ml\.so' || true;
+          echo "=== launching vllm serve ===";
+          exec vllm serve
+          --host 0.0.0.0
+          --port 8000
+          --model Qwen/Qwen3-8B-AWQ
+          --dtype auto
 
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 30
-      start_period: 60s
+      retries: 60
+      start_period: 120s
 
     restart: unless-stopped
     networks:
