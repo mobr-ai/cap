@@ -10,6 +10,7 @@ import httpx
 from opentelemetry import trace
 
 from cap.config import settings
+from cap.util.tag_filter import TagFilter
 from cap.util.str_util import get_file_content
 from cap.util.vega_util import VegaUtil
 from cap.util.cardano_scan import convert_sparql_results_to_links
@@ -55,6 +56,7 @@ class LLMClient:
         self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-AWQ"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
+
 
     def _load_prompt(self, env_key: str, default: str = "") -> str:
         """Load prompt from environment, refreshed on each call."""
@@ -141,6 +143,9 @@ class LLMClient:
         """
         client = await self._get_nl_client()
 
+        tf = TagFilter()
+        tf.reset()
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -151,9 +156,6 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
             "stream": True,
-            "extra_body": {
-                "reasoning": {"enabled": False}
-            },
         }
 
         async with client.stream(
@@ -168,12 +170,10 @@ class LLMClient:
                 if not line:
                     continue
 
-                # vLLM streams SSE: "data: {...}"
-                if line.startswith("data: "):
-                    payload = line[len("data: "):].strip()
-                else:
+                if not line.startswith("data: "):
                     continue
 
+                payload = line[len("data: "):].strip()
                 if payload == "[DONE]":
                     break
 
@@ -182,14 +182,22 @@ class LLMClient:
                 except json.JSONDecodeError:
                     continue
 
-                # OpenAI-style delta tokens
                 delta = (
                     chunk.get("choices", [{}])[0]
                         .get("delta", {})
                         .get("content")
                 )
-                if delta:
-                    yield delta
+
+                if not delta:
+                    continue
+
+                safe = tf.push(delta)
+                if safe:
+                    yield safe
+
+        leftover = tf.flush()
+        if leftover:
+            yield leftover
 
 
     async def generate_complete(
@@ -201,6 +209,7 @@ class LLMClient:
     ) -> str:
         """
         vLLM OpenAI-compatible non-streaming Chat Completions.
+        Removes <think>...</think> blocks from the returned content.
         """
         client = await self._get_nl_client()
 
@@ -214,9 +223,6 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
             "stream": False,
-            "extra_body": {
-                "reasoning": {"enabled": False}
-            },
         }
 
         response = await client.post(
@@ -226,11 +232,16 @@ class LLMClient:
         response.raise_for_status()
 
         data = response.json()
-        return (
+        content = (
             data.get("choices", [{}])[0]
                 .get("message", {})
                 .get("content", "")
         )
+
+        tf = TagFilter()
+        tf.reset()
+        cleaned = tf.push(content) + tf.flush()
+        return cleaned
 
 
     async def chat_stream(
@@ -241,14 +252,14 @@ class LLMClient:
     ) -> AsyncIterator[str]:
         client = await self._get_nl_client()
 
+        tf = TagFilter()
+        tf.reset()
+
         request_data = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
             "stream": True,
-            "extra_body": {
-                "reasoning": {"enabled": False}
-            },
         }
 
         async with client.stream(
@@ -279,8 +290,18 @@ class LLMClient:
                         .get("delta", {})
                         .get("content")
                 )
-                if delta:
-                    yield delta
+
+                if not delta:
+                    continue
+
+                safe = tf.push(delta)
+                if safe:
+                    yield safe
+
+        leftover = tf.flush()
+        if leftover:
+            yield leftover
+
 
 
     async def nl_to_sparql(
