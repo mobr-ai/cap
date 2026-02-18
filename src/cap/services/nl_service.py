@@ -1,9 +1,8 @@
 """
-Natural language query API endpoint using Ollama LLM.
+Natural language query API endpoint using LLM.
 Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging
-import re
 import time
 import json
 import asyncio
@@ -15,7 +14,7 @@ from cap.services.sparql_service import execute_sparql
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 from cap.util.sparql_util import detect_and_parse_sparql
 from cap.util.sparql_result_processor import convert_sparql_to_kv, format_for_llm
-from cap.services.ollama_client import get_ollama_client, OllamaClient
+from cap.services.llm_client import get_llm_client, LLMClient
 from cap.services.redis_nl_client import get_redis_nl_client, RedisNLClient
 
 logger = logging.getLogger(__name__)
@@ -23,11 +22,11 @@ tracer = trace.get_tracer(__name__)
 
 
 async def nlq_to_sparql(
-        user_query: str,
-        redis_client: RedisNLClient,
-        ollama: OllamaClient,
-        conversation_history: list[dict]
-    ):
+    user_query: str,
+    redis_client: RedisNLClient,
+    llm_client: LLMClient,
+    conversation_history: list[dict]
+):
 
     normalized = QueryNormalizer.normalize(user_query)
     cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
@@ -54,7 +53,7 @@ async def nlq_to_sparql(
         logger.info(f"Cache MISS for {user_query} -> {normalized}")
 
         try:
-            raw_sparql_response = await ollama.nl_to_sparql(
+            raw_sparql_response = await llm_client.nl_to_sparql(
                 natural_query=user_query,
                 conversation_history=conversation_history
             )
@@ -90,7 +89,7 @@ async def query_with_stream_response(
     try:
         yield StatusMessage.processing_query()
 
-        ollama = get_ollama_client()
+        llm_client = get_llm_client()
         redis_client = get_redis_nl_client()
 
         user_query = query
@@ -121,7 +120,7 @@ async def query_with_stream_response(
                 normalized, sparql_query, sparql_queries, is_sequential, sparql_valid = await nlq_to_sparql(
                     user_query=user_query,
                     redis_client=redis_client,
-                    ollama=ollama,
+                    llm_client=llm_client,
                     conversation_history=conversation_history
                 )
 
@@ -191,7 +190,7 @@ async def query_with_stream_response(
                 kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query_str)
                 formatted_results = format_for_llm(kv_results, max_items=10000)
 
-            context_stream = ollama.generate_answer_with_context(
+            context_stream = llm_client.generate_answer_with_context(
                 user_query=user_query,
                 sparql_query=sparql_query_str,
                 sparql_results=formatted_results,

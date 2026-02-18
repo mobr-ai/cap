@@ -1,6 +1,6 @@
 # nl_query.py
 """
-Natural language query API endpoint using Ollama LLM.
+Natural language query API endpoint using LLM.
 Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging
@@ -19,7 +19,7 @@ from cap.database.model import User, ConversationMessage, QueryMetrics
 from cap.core.auth_dependencies import get_current_user_unconfirmed
 from cap.services.nl_service import query_with_stream_response
 from cap.services.redis_nl_client import get_redis_nl_client
-from cap.services.ollama_client import get_ollama_client
+from cap.services.llm_client import get_llm_client
 from cap.services.conversation_persistence import (
     start_conversation_and_persist_user,
     persist_assistant_message_and_touch,
@@ -272,7 +272,7 @@ async def natural_language_query(
                 # strip it before emitting anything to the client.
                 safe_pending, hit_done = strip_any_done_markers(pending_text)
                 pending_text = safe_pending
-                
+
                 for chunk in iter_word_safe_chunks(pending_text, max_len=96):
                     # Second safety net at chunk level (in case re-chunking created a
                     # situation where DONE appears across boundaries).
@@ -324,7 +324,7 @@ async def natural_language_query(
 
                 for raw_line in lines:
                     line = raw_line.rstrip("\r")
-                    
+
                     if stop_stream:
                         break
 
@@ -533,16 +533,16 @@ async def natural_language_query(
 @router.get("/health")
 async def health_check():
     try:
-        ollama = get_ollama_client()
-        healthy = await ollama.health_check()
+        llm_client = get_llm_client()
+        healthy = await llm_client.health_check()
         return {
             "status": "healthy" if healthy else "unhealthy",
-            "service": "ollama",
-            "models": {"llm_model": ollama.llm_model},
+            "service": "llm",
+            "models": {"llm_model": llm_client.llm_model},
         }
     except Exception as e:
         logger.error(f"Health check error: {e}")
-        return {"status": "error", "service": "ollama", "error": str(e)}
+        return {"status": "error", "service": "llm", "error": str(e)}
 
 
 @router.get("/cache/stats")

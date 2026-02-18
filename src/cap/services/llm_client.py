@@ -1,5 +1,5 @@
 """
-Ollama client for interacting with ollama.
+llm client for interacting with models
 """
 import os
 import logging
@@ -34,8 +34,8 @@ def matches_keyword(low_uq: str, keywords):
         for form in (keyword, f"{keyword}s", f"{keyword}es", f"{keyword}ies", f"{keyword}ing")
     )
 
-class OllamaClient:
-    """Client for interacting with Ollama LLM service."""
+class LLMClient:
+    """Client for interacting with LLM service."""
 
     def __init__(
         self,
@@ -44,15 +44,15 @@ class OllamaClient:
         timeout: float = 300.0
     ):
         """
-        Initialize Ollama client.
+        Initialize llm client.
 
         Args:
-            base_url: Ollama API base URL (default: http://localhost:11434)
+            base_url: llm API base URL (default: http://localhost:11434)
             llm_model: Model for converting NL to SPARQL
             timeout: Request timeout in seconds
         """
-        self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
-        self.llm_model = (llm_model or os.getenv("OLLAMA_MODEL_NAME", "mobr/cap"))
+        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
+        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "mobr/cap"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -116,7 +116,7 @@ class OllamaClient:
         temperature: float = 0.1
     ) -> AsyncIterator[str]:
         """
-        Generate streaming response from Ollama.
+        Generate streaming response from llm.
 
         Args:
             prompt: User's input prompt
@@ -127,7 +127,7 @@ class OllamaClient:
         Yields:
             Chunks of generated text
         """
-        with tracer.start_as_current_span("ollama_generate_stream") as span:
+        with tracer.start_as_current_span("generate_stream") as span:
             client = await self._get_nl_client()
 
             request_data = {
@@ -169,11 +169,11 @@ class OllamaClient:
                             continue
 
             except httpx.HTTPStatusError as e:
-                logger.error(f"Ollama HTTP error: {e}")
+                logger.error(f"llm HTTP error: {e}")
                 raise
 
             except Exception as e:
-                logger.error(f"Ollama streaming error: {e}")
+                logger.error(f"llm streaming error: {e}")
                 raise
 
 
@@ -185,7 +185,7 @@ class OllamaClient:
         temperature: float = 0.1
     ) -> str:
         """
-        Generate complete (non-streaming) response from Ollama.
+        Generate complete (non-streaming) response from llm.
 
         Args:
             prompt: User's input prompt
@@ -196,7 +196,7 @@ class OllamaClient:
         Returns:
             Complete generated text
         """
-        with tracer.start_as_current_span("ollama_generate_complete") as span:
+        with tracer.start_as_current_span("generate_complete") as span:
             span.set_attribute("model", model)
             span.set_attribute("prompt_length", len(prompt))
 
@@ -229,12 +229,12 @@ class OllamaClient:
 
             except httpx.HTTPStatusError as e:
                 span.set_attribute("error", str(e))
-                logger.error(f"Ollama HTTP error: {e}")
+                logger.error(f"llm HTTP error: {e}")
                 raise
 
             except Exception as e:
                 span.set_attribute("error", str(e))
-                logger.error(f"Ollama generation error: {e}")
+                logger.error(f"llm generation error: {e}")
                 raise
 
     async def nl_to_sparql(
@@ -326,7 +326,7 @@ class OllamaClient:
     @staticmethod
     def format_kv(user_query: str, sparql_query:str, kv_results: dict) -> str:
         result_type = kv_results["result_type"]
-        result_type = OllamaClient._categorize_query(user_query, result_type)
+        result_type = LLMClient._categorize_query(user_query, result_type)
         if result_type != "":
             kv_results["result_type"] = result_type
 
@@ -421,7 +421,7 @@ class OllamaClient:
             result_type = ""
             if kv_results:
                 try:
-                    kv_formatted, result_type = OllamaClient.format_kv(
+                    kv_formatted, result_type = LLMClient.format_kv(
                         user_query=user_query,
                         sparql_query=sparql_query,
                         kv_results=kv_results
@@ -585,7 +585,7 @@ class OllamaClient:
         temperature: float = 0.1
     ) -> AsyncIterator[str]:
         """
-        Generate streaming response using Ollama chat endpoint.
+        Generate streaming response using llm chat endpoint.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
@@ -595,7 +595,7 @@ class OllamaClient:
         Yields:
             Chunks of generated text
         """
-        with tracer.start_as_current_span("ollama_chat_stream") as span:
+        with tracer.start_as_current_span("chat_stream") as span:
             client = await self._get_nl_client()
 
             if messages and len(messages) > 1:
@@ -640,16 +640,16 @@ class OllamaClient:
                             continue
 
             except httpx.HTTPStatusError as e:
-                logger.error(f"Ollama HTTP error: {e}")
+                logger.error(f"llm HTTP error: {e}")
                 raise
             except Exception as e:
-                logger.error(f"Ollama streaming error: {e}")
+                logger.error(f"llm streaming error: {e}")
                 raise
 
 
     async def health_check(self) -> bool:
         """
-        Check if Ollama service is available.
+        Check if llm service is available.
 
         Returns:
             True if service is healthy, False otherwise
@@ -659,28 +659,28 @@ class OllamaClient:
             response = await client.get(f"{self.base_url}/api/tags")
             healthy = response.status_code == 200
             if not healthy:
-                logger.warning(f"Ollama health check with invalid status code {response}")
+                logger.warning(f"llm health check with invalid status code {response}")
             return healthy
         except Exception as e:
-            logger.warning(f"Ollama health check failed: {e}")
+            logger.warning(f"llm health check failed: {e}")
             return False
 
 
 # Global client instance
-_ollama_client: Optional[OllamaClient] = None
+_llm_client: Optional[LLMClient] = None
 
 
-def get_ollama_client() -> OllamaClient:
-    """Get or create global Ollama client instance."""
-    global _ollama_client
-    if _ollama_client is None:
-        _ollama_client = OllamaClient()
-    return _ollama_client
+def get_llm_client() -> LLMClient:
+    """Get or create global llm client instance."""
+    global _llm_client
+    if _llm_client is None:
+        _llm_client = LLMClient()
+    return _llm_client
 
 
-async def cleanup_ollama_client():
-    """Cleanup global Ollama client."""
-    global _ollama_client
-    if _ollama_client:
-        await _ollama_client.close()
-        _ollama_client = None
+async def cleanup_llm_client():
+    """Cleanup global llm client."""
+    global _llm_client
+    if _llm_client:
+        await _llm_client.close()
+        _llm_client = None

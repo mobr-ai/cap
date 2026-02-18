@@ -10,7 +10,7 @@ from pathlib import Path
 
 from cap.util.sparql_util import detect_and_parse_sparql, force_limit_cap
 from cap.rdf.triplestore import TriplestoreClient
-from cap.services.ollama_client import OllamaClient
+from cap.services.llm_client import LLMClient
 
 def _read_content_nl_file(path: str | Path) -> str:
     """Read and return the content of a txt file with nl queries."""
@@ -23,7 +23,7 @@ class SPARQLGenerationTester:
 
     def __init__(self, input:str):
         self.input = input
-        self.oc = OllamaClient()
+        self.oc = LLMClient()
         self.tc = TriplestoreClient()
 
     async def run_all_tests(self):

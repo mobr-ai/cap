@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from cap.util.sparql_result_processor import convert_sparql_to_kv
-from cap.services.ollama_client import get_ollama_client, OllamaClient
+from cap.services.llm_client import get_llm_client, LLMClient
 from cap.services.redis_nl_client import get_redis_nl_client
 from cap.services.nl_service import nlq_to_sparql, execute_sparql
 
@@ -29,7 +29,7 @@ class NLQueryTester:
 
 
     def __init__(self, base_url: str, input: str):
-        self.oc = OllamaClient()
+        self.oc = LLMClient()
         self.input: str = input
         self.base_url: str = base_url.rstrip("/")
         self.metrics = []
@@ -72,12 +72,12 @@ class NLQueryTester:
 
     @staticmethod
     async def get_kvr_from_query(query:str):
-        ollama = get_ollama_client()
+        llm_client = get_llm_client()
         redis_client = get_redis_nl_client()
         _, sparql_query, sparql_queries, is_sequential, sparql_valid = await nlq_to_sparql(
             user_query=query,
             redis_client=redis_client,
-            ollama=ollama,
+            llm_client=llm_client,
             conversation_history=None
         )
 
@@ -91,7 +91,7 @@ class NLQueryTester:
             print(sparql_results)
             kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
             if kv_results:
-                return OllamaClient.format_kv(
+                return LLMClient.format_kv(
                     user_query=query,
                     sparql_query=sparql_query,
                     kv_results=kv_results
@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
     Make sure the following are running:
     1. CAP service (python -m cap.main)
-    2. Ollama service (ollama serve)
+    2. llm service (llm serve)
     3. Virtuoso triplestore
 
     Press Ctrl+C to cancel

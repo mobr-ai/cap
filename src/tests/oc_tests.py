@@ -1,33 +1,33 @@
 """
-Ollama client tests
+llm client tests
 """
 import logging
 import json
 import sys
 import asyncio
 
-from cap.services.ollama_client import OllamaClient
+from cap.services.llm_client import LLMClient
 from cap.util.sparql_util import _clean_sparql
 
 async def test_health_check():
-    """Test 1: Health Check - Verify Ollama service is running."""
+    """Test 1: Health Check - Verify llm service is running."""
     print("\n" + "="*70)
     print("TEST 1: Health Check")
     print("="*70)
-    print("Purpose: Verify that Ollama service is accessible and responding\n")
+    print("Purpose: Verify that llm service is accessible and responding\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         is_healthy = await client.health_check()
 
         if is_healthy:
-            print("SUCCESS: Ollama service is healthy and responding")
+            print("SUCCESS: llm service is healthy and responding")
             print(f"   Base URL: {client.base_url}")
             print(f"   SPARQL Model: {client.llm_model}")
         else:
-            print("FAILED: Ollama service is not responding")
-            print("   Please ensure 'ollama serve' is running")
+            print("FAILED: llm service is not responding")
+            print("   Please ensure llm service is running")
 
         return is_healthy
 
@@ -45,7 +45,7 @@ async def test_generate_complete():
     print("="*70)
     print("Purpose: Generate a complete response without streaming\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         prompt = "Explain what a blockchain is in one sentence."
@@ -81,7 +81,7 @@ async def test_generate_stream():
     print("="*70)
     print("Purpose: Generate a response with streaming for real-time display\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         prompt = "Write a haiku about blockchain technology."
@@ -117,7 +117,7 @@ async def test_nl_to_sparql():
     print("="*70)
     print("Purpose: Convert a natural language question to SPARQL query\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         natural_query = "Show me the latest 5 blocks"
@@ -150,7 +150,7 @@ async def test_contextualize_answer():
     print("="*70)
     print("Purpose: Generate a natural language answer from SPARQL results\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         user_query = "What is the current epoch?"
@@ -215,7 +215,7 @@ async def test_clean_sparql():
     print("="*70)
     print("Purpose: Show how raw LLM output is cleaned to extract pure SPARQL\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     # Example messy SPARQL responses from LLM
     test_cases = [
@@ -279,7 +279,7 @@ async def test_full_pipeline():
     print("="*70)
     print("Purpose: Simulate the complete NL query pipeline\n")
 
-    client = OllamaClient()
+    client = LLMClient()
 
     try:
         # Step 1: User asks a question
@@ -349,15 +349,14 @@ async def safe_run(test_func):
 
 async def run_all_tests():
     """Run all illustrative tests."""
-    print("\nStarting OllamaClient test suite...\n")
+    print("\nStarting LLMClient test suite...\n")
 
     is_healthy = await safe_run(test_health_check)
     if not is_healthy:
         print("\n" + "="*70)
-        print("WARNING: Ollama service is not available")
+        print("WARNING: llm service is not available")
         print("="*70)
-        print("\nPlease start Ollama service:")
-        print("  $ ollama serve")
+        print("\nPlease start llm service:")
         print("\nThen run this test again.")
         return
 
@@ -379,10 +378,10 @@ if __name__ == "__main__":
     )
 
     print("""
-    OllamaClient tests
+    LLMClient tests
       Prerequisites:
-        1. Ollama service must be running (ollama serve)
-        2. OllamaClient model must be available
+        1. llm service must be running (llm serve)
+        2. LLMClient model must be available
     """)
 
     # Run all tests

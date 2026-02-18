@@ -1,5 +1,5 @@
 """
-Natural language query API endpoint using Ollama LLM.
+Natural language query API endpoint using LLM.
 Multi-stage pipeline: NL -> SPARQL -> Execute -> Contextualize -> Stream
 """
 import logging

@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 from cap.services.nl_service import query_with_stream_response
-from cap.services.ollama_client import OllamaClient
+from cap.services.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 logger.setLevel(level=logging.ERROR)
@@ -30,7 +30,7 @@ class NLQueryTester:
 
 
     def __init__(self, base_url: str, input: str):
-        self.oc = OllamaClient()
+        self.oc = LLMClient()
         self.input: str = input
         self.base_url: str = base_url.rstrip("/")
         self.metrics = []
@@ -169,8 +169,8 @@ class NLQueryTester:
         health_ok = await self.test_health()
         if not health_ok:
             print("\nHealth check failed. Please ensure:")
-            print("  1. Ollama service is running (ollama serve)")
-            print("  2. Models are available (ollama list)")
+            print("  1. llm service is running ")
+            print("  2. Models are available")
             print("  3. CAP service is running")
             return
 
@@ -249,7 +249,7 @@ if __name__ == "__main__":
 
     Make sure the following are running:
     1. CAP service (python -m cap.main)
-    2. Ollama service (ollama serve)
+    2. llm service
     3. Virtuoso triplestore
 
     Press Ctrl+C to cancel

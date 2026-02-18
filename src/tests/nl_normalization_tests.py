@@ -9,7 +9,7 @@ import argparse
 import time
 from pathlib import Path
 
-from cap.services.ollama_client import OllamaClient
+from cap.services.llm_client import LLMClient
 from cap.rdf.cache.query_normalizer import QueryNormalizer
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class NLNormalizationTester:
         if expected:
             assert normalized == expected
 
-        query_category = OllamaClient._categorize_query(query, "multiple")
+        query_category = LLMClient._categorize_query(query, "multiple")
         print(f"{query} normalizes to '{normalized}' on category {query_category}")
         return True
 
