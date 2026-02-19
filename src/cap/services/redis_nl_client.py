@@ -64,27 +64,19 @@ class RedisNLClient:
         """Create count key from normalized natural language query."""
         return f"nlq:count:{normalized_nl}"
 
-    @staticmethod
-    def _calculate_similarity(query1: str, query2: str) -> float:
-        """Calculate similarity between two normalized queries."""
-        words1 = set(query1.split())
-        words2 = set(query2.split())
-
-        if not words1 or not words2:
-            return 0.0
-
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
-
-        return len(intersection) / len(union)
-
     async def cache_query(
         self,
         nl_query: str,
         sparql_query: str,
         ttl: Optional[int] = None
     ) -> int:
-        """Cache query with placeholder normalization."""
+        """Cache query with placeholder normalisation.
+
+        Returns:
+             1  — successfully cached (new entry).
+             0  — duplicate; already cached, nothing written.
+            -1  — error.
+        """
         with tracer.start_as_current_span("cache_sparql_query") as span:
             span.set_attribute("nl_query", nl_query)
 
@@ -93,11 +85,9 @@ class RedisNLClient:
                 normalized = QueryNormalizer.normalize(nl_query)
                 cache_key = self._make_cache_key(normalized)
 
-                # Checking if query already exists
                 if await client.exists(cache_key):
-                    return 0  # Indicates duplicate, not cached
+                    return 0  # Duplicate — do not overwrite
 
-                # Process SPARQL (single or sequential)
                 normalized_sparql, placeholder_map = self._normalize_sparql(sparql_query)
                 count_key = self._make_count_key(normalized)
 
@@ -106,8 +96,11 @@ class RedisNLClient:
                     "normalized_query": normalized,
                     "sparql_query": normalized_sparql,
                     "placeholder_map": placeholder_map,
-                    "is_sequential": isinstance(sparql_query, str) and sparql_query.strip().startswith('['),
-                    "precached": False
+                    "is_sequential": (
+                        isinstance(sparql_query, str)
+                        and sparql_query.strip().startswith("[")
+                    ),
+                    "precached": False,
                 }
 
                 ttl_value = ttl or self.ttl
@@ -115,12 +108,24 @@ class RedisNLClient:
                 await client.incr(count_key)
                 await client.expire(count_key, ttl_value)
 
-                return 1  # Successfully cached
+                # Notify the similarity layer that a new query was cached.
+                # Imported lazily and fired as a background task to avoid
+                # circular imports and to keep cache_query() non-blocking.
+                try:
+                    import asyncio
+                    from cap.services.similarity_service import SimilarityService
+                    asyncio.ensure_future(SimilarityService.notify_cache_updated())
+                except Exception as notify_error:
+                    logger.warning(
+                        f"Could not notify SimilarityService of cache update: {notify_error}"
+                    )
+
+                return 1
 
             except Exception as e:
                 span.set_attribute("error", str(e))
                 logger.error(f"Failed to cache query: {e}")
-                return -1  # cache error
+                return -1
 
     def _normalize_sparql(self, sparql_query: str) -> Tuple[str, dict[str, str]]:
         """Normalize SPARQL query (handles single and sequential)."""
