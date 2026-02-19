@@ -19,7 +19,8 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-_MODEL_NAME = "intfloat/multilingual-e5-small"
+#_MODEL_NAME = "intfloat/multilingual-e5-small"
+_MODEL_NAME = "all-MiniLM-L6-v2"
 _COLLECTION_NAME = "nlq_cache"
 _CHROMA_PATH = "./chroma_nlq_store"
 
@@ -61,10 +62,8 @@ class EmbeddingService:
 
     def _get_model(self) -> SentenceTransformer:
         if self._model is None:
-            # logger.info(f"Loading embedding model '{self._model_name}' …")
-            # self._model = SentenceTransformer(self._model_name)
-            logger.info(f"Loading default embedding model …")
-            self._model = SentenceTransformer()
+            logger.info(f"Loading embedding model '{self._model_name}' …")
+            self._model = SentenceTransformer(self._model_name)
             logger.info("Embedding model ready.")
 
         return self._model
