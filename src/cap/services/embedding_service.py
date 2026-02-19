@@ -57,8 +57,10 @@ class EmbeddingService:
 
     def _ensure_model(self) -> SentenceTransformer:
         if self._model is None:
-            logger.info(f"Loading embedding model '{self._model_name}' …")
-            self._model = SentenceTransformer(self._model_name)
+            # logger.info(f"Loading embedding model '{self._model_name}' …")
+            # self._model = SentenceTransformer(self._model_name)
+            logger.info(f"Loading default embedding model (all-MiniLM-L2-v2) …")
+            self._model = SentenceTransformer()
             logger.info("Embedding model loaded.")
         return self._model
 

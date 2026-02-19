@@ -6,10 +6,11 @@ import logging
 import os
 import re
 from typing import Optional, Any, Tuple
-
+import asyncio
 import redis.asyncio as redis
 from opentelemetry import trace
 
+from cap.services.similarity_service import SimilarityService
 from cap.rdf.cache.placeholder_counters import PlaceholderCounters
 from cap.rdf.cache.placeholder_restorer import PlaceholderRestorer
 from cap.rdf.cache.query_normalizer import QueryNormalizer
@@ -112,8 +113,6 @@ class RedisNLClient:
                 # Imported lazily and fired as a background task to avoid
                 # circular imports and to keep cache_query() non-blocking.
                 try:
-                    import asyncio
-                    from cap.services.similarity_service import SimilarityService
                     asyncio.ensure_future(SimilarityService.notify_cache_updated())
                 except Exception as notify_error:
                     logger.warning(
