@@ -1,13 +1,16 @@
 """
 Finds similar cached NL queries.
 
-Strategy (in order):
-  1. Embedding similarity via EmbeddingService (multilingual-e5-small + ChromaDB).
-     The index is rebuilt on demand, governed by EmbeddingRegenerationPolicy.
-  2. Jaccard token-overlap fallback (scans Redis) — used only when embeddings fail.
+Strategy:
+  1. Embedding similarity (multilingual-e5-small + ChromaDB).
+     The index is rebuilt on demand per EmbeddingRegenerationPolicy.
+  2. Jaccard token-overlap fallback — activated only when embeddings fail.
+
+The regeneration state lives here because SimilarityService is the only
+consumer of the policy. Neither RedisNLClient nor nl_service know it exists.
 """
-import logging
 import json
+import logging
 from typing import Any
 
 from opentelemetry import trace
@@ -23,12 +26,18 @@ from cap.services.embedding_regeneration_policy import (
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-# Shared regeneration state — lives for the lifetime of the process.
-_regeneration_state = RegenerationState()
+# Process-lifetime regeneration state owned exclusively by this module.
+_regen_state = RegenerationState()
 
 
 class SimilarityService:
-    """Find similar cached queries, preferring embedding-based similarity."""
+    """
+    Similarity search over the NL query cache.
+
+    Public surface:
+        find_similar_queries()   — called by LLMClient for few-shot examples.
+        notify_new_cache_entry() — called by nl_service after a successful cache_query().
+    """
 
     # ------------------------------------------------------------------
     # Public API
@@ -40,114 +49,93 @@ class SimilarityService:
         top_n: int = 5,
         min_similarity: float = 0.0,
     ) -> list[dict[str, Any]]:
-        """
-        Return the top-N most similar cached queries.
-
-        Attempts embedding-based search first; falls back to Jaccard on failure.
-
-        Each result dict contains:
-            original_query, normalized_query, sparql_query,
-            similarity_score, is_sequential, precached
-        """
+        """Return the top-N most similar cached queries."""
         with tracer.start_as_current_span("similarity_service.find_similar_queries") as span:
             span.set_attribute("input_query", nl_query)
-            span.set_attribute("top_n", top_n)
 
+            # --- Primary: embedding search ---
             try:
-                results = await SimilarityService._embedding_search(
+                await SimilarityService._ensure_index_is_fresh()
+                results = await get_embedding_service().search(
                     nl_query=nl_query,
                     top_n=top_n,
                     min_similarity=min_similarity,
                 )
                 span.set_attribute("strategy", "embedding")
-                logger.info(
-                    f"Embedding search returned {len(results)} results for '{nl_query}'."
-                )
+                logger.info(f"Embedding search: {len(results)} results for '{nl_query}'.")
                 return results
 
-            except Exception as embedding_error:
+            except Exception as embedding_exc:
                 logger.warning(
-                    f"Embedding search failed ({embedding_error}); "
+                    f"Embedding search failed ({embedding_exc}); "
                     "falling back to Jaccard similarity."
                 )
                 span.set_attribute("strategy", "jaccard_fallback")
-                span.set_attribute("embedding_error", str(embedding_error))
+                span.set_attribute("embedding_error", str(embedding_exc))
 
+            # --- Fallback: Jaccard over Redis ---
             try:
                 results = await SimilarityService._jaccard_search(
                     nl_query=nl_query,
                     top_n=top_n,
                     min_similarity=min_similarity,
                 )
-                logger.info(
-                    f"Jaccard fallback returned {len(results)} results for '{nl_query}'."
-                )
+                logger.info(f"Jaccard fallback: {len(results)} results for '{nl_query}'.")
                 return results
 
-            except Exception as jaccard_error:
-                span.set_attribute("jaccard_error", str(jaccard_error))
-                logger.error(f"Jaccard fallback also failed: {jaccard_error}")
+            except Exception as jaccard_exc:
+                span.set_attribute("jaccard_error", str(jaccard_exc))
+                logger.error(f"Jaccard fallback also failed: {jaccard_exc}", exc_info=True)
                 return []
 
     @staticmethod
-    async def notify_cache_updated() -> None:
+    async def notify_new_cache_entry() -> None:
         """
-        Must be called every time a new query is successfully cached in Redis.
-        Increments the counter and triggers index regeneration if the policy says so.
-        """
-        _regeneration_state.record_new_cache()
+        Signal that a new query was successfully written to Redis.
+        Called by nl_service — never by RedisNLClient.
 
-        if EmbeddingRegenerationPolicy.should_regenerate(_regeneration_state):
-            await SimilarityService._rebuild_embedding_index()
+        Increments the counter; triggers a background index rebuild
+        if the regeneration policy says it is due.
+        """
+        _regen_state.record_new_cache()
+
+        if EmbeddingRegenerationPolicy.should_regenerate(_regen_state):
+            try:
+                await SimilarityService._rebuild_index()
+            except Exception as exc:
+                # Rebuild failure must never surface to the NL pipeline.
+                logger.error(f"Background index rebuild failed: {exc}", exc_info=True)
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def _rebuild_embedding_index() -> None:
-        """Load all entries from Redis and hand them to EmbeddingService.rebuild()."""
-        with tracer.start_as_current_span("similarity_service.rebuild_index"):
-            try:
-                redis_client = get_redis_nl_client()
-                client = await redis_client._get_nl_client()
-
-                cached_entries: list[dict[str, Any]] = []
-                async for cache_key in client.scan_iter(match="nlq:cache:*"):
-                    raw = await client.get(cache_key)
-                    if not raw:
-                        continue
-                    try:
-                        entry = json.loads(raw)
-                        cached_entries.append(entry)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Could not parse cache entry for key {cache_key}.")
-
-                embedding_service = get_embedding_service()
-                await embedding_service.rebuild(cached_entries)
-                _regeneration_state.record_regenerated()
-
-            except Exception as exc:
-                logger.error(
-                    f"Failed to rebuild embedding index: {exc}", exc_info=True
-                )
+    async def _ensure_index_is_fresh() -> None:
+        """Trigger a rebuild before search if the policy requires it."""
+        if EmbeddingRegenerationPolicy.should_regenerate(_regen_state):
+            await SimilarityService._rebuild_index()
 
     @staticmethod
-    async def _embedding_search(
-        nl_query: str,
-        top_n: int,
-        min_similarity: float,
-    ) -> list[dict[str, Any]]:
-        """Delegate to EmbeddingService, ensuring the index is fresh first."""
-        if EmbeddingRegenerationPolicy.should_regenerate(_regeneration_state):
-            await SimilarityService._rebuild_embedding_index()
+    async def _rebuild_index() -> None:
+        """Read all entries from Redis and hand them to EmbeddingService.rebuild()."""
+        with tracer.start_as_current_span("similarity_service.rebuild_index"):
+            redis_client = get_redis_nl_client()
+            client = await redis_client._get_nl_client()
 
-        embedding_service = get_embedding_service()
-        return await embedding_service.search(
-            nl_query=nl_query,
-            top_n=top_n,
-            min_similarity=min_similarity,
-        )
+            entries: list[dict[str, Any]] = []
+            async for cache_key in client.scan_iter(match="nlq:cache:*"):
+                raw = await client.get(cache_key)
+                if not raw:
+                    continue
+                try:
+                    entries.append(json.loads(raw))
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping malformed cache entry at key '{cache_key}'.")
+
+            await get_embedding_service().rebuild(entries)
+            _regen_state.record_regenerated()
+            logger.info(f"Embedding index rebuilt from {len(entries)} Redis entries.")
 
     @staticmethod
     async def _jaccard_search(
@@ -155,10 +143,7 @@ class SimilarityService:
         top_n: int,
         min_similarity: float,
     ) -> list[dict[str, Any]]:
-        """
-        Scan every Redis cache entry and rank by Jaccard token-overlap.
-        Preserves the original behaviour of the legacy similarity service.
-        """
+        """Scan Redis and rank entries by Jaccard token-overlap on normalised queries."""
         redis_client = get_redis_nl_client()
         client = await redis_client._get_nl_client()
         normalized_input = QueryNormalizer.normalize(nl_query)
@@ -169,42 +154,36 @@ class SimilarityService:
             raw = await client.get(cache_key)
             if not raw:
                 continue
-
             try:
-                cached_data = json.loads(raw)
+                entry = json.loads(raw)
             except json.JSONDecodeError:
                 continue
 
-            cached_normalized = cached_data.get("normalized_query", "")
+            cached_normalized = entry.get("normalized_query", "")
             score = SimilarityService._jaccard(normalized_input, cached_normalized)
-
             if score < min_similarity:
                 continue
 
-            original_nl_query = cached_data.get("original_query", "")
+            original_nl = entry.get("original_query", "")
             sparql_data = await redis_client.get_cached_query_with_original(
                 normalized_query=cached_normalized,
-                original_query=original_nl_query,
+                original_query=original_nl,
             )
-
-            candidates.append(
-                {
-                    "original_query": original_nl_query,
-                    "normalized_query": cached_normalized,
-                    "sparql_query": sparql_data,
-                    "similarity_score": score,
-                    "is_sequential": cached_data.get("is_sequential", False),
-                    "precached": cached_data.get("precached", False),
-                }
-            )
+            candidates.append({
+                "original_query": original_nl,
+                "normalized_query": cached_normalized,
+                "sparql_query": sparql_data,
+                "similarity_score": score,
+                "is_sequential": entry.get("is_sequential", False),
+                "precached": entry.get("precached", False),
+            })
 
         candidates.sort(key=lambda x: x["similarity_score"], reverse=True)
         return candidates[:top_n]
 
     @staticmethod
-    def _jaccard(query1: str, query2: str) -> float:
-        words1 = set(query1.split())
-        words2 = set(query2.split())
-        if not words1 or not words2:
+    def _jaccard(a: str, b: str) -> float:
+        sa, sb = set(a.split()), set(b.split())
+        if not sa or not sb:
             return 0.0
-        return len(words1 & words2) / len(words1 | words2)
+        return len(sa & sb) / len(sa | sb)

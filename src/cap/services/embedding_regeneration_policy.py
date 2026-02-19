@@ -1,9 +1,12 @@
 """
-Policy that decides when the ChromaDB embedding index should be regenerated.
+Stateless policy that decides when the ChromaDB embedding index must be rebuilt.
 
-Rules:
-  - More than 24 hours have elapsed since the last full regeneration, OR
-  - At least 100 new queries have been successfully cached since the last regeneration.
+Triggers:
+  - The index has never been built, OR
+  - 24 hours have elapsed since the last rebuild, OR
+  - 100 new queries have been successfully cached since the last rebuild.
+
+No I/O. No app dependencies. Trivially unit-testable.
 """
 import logging
 from dataclasses import dataclass, field
@@ -30,12 +33,12 @@ class RegenerationState:
 
 
 class EmbeddingRegenerationPolicy:
-    """Stateless policy: given a RegenerationState, decides if regeneration is needed."""
+    """Given a RegenerationState, returns whether a rebuild is due."""
 
     @staticmethod
     def should_regenerate(state: RegenerationState) -> bool:
         if state.last_regenerated_at is None:
-            logger.debug("Regeneration needed: never regenerated before.")
+            logger.debug("Rebuild needed: index has never been built.")
             return True
 
         elapsed_hours = (
@@ -44,15 +47,15 @@ class EmbeddingRegenerationPolicy:
 
         if elapsed_hours >= _REGENERATION_INTERVAL_HOURS:
             logger.debug(
-                f"Regeneration needed: {elapsed_hours:.1f}h elapsed "
+                f"Rebuild needed: {elapsed_hours:.1f}h elapsed "
                 f"(threshold: {_REGENERATION_INTERVAL_HOURS}h)."
             )
             return True
 
         if state.cached_since_last_regen >= _NEW_QUERIES_THRESHOLD:
             logger.debug(
-                f"Regeneration needed: {state.cached_since_last_regen} new queries "
-                f"cached since last regen (threshold: {_NEW_QUERIES_THRESHOLD})."
+                f"Rebuild needed: {state.cached_since_last_regen} new queries cached "
+                f"since last rebuild (threshold: {_NEW_QUERIES_THRESHOLD})."
             )
             return True
 

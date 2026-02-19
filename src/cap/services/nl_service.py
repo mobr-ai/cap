@@ -16,6 +16,7 @@ from cap.util.sparql_util import detect_and_parse_sparql
 from cap.util.sparql_result_processor import convert_sparql_to_kv, format_for_llm
 from cap.services.llm_client import get_llm_client, LLMClient
 from cap.services.redis_nl_client import get_redis_nl_client, RedisNLClient
+from cap.services.similarity_service import SimilarityService
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -135,15 +136,28 @@ async def query_with_stream_response(
                 # Success - cache if needed and break
                 if has_data and not was_from_cache:
                     if is_sequential and sparql_queries:
-                        await redis_client.cache_query(
+                        result = await redis_client.cache_query(
                             nl_query=user_query,
                             sparql_query=json.dumps(sparql_queries)
                         )
                     elif sparql_query:
-                        await redis_client.cache_query(
+                        result = await redis_client.cache_query(
                             nl_query=user_query,
                             sparql_query=sparql_query
                         )
+                    else:
+                        result = 0
+
+                    # Notify the similarity layer only when a genuinely new
+                    # entry was written (return value 1). Duplicates (0) and
+                    # errors (-1) must not trigger a rebuild.
+                    if result == 1:
+                        try:
+                            await SimilarityService.notify_new_cache_entry()
+                        except Exception as notify_exc:
+                            logger.warning(
+                                f"SimilarityService notification failed: {notify_exc}"
+                            )
 
                 # Success, exit retry loop
                 break
