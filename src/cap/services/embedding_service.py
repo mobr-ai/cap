@@ -61,9 +61,12 @@ class EmbeddingService:
 
     def _get_model(self) -> SentenceTransformer:
         if self._model is None:
-            logger.info(f"Loading embedding model '{self._model_name}' …")
-            self._model = SentenceTransformer(self._model_name)
+            # logger.info(f"Loading embedding model '{self._model_name}' …")
+            # self._model = SentenceTransformer(self._model_name)
+            logger.info(f"Loading default embedding model …")
+            self._model = SentenceTransformer()
             logger.info("Embedding model ready.")
+
         return self._model
 
     def _get_collection(self):
