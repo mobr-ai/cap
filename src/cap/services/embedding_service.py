@@ -110,9 +110,15 @@ class EmbeddingService:
                     passages = [f"{_PASSAGE_PREFIX}{q}" for q in original_queries]
 
                     logger.info(f"Encoding {len(passages)} queries for embedding index …")
+
+                    # Initialise the model on the event-loop thread before handing
+                    # work to the executor. SentenceTransformer is not thread-safe
+                    # during construction; only the stateless encode() call is safe
+                    # to run in a worker thread.
+                    model = self._get_model()
                     embeddings = await loop.run_in_executor(
                         None,
-                        lambda: self._get_model().encode(
+                        lambda: model.encode(
                             passages,
                             batch_size=64,
                             show_progress_bar=False,
@@ -178,9 +184,10 @@ class EmbeddingService:
                     return []
 
                 loop = asyncio.get_event_loop()
+                model = self._get_model()
                 query_embedding = await loop.run_in_executor(
                     None,
-                    lambda: self._get_model().encode(
+                    lambda: model.encode(
                         [f"{_QUERY_PREFIX}{nl_query}"],
                         normalize_embeddings=True,
                     ).tolist(),
