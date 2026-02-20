@@ -63,7 +63,7 @@ class EmbeddingService:
     def _get_model(self) -> SentenceTransformer:
         if self._model is None:
             logger.info(f"Loading embedding model '{self._model_name}' …")
-            self._model = SentenceTransformer(self._model_name)
+            self._model = SentenceTransformer(self._model_name, device="cpu")
             logger.info("Embedding model ready.")
 
         return self._model
