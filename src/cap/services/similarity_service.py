@@ -185,7 +185,7 @@ class SimilarityService:
             candidates.append({
                 "original_query": original_nl,
                 "normalized_query": cached_normalized,
-                "sparql_query": sparql_data,
+                "sparql_query": sparql_data["sparql_query"],
                 "similarity_score": score,
                 "is_sequential": entry.get("is_sequential", False),
                 "precached": entry.get("precached", False),

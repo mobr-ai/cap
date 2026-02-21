@@ -115,13 +115,8 @@ async def query_with_stream_response(
             try:
                 logger.info(f"Stage 1: convert NL to SPARQL (attempt {retry_count + 1}/{max_retries + 1})")
 
-                # Check cache status before generating
-                normalized_check = QueryNormalizer.normalize(user_query)
-                cached_data = await redis_client.get_cached_query_with_original(normalized_check, user_query)
-                was_from_cache = cached_data is not None
-
                 # Generate or retrieve SPARQL
-                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, _ = await nlq_to_sparql(
+                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, was_from_cache = await nlq_to_sparql(
                     user_query=user_query,
                     redis_client=redis_client,
                     llm_client=llm_client,

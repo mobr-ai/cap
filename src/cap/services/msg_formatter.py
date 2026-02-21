@@ -30,7 +30,7 @@ class MessageFormatter:
         for example in examples_to_use:
             examples.append({
                 "user": f"User Question: {example['original_query']}",
-                "assistant": example['sparql_query']
+                "assistant": f"Assistant Answer: {example['sparql_query']}"
             })
 
         return examples
@@ -66,7 +66,7 @@ class MessageFormatter:
                 prompt_parts.append(f"\n--- Example {i} ---")
 
             prompt_parts.append(f"\n{example['user']}")
-            prompt_parts.append(f"\nSPARQL Query:\n{example['assistant']}")
+            prompt_parts.append(f"\n{example['assistant']}")
 
             if include_separator and i < len(examples):
                 prompt_parts.append("\n")

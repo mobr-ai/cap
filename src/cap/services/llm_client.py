@@ -352,7 +352,7 @@ class LLMClient:
                 temperature=0.0
             )
 
-            logger.info(f"LLM-generated SPARQL: \n {sparql_response}")
+            logger.info(f"LLM-generated SPARQL: -----\n {sparql_response} \n -----")
             is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
             if is_sequential:
                 # For backward compatibility, return first query if sequential (or raise/log)
