@@ -25,7 +25,7 @@ tracer = trace.get_tracer(__name__)
 
 MODEL_CONTEXT_CAP = settings.MODEL_CONTEXT_CAP * 1000
 CHAR_PER_TOKEN = settings.CHAR_PER_TOKEN
-MAX_CONTEXT_CHARS = CHAR_PER_TOKEN * MODEL_CONTEXT_CAP
+MAX_CONTEXT_CHARS = 18000 # CHAR_PER_TOKEN * MODEL_CONTEXT_CAP
 
 
 def matches_keyword(low_uq: str, keywords):
@@ -324,7 +324,7 @@ class LLMClient:
         use_ontology: bool = True,
         use_fewshot: bool = True,
         fewshot_strategy: SearchStrategy = SearchStrategy.auto,
-        fewshot_top_n: int = 5,
+        fewshot_top_n: int = 3,
         _eval_retrieved_out: list[dict] | None = None,
     ) -> str:
         """Convert natural language query to SPARQL."""
@@ -366,6 +366,12 @@ class LLMClient:
                 system_prompt=system_prompt,
                 temperature=0.0
             )
+
+            if not sparql_response.strip():
+                logger.warning("--- Empty SPARQL from model")
+                logger.warning(f"prompt: '{nl_prompt}'")
+                logger.warning("--- ---")
+                return ""
 
             logger.info(f"LLM-generated SPARQL: -----\n {sparql_response} \n -----")
             is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
@@ -616,7 +622,7 @@ class LLMClient:
         nl_query: str,
         prompt: str,
         strategy: SearchStrategy = SearchStrategy.auto,
-        top_n: int = 5,
+        top_n: int = 3,
         min_similarity: float = 0.0,
         _eval_retrieved_out: list[dict] | None = None,
     ) -> str:

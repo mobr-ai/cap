@@ -1,0 +1,7366 @@
+MESSAGE user What was the average transaction fee last week?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?startTime ?endTime ?avgFee
+WHERE {
+  BIND (NOW() AS ?endTime)
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+
+  {
+    SELECT ((SUM(COALESCE(?fee, 0)) / COUNT(?tx)) AS ?avgFee)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTx ?tx ;
+             b:hasTimestamp ?timestamp .
+      BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+      OPTIONAL { ?tx c:hasFee ?fee . }
+    }
+  }
+}
+
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly smart contract deployments
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?script) AS ?deployments)
+WHERE {
+  ?script a c:PlutusScript ;
+          c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user How many smart contracts were deployed today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?date
+  (COUNT(DISTINCT ?script) AS ?deployments)
+WHERE {
+  ?script a c:PlutusScript ;
+          c:hasCreationTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+GROUP BY ?date
+ORDER BY ?date
+
+
+
+"""
+
+MESSAGE user How many NFTs were minted in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?asset) as ?nftCount)
+WHERE {
+    ?asset a b:NFT ;
+        c:hasCreationTimestamp ?timestamp .
+    BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+}
+
+
+
+"""
+
+MESSAGE user How many NFTs were minted today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?asset) as ?nftCount)
+WHERE {
+  ?asset a b:NFT ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+
+
+
+"""
+
+MESSAGE user List the most frequently transferred tokens in the last week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers) ?startTime
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp .
+
+    BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?block b:hasTx ?tx .
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName ?startTime
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of new accounts created daily over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(DISTINCT ?account) AS ?new_accounts)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?account a b:Account ;
+           c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Show the 10 largest ADA transactions in the last 24 hours
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txHash
+  (SUM(?amount) AS ?totalAmount)
+  ?timestamp
+WHERE {
+  {
+    SELECT ?block ?timestamp
+    WHERE {
+      ?block a b:Block ;
+             b:hasTimestamp ?timestamp .
+      FILTER(?timestamp >= (NOW() - "P1D"^^xsd:dayTimeDuration))
+    }
+  }
+
+  ?block b:hasTx ?tx .
+
+  ?tx b:hasTxID ?txHash ;
+      c:hasTxOutput ?output .
+
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?amount .
+}
+GROUP BY ?txHash ?timestamp
+ORDER BY DESC(?totalAmount)
+LIMIT 10
+
+
+
+"""
+
+MESSAGE user Show the 5 largest ADA transactions today
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txHash
+  (SUM(?amount) AS ?totalAmount)
+  ?timestamp
+WHERE {
+  {
+    SELECT ?block ?timestamp
+    WHERE {
+      ?block a b:Block ;
+             b:hasTimestamp ?timestamp .
+
+      BIND(xsd:date(?timestamp) AS ?date)
+      BIND (xsd:date(NOW()) as ?startDate)
+      FILTER (?date >= ?startDate)
+    }
+  }
+
+  ?block b:hasTx ?tx .
+
+  ?tx b:hasTxID ?txHash ;
+      c:hasTxOutput ?output .
+
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?amount .
+}
+GROUP BY ?txHash ?timestamp
+ORDER BY DESC(?totalAmount)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Plot a bar chart showing number of daily transactions over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions and outputs daily over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Trace a line chart showing the number of NFTs minted daily in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(DISTINCT ?asset) as ?nftCount)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?asset a b:NFT ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Bar chart showing number of smart contract deployed daily in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?script) AS ?deployments)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?script a c:PlutusScript ;
+          c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of proposals submitted daily in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (COUNT(?proposal) AS ?proposalCount)
+  ?timePeriod
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?block b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  ?proposal a c:GovernanceProposal .
+
+  ?tx c:hasGovernanceProposal ?proposal ;
+    b:hasTxID ?proposalTxHash .
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Line chart showing the number of multi assets created daily in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (COUNT(?multiAsset) AS ?multiAssetCount)
+  ?timePeriod
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?multiAsset a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Current trends
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?isScript)  AS ?scriptsDeployed)
+  (SUM(?isCNT)     AS ?multiAssetsCreated)
+  (SUM(?isNFT)     AS ?nftsMinted)
+  (SUM(?isAccount) AS ?accountsCreated)
+WHERE {
+
+  BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?e c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  BIND(
+    IF(EXISTS { ?e a c:PlutusScript }, 1, 0)
+    AS ?isScript
+  )
+  BIND(
+    IF(EXISTS { ?e a c:MultiAssetCNT }, 1, 0)
+    AS ?isCNT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:NFT }, 1, 0)
+    AS ?isNFT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:Account }, 1, 0)
+    AS ?isAccount
+  )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Trends past week
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?isScript)  AS ?scriptsDeployed)
+  (SUM(?isCNT)     AS ?multiAssetsCreated)
+  (SUM(?isNFT)     AS ?nftsMinted)
+  (SUM(?isAccount) AS ?accountsCreated)
+WHERE {
+
+  BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?e c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  BIND(
+    IF(EXISTS { ?e a c:PlutusScript }, 1, 0)
+    AS ?isScript
+  )
+  BIND(
+    IF(EXISTS { ?e a c:MultiAssetCNT }, 1, 0)
+    AS ?isCNT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:NFT }, 1, 0)
+    AS ?isNFT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:Account }, 1, 0)
+    AS ?isAccount
+  )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Monthly trends
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?isScript)  AS ?scriptsDeployed)
+  (SUM(?isCNT)     AS ?multiAssetsCreated)
+  (SUM(?isNFT)     AS ?nftsMinted)
+  (SUM(?isAccount) AS ?accountsCreated)
+WHERE {
+
+  BIND(NOW() - "P6M"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?e c:hasCreationTimestamp ?timestamp .
+  FILTER (?timestamp >= ?startTime)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+
+  BIND(
+    IF(EXISTS { ?e a c:PlutusScript }, 1, 0)
+    AS ?isScript
+  )
+  BIND(
+    IF(EXISTS { ?e a c:MultiAssetCNT }, 1, 0)
+    AS ?isCNT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:NFT }, 1, 0)
+    AS ?isNFT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:Account }, 1, 0)
+    AS ?isAccount
+  )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user What is the average transaction fee today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?today ?avgFee
+WHERE {
+  BIND (xsd:date(NOW()) as ?today)
+
+  {
+    SELECT ((SUM(COALESCE(?fee, 0)) / COUNT(?tx)) AS ?avgFee)
+    WHERE {
+      ?block a b:Block ;
+        b:hasTx ?tx ;
+        b:hasTimestamp ?timestamp .
+
+      BIND(xsd:date(?timestamp) AS ?date)
+      BIND (xsd:date(NOW()) as ?startDate)
+      FILTER (?date >= ?startDate)
+      OPTIONAL { ?tx c:hasFee ?fee . }
+    }
+  }
+}
+GROUP BY ?today
+
+
+"""
+MESSAGE user List the latest 5 blocks of 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?blockNumber ?slotNumber ?epochNumber ?timestamp ?blockSize ?hash ?transactionCount
+WHERE {
+  ?block a b:Block ;
+          c:hasBlockNumber ?blockNumber ;
+          b:hasTxCount ?transactionCount ;
+          c:hasSlotNumber ?slotNumber ;
+          b:hasTimestamp ?timestamp ;
+          c:hasBlockSize ?blockSize ;
+          c:hasEpoch ?epoch ;
+          b:hasHash ?hash .
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly number of transactions in 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?txCount) AS ?totalTxs)
+WHERE {
+  ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing monthly number of transactions and outputs in 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing monthly number of transactions, inputs and outputs in 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?inputsCount, 0)) AS ?sumInputs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+
+  OPTIONAL { ?tx c:hasTxInputCount ?inputsCount . }
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly multi assets created.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?cnt) AS ?deployments)
+WHERE {
+  ?cnt a c:MultiAssetCNT ;
+       c:hasCreationTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly multi assets created in 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?cnt) AS ?deployments)
+WHERE {
+  ?cnt a c:MultiAssetCNT ;
+       c:hasCreationTimestamp ?timestamp .
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of multi assets created per epoch.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(?asset) AS ?totalAssets)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+  ?tx c:hasMintedAsset ?asset .
+  ?asset a c:MultiAssetCNT .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly number of transactions.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?txs) AS ?txCount)
+WHERE {
+  ?block a b:Block ;
+         b:hasTxCount ?txs ;
+         b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions per epoch.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (SUM(?txCount) AS ?totalTxs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTxCount ?txCount ;
+    c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions and outputs per epoch.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+"""
+
+MESSAGE user Plot a line chart showing daily number of transactions and outputs on March, 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+         b:hasTx ?tx ;
+         b:hasTimestamp ?timestamp .
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing daily number of transactions and outputs on the first week of March, 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-07T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing weekly number of transactions and outputs on March, 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+      b:hasTx ?tx ;
+      b:hasTimestamp ?timestamp .
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(CONCAT(SUBSTR(STR(?timestamp), 1, 7), "-W", STR(FLOOR((xsd:integer(SUBSTR(STR(?timestamp), 9, 2)) - 1) / 7) + 1)) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+MESSAGE user Plot a pie chart to show how much the top 1% ADA holders represent from the total supply on the Cardano network?
+MESSAGE assistant """
+---split in two queries---
+---query 1 number of accounts with ADA (ADA holders)---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?totalAda)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?totalAda > 0)
+  }
+}
+
+---query 2 representation of the 1% against total supply---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ((SUM(?balance) / ?totalSupply) AS ?topHolders)
+  ((1 - (SUM(?balance) / ?totalSupply)) AS ?otherHolders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS {?output c:hasOutputSpendTimestamp ?spendTimestamp .}
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    ORDER BY DESC(?balance)
+    LIMIT INJECT(evaluate(holders * 0.01))
+  }
+  <https://mobr.ai/ont/cardano#cnt/ada> b:hasTotalSupply ?totalSupply .
+}
+GROUP BY ?totalSupply
+
+
+"""
+
+MESSAGE user Show a table with the top 10 tokens by transfer count
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+        b:hasTx ?tx .
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+"""
+MESSAGE user What day was one week ago?
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?startTime
+WHERE {
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+}
+
+
+"""
+
+MESSAGE user What month was two months ago?
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (month(?startTime) as ?month)
+WHERE {
+  BIND (NOW() - "P60D"^^xsd:dayTimeDuration as ?startTime)
+}
+
+
+"""
+
+MESSAGE user What year was two years ago?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (year(?startTime) as ?year)
+WHERE {
+  BIND (NOW() - "P730D"^^xsd:dayTimeDuration as ?startTime)
+}
+
+
+
+"""
+MESSAGE user Show me the latest 5 blocks
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?blockNumber ?slotNumber ?epochNumber ?timestamp ?blockSize ?hash ?transactionCount
+WHERE {
+    ?block a b:Block ;
+      b:hasTxCount ?transactionCount ;
+      c:hasBlockNumber ?blockNumber ;
+      c:hasSlotNumber ?slotNumber ;
+      b:hasTimestamp ?timestamp ;
+      c:hasBlockSize ?blockSize ;
+      c:hasEpoch ?epoch ;
+      b:hasHash ?hash .
+
+     ?epoch c:hasEpochNumber ?epochNumber
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Show me the latest epoch
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT ?epoch ?epochNumber (COUNT(?block) as ?blockCount) (COUNT(?tx) as ?txCount) (SUM(?totalTxOutput) as ?totalOutput) (SUM(?txFee) as ?totalFees) (SUM(?rewardAmount) as ?rewardsDistributed)
+WHERE {
+  ?epoch a c:Epoch ;
+         c:hasEpochNumber ?epochNumber .
+
+  ?block c:hasEpoch ?epoch .
+
+  OPTIONAL { ?block b:hasTx ?tx }
+  OPTIONAL { ?tx c:hasTxOutputValue ?totalTxOutput }
+  OPTIONAL { ?tx c:hasFee ?txFee }
+  OPTIONAL {
+    ?tx c:hasRewardWithdrawal ?reward .
+    ?reward c:hasRewardWithdrawTokenState ?tokenState .
+    ?tokenState b:hasValue ?rewardAmount .
+  }
+
+  BIND((?endTime - ?startTime) AS ?duration)
+}
+GROUP BY ?epoch ?epochNumber
+ORDER BY DESC(?epochNumber)
+LIMIT 1
+
+
+"""
+
+MESSAGE user List the top 10 stake pools by stake amount
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?poolId (SUM(?amount) as ?stakeAmount)
+WHERE {
+    ?delegationSpec c:hasDelegatee ?pool ;
+      c:hasDelegator ?account .
+    ?pool b:hasHash ?poolId .
+}
+GROUP BY ?poolId
+ORDER BY DESC(?stakeAmount)
+LIMIT 10
+
+
+"""
+MESSAGE user What is the average of transactions per block in the last week?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+    (COUNT(DISTINCT ?block) AS ?totalBlocks)
+    (COUNT(?transaction) AS ?txCount)
+    (?totalTransactions / ?totalBlocks AS ?avgTransactionsPerBlock)
+WHERE {
+    ?block a b:Block ;
+            b:hasTimestamp ?timestamp ;
+            b:hasTx ?transaction .
+
+    BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?totalTransactions
+
+
+
+"""
+
+MESSAGE user What is the average of transactions per block?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (COUNT(DISTINCT ?block) AS ?totalBlocks) (SUM(?txCount) AS ?totalTransactions) (?totalTransactions / ?totalBlocks AS ?avgTransactionsPerBlock)
+WHERE {
+    ?block a b:Block ;
+      b:hasTxCount ?txCount .
+}
+
+
+
+"""
+
+MESSAGE user How much ADA the top 1% ADA holders have?
+MESSAGE assistant """
+---split in two queries---
+---query 1 number of accounts with ADA (ADA holders)---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?balance > 0)
+  }
+}
+
+---query 2 amount of lovelace held by the 1%---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (SUM(?balance) AS ?topTotalBalance)
+  (INJECT(evaluate(holders * 0.01)) AS ?numberOfTopHolders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS {?output c:hasOutputSpendTimestamp ?spendTimestamp .}
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    ORDER BY DESC(?balance)
+    LIMIT INJECT(evaluate(holders * 0.01))
+  }
+}
+
+
+
+"""
+
+MESSAGE user How much the top 1% ADA holders represent from the total supply on the Cardano network?
+MESSAGE assistant """
+---split in two queries---
+---query 1 number of accounts with ADA (ADA holders)---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?balance > 0)
+  }
+}
+
+---query 2 representation of the 1% against total supply---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (SUM(?balance) AS ?topTotalBalance)
+  ((SUM(?balance) / ?totalSupply) AS ?supplyRepresentation)
+  (INJECT(evaluate(holders * 0.01)) AS ?numberOfTopHolders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS {?output c:hasOutputSpendTimestamp ?spendTimestamp .}
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    ORDER BY DESC(?balance)
+    LIMIT INJECT(evaluate(holders * 0.01))
+  }
+  <https://mobr.ai/ont/cardano#cnt/ada> b:hasTotalSupply ?totalSupply .
+}
+GROUP BY ?totalSupply
+
+
+
+"""
+
+MESSAGE user how much ada in the account that holds more ada?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (SUM(?value) AS ?balance)
+WHERE {
+  FILTER NOT EXISTS {?output c:hasOutputSpendTimestamp ?spendTimestamp .}
+
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show me the 5 blocks with the largest number of transactions?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?block_hash ?block_number ?timestamp ?number_of_transactions
+WHERE {
+  ?block b:hasTxCount ?number_of_transactions ;
+    c:hasBlockNumber ?block_number ;
+    b:hasHash ?block_hash ;
+    b:hasTimestamp ?timestamp .
+}
+ORDER BY DESC(?number_of_transactions)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me the 3 blocks with the largest number of outputs
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?block_hash
+  ?block_number
+  ?timestamp
+  ?number_of_transactions
+  (SUM(COALESCE(?outputsCount, 0)) AS ?sumOutputs)
+WHERE {
+  ?block b:hasTxCount ?number_of_transactions ;
+          c:hasBlockNumber ?block_number ;
+          b:hasHash ?block_hash ;
+          b:hasTimestamp ?timestamp ;
+          b:hasTx ?tx .
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?block_hash ?block_number ?timestamp ?number_of_transactions
+ORDER BY DESC(?sumOutputs)
+LIMIT 3
+
+
+
+"""
+MESSAGE user Scatter chart showing transaction fee vs transaction value for a random sample of 1,000 transactions from the last 24 hours.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT ?txValue ?fee
+WHERE {
+  {
+    SELECT ?blk
+    WHERE {
+      ?blk a b:Block ;
+           b:hasTimestamp ?timestamp .
+      FILTER(?timestamp >= (NOW() - "P1D"^^xsd:dayTimeDuration))
+    }
+  }
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasFee ?fee ;
+      c:hasTxOutputValue ?txValue .
+
+  FILTER(RAND() < 0.01)
+}
+LIMIT 1000
+
+
+
+"""
+
+MESSAGE user Scatter chart showing transaction fee vs transaction value for a random sample of 100 transactions from the last epoch.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT ?txValue ?fee
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber) ?epoch
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+    GROUP BY ?epoch ?epochNumber
+  }
+  {
+    SELECT ?blk
+    WHERE {
+      ?blk a b:Block ;
+        c:hasEpoch ?epoch .
+    }
+  }
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasFee ?fee ;
+      c:hasTxOutputValue ?txValue .
+
+  FILTER(RAND() < 0.01)
+}
+LIMIT 100
+
+
+
+"""
+
+MESSAGE user Compare the last 52 epochs using a bubble chart: y = TPS, x = epoch number, bubble size = average transaction fee.
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  ((SUM(?txCount) / "432000"^^xsd:decimal) AS ?tps)
+  (AVG(?fee) AS ?avgFee)
+  (SUM(?txCount) AS ?totalTx)
+WHERE {
+  {
+    SELECT ?epoch ?epochNumber
+    WHERE {
+      ?blk a b:Block ;
+           c:hasEpoch ?epoch ;
+           b:hasTimestamp ?timestamp .
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+    GROUP BY ?epoch ?epochNumber
+    ORDER BY DESC(MAX(?timestamp))
+    LIMIT 52
+  }
+
+  ?blk a b:Block ;
+       c:hasEpoch ?epoch ;
+       b:hasTxCount ?txCount ;
+       b:hasTx ?tx .
+
+  ?tx a b:Transaction ;
+      c:hasFee ?fee .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Each bubble represents a governance proposal from the latest 30 proposals, positioned by total votes and number of unique voters, with bubble size showing how many votes included a rationale.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?proposal
+  (COUNT(?vote) AS ?totalVotes)
+  (COUNT(DISTINCT ?voterId) AS ?uniqueVoters)
+  (SUM(?hasRationale) AS ?votesWithRationale)
+WHERE {
+  {
+    SELECT ?proposal
+    WHERE {
+      ?tx a b:Transaction ;
+          c:hasGovernanceProposal ?proposal ;
+          c:hasAnchor ?blk .
+      ?blk b:hasTimestamp ?timestamp .
+    }
+    GROUP BY ?proposal
+    ORDER BY DESC(?timestamp)
+    LIMIT 30
+  }
+
+  ?tx a b:Transaction ;
+      c:hasVote ?vote .
+
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voterId .
+
+  OPTIONAL { ?tx c:hasTxMetadata ?md . }
+  BIND(IF(BOUND(?md), 1, 0) AS ?hasRationale)
+}
+GROUP BY ?proposal
+ORDER BY DESC(?totalVotes)
+
+
+
+
+"""
+
+MESSAGE user Treemap breaking down NFT mints by policy ID in the current epoch (size by mint count; show top 30 policy IDs).
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?policyId
+  (COUNT(DISTINCT ?ts) AS ?mintCount)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber) ?epoch
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+    GROUP BY ?epoch ?epochNumber
+  }
+
+  {
+    SELECT ?blk
+    WHERE {
+      ?blk a b:Block ;
+           c:hasEpoch ?epoch .
+    }
+  }
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasMintedAsset ?ts .
+
+  ?ts b:hasCurrency ?asset .
+  ?asset a b:NFT ;
+         c:hasPolicyId ?policyId .
+}
+GROUP BY ?policyId
+ORDER BY DESC(?mintCount)
+LIMIT 30
+
+
+
+"""
+
+MESSAGE user Treemap breaking down NFT mints by policy ID in the current epoch (size by mint count; show top 30 policy IDs, include url for policies).
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?policyId
+  (COUNT(DISTINCT ?ts) AS ?mintCount)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber) ?epoch
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+    GROUP BY ?epoch ?epochNumber
+  }
+
+  {
+    SELECT ?blk
+    WHERE {
+      ?blk a b:Block ;
+        c:hasEpoch ?epoch .
+    }
+  }
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasMintedAsset ?ts .
+
+  ?ts b:hasCurrency ?asset .
+  ?asset a b:NFT ;
+         c:hasPolicyId ?policyId .
+}
+GROUP BY ?policyId
+ORDER BY DESC(?mintCount)
+LIMIT 30
+
+
+
+"""
+
+MESSAGE user Show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over the last 14 days.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?day
+  ?hour
+  (AVG(?fee) AS ?avgFee)
+WHERE {
+  {
+    SELECT ?blk ?timestamp
+    WHERE {
+      ?blk a b:Block ;
+           b:hasTimestamp ?timestamp .
+      FILTER(?timestamp >= (NOW() - "P14D"^^xsd:dayTimeDuration))
+    }
+  }
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?day)
+  BIND(SUBSTR(STR(?timestamp), 12, 2) AS ?hour)
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasFee ?fee .
+}
+GROUP BY ?day ?hour
+ORDER BY ?day ?hour
+
+
+
+"""
+
+MESSAGE user Show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over March of 2025.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?day
+  ?hour
+  (AVG(?fee) AS ?avgFee)
+WHERE {
+  {
+    SELECT ?blk ?timestamp
+    WHERE {
+      ?blk a b:Block ;
+           b:hasTimestamp ?timestamp .
+      BIND ("2025-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+      BIND ("2025-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+      FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+    }
+  }
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?day)
+  BIND(SUBSTR(STR(?timestamp), 12, 2) AS ?hour)
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasFee ?fee .
+}
+GROUP BY ?day ?hour
+ORDER BY ?day ?hour
+
+
+
+
+"""
+
+MESSAGE user Show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over the current epoch.
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?day
+  ?hour
+  (AVG(?fee) AS ?avgFee)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber) ?epoch
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+    GROUP BY ?epoch ?epochNumber
+  }
+  {
+    SELECT ?blk ?timestamp
+    WHERE {
+      ?blk a b:Block ;
+        b:hasTimestamp ?timestamp ;
+        c:hasEpoch ?epoch .
+    }
+  }
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?day)
+  BIND(SUBSTR(STR(?timestamp), 12, 2) AS ?hour)
+
+  ?tx a b:Transaction ;
+      c:hasAnchor ?blk ;
+      c:hasFee ?fee .
+}
+GROUP BY ?day ?hour
+ORDER BY ?day ?hour
+
+
+
+"""
+MESSAGE user How many blocks were created in the cardano network?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(?blocks) AS ?block_count)
+WHERE {
+  ?blocks a b:Block .
+}
+
+
+"""
+
+MESSAGE user How many transactions in the cardano network?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(?s) AS ?count)
+WHERE {
+  ?s a b:Transaction .
+}
+
+
+"""
+
+MESSAGE user How many native tokens in the cardano network?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (COUNT(?s) AS ?count)
+WHERE {
+  ?s a c:MultiAssetCNT .
+}
+
+
+"""
+
+MESSAGE user How many transactions in the last 24h?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?tx) AS ?count)
+WHERE {
+    ?block a b:Block ;
+        b:hasTx ?tx ;
+        b:hasTimestamp ?timestamp .
+
+    BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+}
+
+
+"""
+MESSAGE user What is your current tip and the current cardano tip?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+"""
+
+MESSAGE user What is the current cardano height and the current height you have in your database
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user What is your current sync status?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user What is your sync status?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user What is your current status?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user What is your status?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user What is the CAP's status?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentCardanoHeight (MAX(?blockNum) AS ?capBlockNum) (COUNT(?block) AS ?count)
+WHERE {
+  c:Cardano c:hasBlockNumber ?currentCardanoHeight .
+  ?block a b:Block .
+  ?block c:hasBlockNumber ?blockNum .
+}
+GROUP BY (?currentCardanoHeight)
+
+
+"""
+
+MESSAGE user Time of the latest update
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?timestamp
+WHERE {
+    ?block a b:Block ;
+           c:hasBlockNumber ?blockNumber ;
+           b:hasTimestamp ?timestamp .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+"""
+
+MESSAGE user Last update
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?timestamp
+WHERE {
+    ?block a b:Block ;
+           c:hasBlockNumber ?blockNumber ;
+           b:hasTimestamp ?timestamp .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+"""
+
+MESSAGE user What is your latest update?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?timestamp
+WHERE {
+    ?block a b:Block ;
+           c:hasBlockNumber ?blockNumber ;
+           b:hasTimestamp ?timestamp .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+"""
+MESSAGE user How many blocks cardano up to March 14, 2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?block) AS ?countBlock)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+    BIND ("2021-03-14T23:59:59Z"^^xsd:dateTime as ?someDate)
+    FILTER (?timestamp <= ?someDate)
+}
+
+
+"""
+
+MESSAGE user How many transactions up to March 15, 2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (SUM(?txCount) AS ?totalTxs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp ;
+    b:hasTxCount ?txCount .
+
+  BIND ("2021-03-15T23:59:59Z"^^xsd:dateTime as ?someDate)
+  FILTER (?timestamp <= ?someDate)
+}
+
+
+"""
+
+MESSAGE user How many blocks did Cardano process on 03.14.2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?block) AS ?countBlock)
+WHERE {
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp .
+
+  BIND ("2021-03-14T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-14T23:59:59Z"^^xsd:dateTime AS ?endTime)
+
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+
+
+"""
+
+MESSAGE user How many transactions did Cardano process on 15.04.2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (SUM(?txCount) AS ?totalTxs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp ;
+    b:hasTxCount ?txCount .
+
+  BIND ("2021-04-15T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-04-15T23:59:59Z"^^xsd:dateTime AS ?endTime)
+
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+
+
+"""
+
+MESSAGE user What is the average of transactions per block on March 2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+    (COUNT(DISTINCT ?block) AS ?totalBlocks)
+    (COUNT(?transaction) AS ?txCount)
+    (?totalTransactions / ?totalBlocks AS ?avgTransactionsPerBlock)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp ;
+    b:hasTx ?transaction .
+
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?totalTransactions
+
+
+"""
+
+MESSAGE user how much ada in the account that holds more ada on February 13, 2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+WHERE {
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         b:hasTx ?tx .
+
+  FILTER(?timestamp <= "2021-02-13T23:59:59Z"^^xsd:dateTime)
+
+  ?tx c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output .
+
+  # Keep only unspent outputs
+  FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 1
+
+
+"""
+
+MESSAGE user Show me the 5 blocks with the largest number of transactions on March 2021
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?block_hash ?block_number ?timestamp ?number_of_transactions
+WHERE {
+  ?block b:hasTxCount ?number_of_transactions ;
+    c:hasBlockNumber ?block_number ;
+    b:hasHash ?block_hash ;
+    b:hasTimestamp ?timestamp .
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+ORDER BY DESC(?number_of_transactions)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Show me the 3 blocks with the largest number of outputs on April 18, 2021
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?block_hash
+  ?block_number
+  ?timestamp
+  ?number_of_transactions
+  (SUM(COALESCE(?outputsCount, 0)) AS ?sumOutputs)
+WHERE {
+  ?block b:hasTxCount ?number_of_transactions ;
+          c:hasBlockNumber ?block_number ;
+          b:hasHash ?block_hash ;
+          b:hasTimestamp ?timestamp ;
+          b:hasTx ?tx .
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+  BIND ("2021-04-18T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-04-18T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?block_hash ?block_number ?timestamp ?number_of_transactions
+ORDER BY DESC(?sumOutputs)
+LIMIT 3
+
+
+
+"""
+
+MESSAGE user What were the 10 largest ADA transactions in the last 24 hours?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?txHash ?amount ?timestamp
+WHERE {
+    ?block a b:Block ;
+      b:hasTx ?tx ;
+      b:hasTimestamp ?timestamp .
+    BIND (NOW() - "P1D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?tx c:hasTxOutput ?output ;
+      b:hasTxID ?txHash .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+        b:hasValue ?amount .
+}
+ORDER BY DESC(?amount)
+LIMIT 10
+
+
+"""
+
+MESSAGE user What were the average transaction fees last week?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?startTime ?endTime ?avgFee
+WHERE {
+  BIND (NOW() AS ?endTime)
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+
+  {
+    SELECT ((SUM(COALESCE(?fee, 0)) / COUNT(?tx)) AS ?avgFee)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTx ?tx ;
+             b:hasTimestamp ?timestamp .
+      BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+      OPTIONAL { ?tx c:hasFee ?fee . }
+    }
+  }
+}
+
+
+"""
+
+MESSAGE user How many accounts hold over 200,000 ADA?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?account c:hasAccountUTXO ?output .
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 200000000000)
+  }
+}
+
+
+"""
+
+MESSAGE user What are the average staking rewards for accounts holding more than 1 million ADA?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (AVG(?latestRewardLovelace) AS ?avgLatestReward)
+WHERE {
+  {
+    # Per-account: sum reward values found in the block(s) matching the max timestamp for that account
+    SELECT ?account (SUM(?rewardLovelace) AS ?latestRewardLovelace)
+    WHERE {
+      # --- same account filter by unspent UTXOs > 1,000,000 ADA ---
+      {
+        SELECT ?account
+        WHERE {
+          ?account a b:Account ;
+                   c:hasAccountUTXO ?output .
+          FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp }
+
+          ?output b:hasTokenState ?tokenState .
+          ?tokenState  b:hasCurrency  <https://mobr.ai/ont/cardano#cnt/ada> ;
+               b:hasValue     ?amt .
+        }
+        GROUP BY ?account
+        HAVING (SUM(?amt) > 1000000000000)
+      }
+
+      # --- for each account, compute max block timestamp where a withdrawal for the account appears ---
+      {
+        SELECT ?account (MAX(?blockTs) AS ?maxBlockTs)
+        WHERE {
+          ?account b:hasAddress ?addr .
+          ?addr c:hasRewardWithdrawal ?wd .
+          ?tx c:hasRewardWithdrawal ?wd .
+          ?block b:hasTx ?tx ;
+                 b:hasTimestamp ?blockTs .
+        }
+        GROUP BY ?account
+      }
+
+      # --- join back to the withdrawal(s) that occur in that max timestamp block(s) ---
+      ?account b:hasAddress ?addr2 .
+      ?addr2 c:hasRewardWithdrawal ?wd2 .
+      ?tx2 c:hasRewardWithdrawal ?wd2 .
+      ?block2 b:hasTx ?tx2 ;
+              b:hasTimestamp ?blockTs2 .
+      FILTER(?blockTs2 = ?maxBlockTs)
+
+      ?wd2 c:hasRewardWithdrawTokenState ?timestamp_rw2 .
+      ?timestamp_rw2 b:hasValue ?rewardLovelace .
+    }
+    GROUP BY ?account
+  }
+}
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly smart contract deployments in the last year
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?script) AS ?deployments)
+WHERE {
+  ?script a c:PlutusScript ;
+          c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+
+  BIND(NOW() - "P365D"^^xsd:dayTimeDuration AS ?startTime)
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user List the number of NFTs minted in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?asset) as ?nftCount)
+WHERE {
+    ?asset a b:NFT ;
+        c:hasCreationTimestamp ?timestamp .
+    BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+}
+
+
+"""
+
+MESSAGE user Which tokens were the most frequently transferred in the last week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers) ?startTime
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp .
+
+    BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?block b:hasTx ?tx .
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName ?startTime
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+
+"""
+
+MESSAGE user How many new accounts were created daily over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(DISTINCT ?account) AS ?new_accounts)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?account a b:Account ;
+           c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user What percentage of delegated ADA is to the top 10 stake pools
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  (SUM(?top10_stake) AS ?total_top10_stake)
+  (SUM(?all_stake) AS ?total_delegated_stake)
+  ((SUM(?top10_stake) / SUM(?all_stake) * 100) AS ?percentage_top10)
+WHERE {
+  {
+    # Get all current delegations with account balances
+    SELECT ?pool ?account (SUM(?value) AS ?account_balance)
+    WHERE {
+      # Find delegations
+      ?delegation a c:Delegation ;
+                  c:hasDelegator ?account ;
+                  c:hasDelegatee ?pool ;
+                  c:hasDelegationTimestamp ?delegationTime .
+
+      # Get the credential from the account
+      ?account c:hasScriptCredential ?credential .
+
+      # Ensure no later delegation exists for this account
+      FILTER NOT EXISTS {
+        ?laterDelegation a c:Delegation ;
+                        c:hasDelegator ?account ;
+                        c:hasDelegationTimestamp ?laterTime .
+        FILTER (?laterTime > ?delegationTime)
+      }
+
+      # Ensure the credential is not deregistered after this delegation
+      # Check for any certificate that deregisters this credential
+      FILTER NOT EXISTS {
+        ?deregCert c:certToAccount ?account ;
+                   c:hasCredential ?credential .
+        # This would be a deregistration certificate type
+        # (specific type depends on schema - might need adjustment)
+        FILTER NOT EXISTS {
+          ?deregCert a c:Delegation .
+        }
+      }
+
+      # Get account UTXOs (unspent outputs only)
+      ?account c:hasAccountUTXO ?output .
+
+      # Critical: Output must NOT be spent
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp
+      }
+
+      # Get ADA balance from unspent UTXOs
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?pool ?account
+  }
+
+  # Calculate total stake per pool
+  {
+    SELECT ?pool (SUM(?account_balance) AS ?pool_stake)
+    WHERE {
+      {
+        SELECT ?pool ?account (SUM(?value) AS ?account_balance)
+        WHERE {
+          ?delegation a c:Delegation ;
+                      c:hasDelegator ?account ;
+                      c:hasDelegatee ?pool ;
+                      c:hasDelegationTimestamp ?delegationTime .
+
+          ?account c:hasScriptCredential ?credential .
+
+          FILTER NOT EXISTS {
+            ?laterDelegation a c:Delegation ;
+                            c:hasDelegator ?account ;
+                            c:hasDelegationTimestamp ?laterTime .
+            FILTER (?laterTime > ?delegationTime)
+          }
+
+          FILTER NOT EXISTS {
+            ?deregCert c:certToAccount ?account ;
+                       c:hasCredential ?credential .
+            FILTER NOT EXISTS {
+              ?deregCert a c:Delegation .
+            }
+          }
+
+          ?account c:hasAccountUTXO ?output .
+
+          # Only unspent outputs
+          FILTER NOT EXISTS {
+            ?output c:hasOutputSpendTimestamp ?spendTimestamp
+          }
+
+          ?output b:hasTokenState ?tokenState .
+          ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?value .
+        }
+        GROUP BY ?pool ?account
+      }
+    }
+    GROUP BY ?pool
+    ORDER BY DESC(?pool_stake)
+    LIMIT 10
+  }
+
+  BIND(?pool_stake AS ?top10_stake)
+
+  # Get total delegated stake (all pools)
+  {
+    SELECT (SUM(?account_balance) AS ?all_stake)
+    WHERE {
+      {
+        SELECT ?account (SUM(?value) AS ?account_balance)
+        WHERE {
+          ?delegation a c:Delegation ;
+                      c:hasDelegator ?account ;
+                      c:hasDelegationTimestamp ?delegationTime .
+
+          ?account c:hasScriptCredential ?credential .
+
+          FILTER NOT EXISTS {
+            ?laterDelegation a c:Delegation ;
+                            c:hasDelegator ?account ;
+                            c:hasDelegationTimestamp ?laterTime .
+            FILTER (?laterTime > ?delegationTime)
+          }
+
+          FILTER NOT EXISTS {
+            ?deregCert c:certToAccount ?account ;
+                       c:hasCredential ?credential .
+            FILTER NOT EXISTS {
+              ?deregCert a c:Delegation .
+            }
+          }
+
+          ?account c:hasAccountUTXO ?output .
+
+          FILTER NOT EXISTS {
+            ?output c:hasOutputSpendTimestamp ?spendTimestamp
+          }
+
+          ?output b:hasTokenState ?tokenState .
+          ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?value .
+        }
+        GROUP BY ?account
+      }
+    }
+  }
+}
+
+
+"""
+
+MESSAGE user How many accounts voted on the latest governance proposal
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  {
+    SELECT ?latestProposal ?proposalTimestamp ?proposalTxHash ?eUrl
+    WHERE {
+      ?latestProposal a c:GovernanceProposal .
+
+      ?tx c:hasGovernanceProposal ?latestProposal ;
+          b:hasTxID ?proposalTxHash .
+
+      ?block b:hasTx ?tx ;
+             b:hasTimestamp ?proposalTimestamp .
+
+      BIND(CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash)) AS ?eUrl)
+    }
+    ORDER BY DESC(?proposalTimestamp)
+    LIMIT 1
+  }
+
+  ?vote a c:Vote ;
+        c:votesOn ?latestProposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+
+  OPTIONAL {
+    ?latestProposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+
+  BIND(COALESCE(?url, ?eUrl) AS ?proposalUrl)
+}
+GROUP BY ?proposalTxHash ?proposalUrl ?proposalTimestamp
+
+
+
+"""
+MESSAGE user Show me the 5 latest accounts created.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?account
+  ?creationTimestamp
+  (GROUP_CONCAT(CONCAT(?address, ": ", STR(SUM(?valueAddr))); separator=" | ") AS ?addressBalances)
+WHERE {
+  {
+    SELECT ?account ?creationTimestamp
+    WHERE {
+      ?account a b:Account ;
+               c:hasCreationTimestamp ?creationTimestamp .
+    }
+    ORDER BY DESC(?creationTimestamp)
+    LIMIT 5
+  }
+
+  ?account b:hasAddress ?addr .
+  ?addr b:hasId ?address .
+}
+GROUP BY ?account ?creationTimestamp
+ORDER BY DESC(?creationTimestamp)
+
+
+
+"""
+
+MESSAGE user Show me the 5 latest accounts created in 2023
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?account
+  ?creationTimestamp
+  (GROUP_CONCAT(CONCAT(?address, ": ", STR(SUM(?valueAddr))); separator=" | ") AS ?addressBalances)
+WHERE {
+  {
+    SELECT ?account ?creationTimestamp
+    WHERE {
+      ?account a b:Account ;
+               c:hasCreationTimestamp ?creationTimestamp .
+
+      BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+      FILTER (?timestamp <= ?endTime)
+    }
+    ORDER BY DESC(?creationTimestamp)
+    LIMIT 5
+  }
+
+  ?account b:hasAddress ?addr .
+  ?addr b:hasId ?address .
+}
+GROUP BY ?account ?creationTimestamp
+ORDER BY DESC(?creationTimestamp)
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of wallets over time
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?account a b:Account ;
+         c:hasCreationTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of wallets created in 2022
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?account a b:Account ;
+         c:hasCreationTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  BIND ("2022-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2022-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per year
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?account a b:Account ;
+         c:hasCreationTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 4) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per year from 2020 to 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?account a b:Account ;
+         c:hasCreationTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 4) AS ?timePeriod)
+  BIND ("2020-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?account a b:Account ;
+           c:hasCreationTimestamp ?timestamp .
+
+  BIND(CONCAT(SUBSTR(STR(?timestamp), 1, 7), "-W", STR(FLOOR((xsd:integer(SUBSTR(STR(?timestamp), 9, 2)) - 1) / 7) + 1)) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?block c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+  ?transaction c:hasAnchor ?block ;
+    c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output ;
+    c:hasCreationTimestamp ?timestamp .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per epoch in 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?block c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+  ?transaction c:hasAnchor ?block ;
+    c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output ;
+    c:hasCreationTimestamp ?timestamp .
+  BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new wallets per epoch from 2023 to 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(DISTINCT ?account) AS ?walletCount)
+WHERE {
+  ?block c:hasEpoch ?epoch .
+  ?epoch c:hasEpochNumber ?epochNumber .
+  ?transaction c:hasAnchor ?block ;
+    c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output ;
+    c:hasCreationTimestamp ?timestamp .
+  BIND ("2023-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user New accounts per day in last 30 days
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(DISTINCT ?account) AS ?new_accounts)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?account a b:Account ;
+           c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of new accounts created daily over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(DISTINCT ?account) AS ?new_accounts)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?account a b:Account ;
+           c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user Top 5 accounts by balance
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?account (SUM(?value) AS ?balance)
+WHERE {
+  ?block b:hasTx ?tx .
+  ?tx c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+  FILTER NOT EXISTS {
+    ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+  }
+
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Top 5 accounts by balance in 2021
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?account (SUM(?value) AS ?balance)
+WHERE {
+  ?block b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  ?tx c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp <= ?endTime)
+  FILTER NOT EXISTS {
+    ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+  }
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Top 5 accounts by balance of hosky
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?account (SUM(?value) AS ?balance)
+WHERE {
+  ?block b:hasTx ?tx .
+  ?tx c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasTokenName ?tokenName ;
+      b:hasValue ?value .
+
+  FILTER(CONTAINS(LCASE(?tokenName), "hosky"))
+
+  FILTER NOT EXISTS {
+    ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+  }
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Top 5 accounts by balance of hosky in 2024
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?account (SUM(?value) AS ?balance)
+WHERE {
+  ?block b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  ?tx c:hasTxOutput ?output .
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasTokenName ?tokenName ;
+      b:hasValue ?value .
+
+  BIND ("2024-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp <= ?endTime)
+
+  FILTER(CONTAINS(LCASE(?tokenName), "hosky"))
+
+  FILTER NOT EXISTS {
+    ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+  }
+}
+GROUP BY ?account
+ORDER BY DESC(?balance)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me 5 accounts with more than 2 billion ADA
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT ?account ?balance ?address
+WHERE {
+  {
+    SELECT ?account (SUM(?value) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+    ORDER BY DESC(?balance)
+    LIMIT 5
+  }
+  ?account b:hasAddress ?addr .
+  ?addr b:hasId ?address .
+}
+ORDER BY DESC(?balance)
+
+
+
+"""
+
+MESSAGE user Plot a line chart to show the number of accounts per year that holds more than 2 billion ADA
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?year (COUNT(?account) AS ?numAccounts)
+WHERE {
+  {
+    SELECT ?account ?year (SUM(?value) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTs . }
+
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+      ?tx c:hasTxOutput ?output .
+
+      BIND (year(xsd:dateTime(?blockTimestamp)) AS ?year)
+    }
+    GROUP BY ?account ?year
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+GROUP BY ?year
+ORDER BY ?year
+
+
+
+"""
+
+MESSAGE user How many accounts hold more than 2 billion ada?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?account c:hasAccountUTXO ?utxo .
+      ?utxo b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+      FILTER NOT EXISTS {
+        ?utxo c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+
+
+
+"""
+
+MESSAGE user How many accounts held more than 2 billion ada in 2024?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+      FILTER(?blockTimestamp <= "2024-12-31T23:59:59Z"^^xsd:dateTime)
+      ?tx c:hasTxOutput ?output .
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+
+
+
+"""
+
+MESSAGE user Number of accounts with ADA
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?value > 0)
+  }
+}
+
+
+
+"""
+
+MESSAGE user Number of accounts with ADA in 2024
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+      FILTER(?blockTimestamp <= "2024-12-31T23:59:59Z"^^xsd:dateTime)
+      ?tx c:hasTxOutput ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?value > 0)
+  }
+}
+
+
+
+"""
+
+MESSAGE user How many accounts hold ada
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+  }
+}
+
+
+
+"""
+
+MESSAGE user Number of accounts with snek
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency ?asset ;
+          b:hasValue ?value .
+
+      ?asset b:hasTokenName ?assetName .
+
+      FILTER CONTAINS(LCASE(?assetName), "snek")
+    }
+    GROUP BY ?account
+    HAVING (?value > 0)
+  }
+}
+
+
+
+"""
+
+MESSAGE user How many accounts hold snek?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency ?asset ;
+          b:hasValue ?value .
+
+      ?asset b:hasTokenName ?assetName .
+
+      FILTER CONTAINS(LCASE(?assetName), "snek")
+    }
+    GROUP BY ?account
+    HAVING (?balance > 0)
+  }
+}
+
+
+
+"""
+
+MESSAGE user Number of accounts with ADA on September, 2021
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?totalAda)
+    WHERE {
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+      FILTER(?blockTimestamp <= "2021-09-30T23:59:59Z"^^xsd:dateTime)
+      ?tx c:hasTxOutput ?output .
+      ?account c:hasAccountUTXO ?output .
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (?totalAda > 0)
+  }
+}
+
+
+
+"""
+
+MESSAGE user Number of accounts with IAG on September, 2021
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+
+      FILTER(?blockTimestamp <= "2021-09-30T23:59:59Z"^^xsd:dateTime)
+
+      ?tx c:hasTxOutput ?output .
+      ?account c:hasAccountUTXO ?output .
+
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+
+      ?asset c:hasTokenName ?assetName .
+      FILTER(CONTAINS(LCASE(?assetName), "hosky"))
+      ?tokenState b:hasCurrency ?asset ;
+          b:hasValue ?value .
+      ?output b:hasTokenState ?tokenState .
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+
+
+
+"""
+
+MESSAGE user How many accounts held more than 2 billion ada on April 4th, 2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+
+      FILTER(?blockTimestamp <= "2021-04-04T23:59:59Z"^^xsd:dateTime)
+
+      ?tx c:hasTxOutput ?output .
+      ?account c:hasAccountUTXO ?output .
+
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+
+
+
+
+"""
+
+MESSAGE user How many accounts held more than 2 billion hosky on April 4th, 2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    SELECT ?account
+    WHERE {
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?blockTimestamp .
+
+      FILTER(?blockTimestamp <= "2021-04-04T23:59:59Z"^^xsd:dateTime)
+
+      ?tx c:hasTxOutput ?output .
+      ?account c:hasAccountUTXO ?output .
+
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+
+      ?asset c:hasTokenName ?assetName .
+      FILTER(CONTAINS(LCASE(?assetName), "hosky"))
+      ?tokenState b:hasCurrency ?asset ;
+          b:hasValue ?value .
+      ?output b:hasTokenState ?tokenState .
+    }
+    GROUP BY ?account
+    HAVING (SUM(?value) > 2000000000000000)
+  }
+}
+
+
+
+
+"""
+
+MESSAGE user How many accounts there is in cardano?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  ?account a b:Account .
+}
+
+
+
+"""
+
+MESSAGE user What is the number of new accounts created today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?date (COUNT(DISTINCT ?account) AS ?new_accounts)
+WHERE {
+  ?account a b:Account ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+GROUP BY ?date
+ORDER BY ?date
+
+
+
+"""
+
+MESSAGE user What is the number of new accounts created in the current epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(DISTINCT ?account) AS ?new_accounts_in_epoch)
+WHERE {
+  {
+    SELECT
+      ?currentEpochNumber
+      ?selectedEpochNumber
+      (MIN(?timestamp) AS ?startEpoch)
+      (MAX(?timestamp) AS ?endEpoch)
+    WHERE {
+      {
+        SELECT
+          (MAX(?epochNumber) AS ?currentEpochNumber)
+        WHERE {
+          ?epoch c:hasEpochNumber ?epochNumber .
+        }
+      }
+
+      ?block a b:Block ;
+        b:hasTimestamp ?timestamp ;
+        b:hasTx ?tx ;
+        c:hasEpoch ?epoch .
+
+      BIND(?currentEpochNumber AS ?selectedEpochNumber)
+      ?epoch c:hasEpochNumber ?selectedEpochNumber .
+    }
+    GROUP BY ?currentEpochNumber ?selectedEpochNumber
+  }
+
+  ?account a b:Account ;
+    c:hasCreationTimestamp ?accountTimestamp .
+
+  FILTER (?accountTimestamp >= ?startEpoch && ?accountTimestamp <= ?endEpoch)
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+"""
+
+MESSAGE user What is the number of new accounts created in the previous epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(DISTINCT ?account) AS ?new_accounts_in_epoch)
+WHERE {
+  {
+    SELECT
+      ?currentEpochNumber
+      ?selectedEpochNumber
+      (MIN(?timestamp) AS ?startEpoch)
+      (MAX(?timestamp) AS ?endEpoch)
+    WHERE {
+      {
+        SELECT
+          (MAX(?epochNumber) AS ?currentEpochNumber)
+        WHERE {
+          ?epoch c:hasEpochNumber ?epochNumber .
+        }
+      }
+
+      ?block a b:Block ;
+        b:hasTimestamp ?timestamp ;
+        b:hasTx ?tx ;
+        c:hasEpoch ?epoch .
+
+      BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+      ?epoch c:hasEpochNumber ?selectedEpochNumber .
+    }
+    GROUP BY ?currentEpochNumber ?selectedEpochNumber
+  }
+
+  ?account a b:Account ;
+    c:hasCreationTimestamp ?accountTimestamp .
+
+  FILTER (?accountTimestamp >= ?startEpoch && ?accountTimestamp <= ?endEpoch)
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+
+"""
+
+MESSAGE user What is the number of new accounts created in epoch 500?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?new_accounts_in_epoch)
+WHERE {
+  {
+    SELECT
+      (MIN(?timestamp) AS ?startEpoch)
+      (MAX(?timestamp) AS ?endEpoch)
+    WHERE {
+      ?block a b:Block ;
+        b:hasTimestamp ?timestamp ;
+        b:hasTx ?tx ;
+        c:hasEpoch ?epoch .
+
+      ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+    }
+  }
+
+  ?account a b:Account ;
+    c:hasCreationTimestamp ?accountTimestamp .
+
+  FILTER (?accountTimestamp >= ?startEpoch && ?accountTimestamp <= ?endEpoch)
+}
+
+
+
+
+"""
+
+MESSAGE user when the address addr1qyvxhxylnetdsaq94zyl7nnztkjj650v5y3xaw770f5z3f8xw5evcg3mr4kxgy50lr6enk5u758dx2mmpj0rtxj0hukq3yg8zk appeared for the first time?
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT (MIN(?timestamp) AS ?firstAppear)
+WHERE {
+  ?out c:hasAddressId "addr1qyvxhxylnetdsaq94zyl7nnztkjj650v5y3xaw770f5z3f8xw5evcg3mr4kxgy50lr6enk5u758dx2mmpj0rtxj0hukq3yg8zk" ;
+       b:hasTokenState ?ts .
+
+  ?tx    c:hasTxOutput ?out .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?timestamp .
+}
+
+
+
+
+"""
+
+MESSAGE user how much ada is on this address addr1qyvxhxylnetdsaq94zyl7nnztkjj650v5y3xaw770f5z3f8xw5evcg3mr4kxgy50lr6enk5u758dx2mmpj0rtxj0hukq3yg8zk?
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT (SUM(?value) AS ?lovelace) (COUNT(DISTINCT ?out) AS ?unspentUtxoCount)
+WHERE {
+  ?out c:hasAddressId "addr1qyvxhxylnetdsaq94zyl7nnztkjj650v5y3xaw770f5z3f8xw5evcg3mr4kxgy50lr6enk5u758dx2mmpj0rtxj0hukq3yg8zk" ;
+       b:hasTokenState ?ts .
+
+  FILTER NOT EXISTS { ?out c:hasOutputSpendTimestamp ?spentTs . }
+
+  ?ts b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+}
+
+
+
+
+"""
+
+MESSAGE user How many address there is in cardano?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?address) AS ?numAddresses)
+WHERE {
+  ?account b:hasAddress ?address .
+}
+
+
+
+
+"""
+
+MESSAGE user How many addresses were ever created?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?address) AS ?numAddresses)
+WHERE {
+  ?account b:hasAddress ?address .
+}
+
+
+
+"""
+MESSAGE user Top 10 tokens by transfer count
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+        b:hasTx ?tx .
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+"""
+
+MESSAGE user How many CNTs exist?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(DISTINCT ?cnt) AS ?cnts_quantity)
+WHERE {
+    ?cnt a c:MultiAssetCNT .
+}
+
+
+"""
+
+MESSAGE user How many multi assets exist?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(DISTINCT ?cnt) AS ?cnts_quantity)
+WHERE {
+    ?cnt a c:MultiAssetCNT .
+}
+
+
+"""
+
+MESSAGE user Plot a line chart with top 5 tokens most frequently transferred in the last year
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp ;
+      b:hasTx ?tx .
+
+    BIND (NOW() - "P365D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+    # using month as default time period aggregator when time goes back 180 days or more
+    BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+}
+GROUP BY ?timePeriod ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Plot a bar chart with top 5 tokens most frequently transferred in the last two months (break it by week)
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp ;
+      b:hasTx ?tx .
+
+    BIND (NOW() - "P60D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+    BIND(CONCAT(SUBSTR(STR(?timestamp), 1, 7), "-W", STR(FLOOR((xsd:integer(SUBSTR(STR(?timestamp), 9, 2)) - 1) / 7) + 1)) AS ?timePeriod)
+}
+GROUP BY ?timePeriod ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Top 10 tokens by transfer count in the last week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp ;
+      b:hasTx ?tx .
+
+    BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+
+"""
+
+MESSAGE user List top 5 tokens most frequently transferred in the last week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp ;
+      b:hasTx ?tx .
+
+    BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user List the most frequently transferred tokens today
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfers)
+WHERE {
+    ?block a b:Block ;
+      b:hasTimestamp ?timestamp ;
+      b:hasTx ?tx .
+
+    BIND(xsd:date(?timestamp) AS ?date)
+    BIND (xsd:date(NOW()) as ?startDate)
+    FILTER (?date >= ?startDate)
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?token .
+    ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user How many NFT mints in last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?asset) as ?nftCount)
+WHERE {
+    ?asset a b:NFT ;
+        c:hasCreationTimestamp ?timestamp .
+    BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?startTime)
+    FILTER (?timestamp >= ?startTime)
+}
+
+
+
+"""
+
+MESSAGE user Plot a pie chart to show how much the top 1% HOSKY holders represent from the total supply?
+MESSAGE assistant """
+---split in two queries---
+---query 1 number of accounts with HOSKY (HOSKY holders)---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?account) AS ?holders)
+WHERE {
+  {
+    ?asset b:hasTokenName ?assetName .
+    FILTER CONTAINS(LCASE(?assetName), "hosky")
+    FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+    ?account c:hasAccountUTXO ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency ?asset ;
+        b:hasValue ?value .
+  }
+}
+
+---query 2 representation of the 1% against total supply---
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ((SUM(?balance) / ?totalSupply) AS ?topHolders)
+  ((1 - (SUM(?balance) / ?totalSupply)) AS ?otherHolders)
+WHERE {
+  {
+    SELECT (
+      SUM( xsd:decimal(COALESCE(?minted, 0)) )
+      - SUM( xsd:decimal(COALESCE(?burned, 0)) )
+      AS ?totalSupply
+    )
+    WHERE {
+      ?asset a b:Asset ;
+            b:hasTokenName ?assetName .
+
+      FILTER(CONTAINS(LCASE(?assetName), "hosky"))
+
+      OPTIONAL { ?asset b:hasMintedAmount ?minted . }
+      OPTIONAL { ?asset b:hasBurnedAmount ?burned . }
+    }
+  }
+  {
+    SELECT ?account (SUM(xsd:decimal(?value)) AS ?balance)
+    WHERE {
+      FILTER NOT EXISTS {?output c:hasOutputSpendTimestamp ?spendTimestamp .}
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+    }
+    GROUP BY ?account
+    ORDER BY DESC(?balance)
+    LIMIT INJECT(evaluate(holders * 0.01))
+  }
+}
+GROUP BY ?totalSupply
+
+
+"""
+
+MESSAGE user What is the total supply of ADA?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+SELECT ?totalSupply
+WHERE {
+  <https://mobr.ai/ont/cardano#cnt/ada> b:hasTotalSupply ?totalSupply .
+}
+
+
+"""
+
+MESSAGE user What is the total supply of SNEK?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (SUM( COALESCE(xsd:decimal(?minted), 0) ) AS ?totalMinted)
+  (SUM( COALESCE(xsd:decimal(?burned), 0) ) AS ?totalBurned)
+  ((SUM( COALESCE(xsd:decimal(?minted), 0) ) -
+    SUM( COALESCE(xsd:decimal(?burned), 0) )) AS ?totalSupply)
+WHERE {
+  ?asset b:hasTokenName ?assetName .
+  FILTER(CONTAINS(LCASE(?assetName), "snek"))
+
+  OPTIONAL { ?asset b:hasMintedAmount ?minted . }
+  OPTIONAL { ?asset b:hasBurnedAmount ?burned . }
+}
+
+
+"""
+
+MESSAGE user How many native tokens in the cardano network up to 2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?ma) AS ?maCount)
+WHERE {
+  ?ma a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime as ?someDate)
+  FILTER (?timestamp <= ?someDate)
+}
+
+
+"""
+
+MESSAGE user How many native tokens were created on 13.12.2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?mcnt) AS ?count)
+WHERE {
+  ?mcnt a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+  BIND ("2021-12-13T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-13T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+
+
+"""
+
+MESSAGE user Top 10 tokens by transfer count up to April 1st, 2021
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) AS ?transfers)
+WHERE {
+  ##################################################################
+  # Step 1 — Restrict blocks FIRST (forces index use)
+  ##################################################################
+  {
+    SELECT ?block ?tx
+    WHERE {
+      ?block a b:Block ;
+             b:hasTimestamp ?timestamp ;
+             b:hasTx ?tx .
+      FILTER(?timestamp <= "2021-04-01T23:59:59Z"^^xsd:dateTime)
+    }
+  }
+
+  ##################################################################
+  # Step 2 — Expand only relevant TXs to outputs and tokens
+  ##################################################################
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token .
+  ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfers)
+LIMIT 10
+
+
+
+
+"""
+
+MESSAGE user How many CNTs existed on Fourth of July, 2021?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?macnt) AS ?cnts_quantity)
+WHERE {
+  ?macnt a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+  FILTER(?timestamp <= "2021-07-04T23:59:59Z"^^xsd:dateTime)
+}
+
+
+
+"""
+
+MESSAGE user plot a line chart with NIGHT transactions
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?timePeriod (COUNT(?tx) as ?txCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    b:hasTokenName "NIGHT" .
+  ?tokenState b:hasCurrency ?multiAsset .
+  ?output b:hasTokenState ?tokenState .
+  ?tx c:hasTxOutput ?output .
+  ?block b:hasTimestamp ?timestamp ;
+    b:hasTx ?tx .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart with NIGHT transfers
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?timePeriod (COUNT(?tx) as ?txCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    b:hasTokenName "NIGHT" .
+  ?tokenState b:hasCurrency ?multiAsset .
+  ?output b:hasTokenState ?tokenState .
+  ?tx c:hasTxOutput ?output .
+  ?block b:hasTimestamp ?timestamp ;
+    b:hasTx ?tx .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart with NIGHT transfers in the last week
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?timePeriod (COUNT(?tx) as ?txCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    b:hasTokenName "NIGHT" .
+  ?tokenState b:hasCurrency ?multiAsset .
+  ?output b:hasTokenState ?tokenState .
+  ?tx c:hasTxOutput ?output .
+  ?block b:hasTimestamp ?timestamp ;
+    b:hasTx ?tx .
+
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart with NIGHT transfers in the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?timePeriod (COUNT(?tx) as ?txCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    b:hasTokenName "NIGHT" .
+  ?tokenState b:hasCurrency ?multiAsset .
+  ?output b:hasTokenState ?tokenState .
+  ?tx c:hasTxOutput ?output .
+  ?block b:hasTimestamp ?timestamp ;
+    b:hasTx ?tx .
+
+  BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart with NIGHT transfers in the last 15 days
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?timePeriod (COUNT(?tx) as ?txCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    b:hasTokenName "NIGHT" .
+  ?tokenState b:hasCurrency ?multiAsset .
+  ?output b:hasTokenState ?tokenState .
+  ?tx c:hasTxOutput ?output .
+  ?block b:hasTimestamp ?timestamp ;
+    b:hasTx ?tx .
+
+  BIND (NOW() - "P15D"^^xsd:dayTimeDuration as ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly multi assets created
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?multiAsset) AS ?multiAssetCount)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a bar chart showing monthly multi assets created in 2021
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(DISTINCT ?script) AS ?deployments)
+WHERE {
+  ?multiAsset a c:MultiAssetCNT ;
+    c:hasCreationTimestamp ?timestamp .
+
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the amount of ada exchanged per day
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (SUM(?amount) AS ?totalAda)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?amount .
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user how much ada is exchanged per day, in average?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (AVG(?dailyAda) AS ?avgAdaPerDay)
+WHERE {
+  SELECT ?timePeriod (SUM(?amount) AS ?dailyAda)
+  WHERE {
+    ?block a b:Block ;
+           b:hasTx ?tx ;
+           b:hasTimestamp ?timestamp .
+
+    BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+                b:hasValue ?amount .
+  }
+  GROUP BY ?timePeriod
+}
+
+
+
+"""
+
+MESSAGE user Consider the time frame of November/25. How much ada is exchanged per day, in average?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (AVG(?dailyAda) AS ?avgAdaPerDay)
+WHERE {
+  SELECT ?timePeriod (SUM(?amount) AS ?dailyAda)
+  WHERE {
+    ?block a b:Block ;
+           b:hasTx ?tx ;
+           b:hasTimestamp ?timestamp .
+
+    BIND ("2025-11-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+    BIND ("2025-11-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+    FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+    BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+    ?tx c:hasTxOutput ?output .
+    ?output b:hasTokenState ?tokenState .
+    ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+                b:hasValue ?amount .
+  }
+  GROUP BY ?timePeriod
+}
+
+
+
+"""
+
+MESSAGE user List the most frequently transferred tokens in the previous epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfersInEpoch) ?currentEpochNumber ?selectedEpochNumber
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+  ?block b:hasTx ?tx .
+
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token .
+  ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName ?selectedEpochNumber ?currentEpochNumber
+ORDER BY DESC(?transfersInEpoch)
+
+
+
+"""
+
+MESSAGE user List the most frequently transferred tokens in the current epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfersInEpoch) ?currentEpochNumber ?selectedEpochNumber
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+  ?block b:hasTx ?tx .
+
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token .
+  ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName ?currentEpochNumber ?selectedEpochNumber
+ORDER BY DESC(?transfersInEpoch)
+
+
+
+"""
+
+MESSAGE user List the most frequently transferred tokens in epoch 500
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tokenName (COUNT(?output) as ?transfersInEpoch)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+  ?block b:hasTx ?tx .
+
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token .
+  ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+ORDER BY DESC(?transfersInEpoch)
+
+
+
+"""
+
+MESSAGE user How many NFT mints in previous epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(DISTINCT ?asset) AS ?nftsMintedInEpoch)
+WHERE {
+  # get latest epoch number in the dataset
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?e c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  # compute previous epoch
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber) .
+
+  # pick blocks whose epoch matches the selected epoch number
+  ?block a b:Block ;
+         c:hasEpoch ?epoch ;
+         b:hasTx ?tx .
+
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+
+  # minted assets in tx, keep only NFTs
+  ?tx c:hasMintedAsset ?asset .
+  ?asset a b:NFT .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many NFT mints in current epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(DISTINCT ?asset) as ?nftsMintedInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+  ?block b:hasTx ?tx .
+  ?tx c:hasMintedAsset ?asset .
+  ?asset a b:NFT .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+"""
+
+MESSAGE user How many NFT mints in epoch 500
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?asset) as ?nftsMintedInEpoch)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+  ?block b:hasTx ?tx .
+  ?tx c:hasMintedAsset ?asset .
+  ?asset a b:NFT .
+}
+
+
+
+"""
+
+MESSAGE user Asset trends
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (SUM(?isCNT)     AS ?multiAssetsCreated)
+  (SUM(?isNFT)     AS ?nftsMinted)
+WHERE {
+
+  BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+
+  ?e c:hasCreationTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  BIND(
+    IF(EXISTS { ?e a c:MultiAssetCNT }, 1, 0)
+    AS ?isCNT
+  )
+  BIND(
+    IF(EXISTS { ?e a b:NFT }, 1, 0)
+    AS ?isNFT
+  )
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+MESSAGE user List the latest 5 blocks.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?blockNumber ?slotNumber ?epochNumber ?timestamp ?blockSize ?hash ?transactionCount
+WHERE {
+    ?block a b:Block ;
+      c:hasBlockNumber ?blockNumber ;
+      c:hasSlotNumber ?slotNumber ;
+      b:hasTimestamp ?timestamp ;
+      c:hasBlockSize ?blockSize ;
+      c:hasEpoch ?epoch ;
+      b:hasTxCount ?transactionCount ;
+      b:hasHash ?hash .
+
+    ?epoch c:hasEpochNumber ?epochNumber .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 5
+
+
+"""
+
+MESSAGE user List the first 5 blocks.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?blockNumber ?slotNumber ?epochNumber ?timestamp ?blockSize ?hash ?transactionCount
+WHERE {
+    ?block a b:Block ;
+      c:hasBlockNumber ?blockNumber ;
+      c:hasSlotNumber ?slotNumber ;
+      b:hasTimestamp ?timestamp ;
+      c:hasBlockSize ?blockSize ;
+      c:hasEpoch ?epoch ;
+      b:hasTxCount ?transactionCount ;
+      b:hasHash ?hash .
+
+    ?epoch c:hasEpochNumber ?epochNumber .
+}
+ORDER BY ?blockNumber
+LIMIT 5
+
+
+"""
+
+MESSAGE user How many blocks do you have in your database?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (COUNT(?block) AS ?count)
+WHERE {
+  ?block a b:Block .
+}
+
+
+"""
+
+MESSAGE user How many blocks has cap processed?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (COUNT(?block) AS ?count)
+WHERE {
+  ?block a b:Block .
+}
+
+
+"""
+
+MESSAGE user What is the date of your last block?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?timestamp
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+}
+ORDER BY DESC(?timestamp)
+LIMIT 1
+
+
+"""
+
+MESSAGE user Show me the first block ever
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?blockNum ?hash ?timestamp ?txCount ?previousBlock
+WHERE {
+  ?block a b:Block ;
+    c:hasBlockNumber ?blockNum ;
+    b:hasHash ?hash ;
+    b:hasTimestamp ?timestamp ;
+    b:hasTxCount ?txCount .
+}
+ORDER BY ?blockNum
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show me the block with the first transaction in the history
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?blockNum ?hash ?timestamp ?txCount ?previousBlock
+WHERE {
+  ?block a b:Block ;
+    c:hasBlockNumber ?blockNum ;
+    b:hasHash ?hash ;
+    b:hasTimestamp ?timestamp ;
+    b:hasTxCount ?txCount ;
+    b:hasPreviousBlock ?prevBlock .
+
+  ?prevBlock b:hasHash ?previousBlock .
+
+  FILTER (?txCount > 0)
+}
+ORDER BY ?blockNum
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user How many blocks mined today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+
+
+
+
+"""
+
+MESSAGE user How many blocks mined today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block .
+}
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced in the last week?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced in the last two weeks?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND (NOW() - "P14D"^^xsd:dayTimeDuration as ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of blocks produced monthly?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of blocks produced monthly in 2021?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND ("2021-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing weekly number of blocks produced on March, 2021.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND ("2021-03-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2021-03-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(CONCAT(SUBSTR(STR(?timestamp), 1, 7), "-W", STR(FLOOR((xsd:integer(SUBSTR(STR(?timestamp), 9, 2)) - 1) / 7) + 1)) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user How many blocks were produced today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blockCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+
+
+
+"""
+
+MESSAGE user How many blocks were produced in the previous epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(?block) as ?blocksInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced in the current epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?currentEpochNumber ?selectedEpochNumber (COUNT(?block) as ?blocksInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced in epoch 500?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blocksInEpoch)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+}
+
+
+
+"""
+
+MESSAGE user How many blocks were produced by this SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au in the previous epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?selectedEpochNumber ?currentEpochNumber (COUNT(?block) as ?blocksProduced)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+  ?block a b:Block ;
+    c:hasEpoch ?epoch ;
+    c:hasSlotLeader ?slotLeader .
+
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+GROUP BY ?selectedEpochNumber ?currentEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced by this SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au in the current epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?selectedEpochNumber ?currentEpochNumber (COUNT(?block) as ?blocksProduced)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+  ?block a b:Block ;
+    c:hasEpoch ?epoch ;
+    c:hasSlotLeader ?slotLeader .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+GROUP BY ?selectedEpochNumber ?currentEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many blocks were produced by this SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au in epoch 500?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?block) as ?blocksProduced)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch ;
+    c:hasSlotLeader ?slotLeader .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+
+
+
+
+"""
+
+MESSAGE user How many blocks the SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au produced?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (COUNT(?block) AS ?blocksCount)
+WHERE {
+  ?block a b:Block ;
+    c:hasSlotLeader ?slotLeader .
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of blocks produced by the SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?block) AS ?blocksCount)
+WHERE {
+  ?block a b:Block ;
+    c:hasSlotLeader ?slotLeader ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the number of blocks produced per epoch by the SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(?block) AS ?blocksCount)
+WHERE {
+  ?block a b:Block ;
+    c:hasSlotLeader ?slotLeader ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user List the latest 5 slot leaders?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT DISTINCT
+  ?poolId
+  ?vkey
+  ?vrfKey
+  ?timestamp
+WHERE {
+  {
+    SELECT ?block ?timestamp ?slotLeader
+    WHERE {
+      ?block a b:Block ;
+        b:hasTimestamp ?timestamp ;
+        c:hasSlotLeader ?slotLeader .
+    }
+    ORDER BY DESC(?timestamp)
+    LIMIT 5
+  }
+
+  ?slotLeader
+    c:hasVerificationKey ?vkey ;
+    c:hasVrfVerificationKey ?vrfKey ;
+    c:hasVrfHash ?vrfHash .
+
+  ?pool
+    b:hasHash ?poolId ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+
+
+
+
+"""
+
+MESSAGE user List all slot leaders instances and their vrf verification key
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT DISTINCT ?sl ?vrfKey
+WHERE {
+  ?sl a c:SlotLeader ;
+      c:hasVrfVerificationKey ?vrfKey .
+}
+
+
+
+"""
+
+MESSAGE user Plot a line chart with SPO slot leadership with the top five block producers in 2025
+MESSAGE assistant """
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?poolId
+  ?timePeriod
+  (COUNT(DISTINCT ?block) AS ?blockProducedCount)
+WHERE {
+  {
+    SELECT ?slotLeader
+    WHERE {
+      ?block a b:Block ;
+             b:hasTimestamp ?timestamp ;
+             c:hasSlotLeader ?slotLeader .
+
+      FILTER (
+        ?timestamp >= "2025-01-01T00:00:00Z"^^xsd:dateTime &&
+        ?timestamp <= "2025-12-31T23:59:59Z"^^xsd:dateTime
+      )
+    }
+    GROUP BY ?slotLeader
+    ORDER BY DESC(COUNT(DISTINCT ?block))
+    LIMIT 5
+  }
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+
+  ?pool
+    b:hasHash ?poolId ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         c:hasSlotLeader ?slotLeader .
+
+  FILTER (
+    ?timestamp >= "2025-01-01T00:00:00Z"^^xsd:dateTime &&
+    ?timestamp <= "2025-12-31T23:59:59Z"^^xsd:dateTime
+  )
+
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?poolId ?timePeriod
+ORDER BY ?timePeriod ?poolId
+
+
+
+"""
+MESSAGE user What is the latest epoch
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?epochNumber
+WHERE {
+  ?epoch a c:Epoch ;
+    c:hasEpochNumber ?epochNumber .
+}
+ORDER BY DESC(?epochNumber)
+LIMIT 1
+
+
+"""
+MESSAGE user Vote count on latest proposal
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter .
+
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show me the latest 3 proposals
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 3
+
+
+
+"""
+
+MESSAGE user Show me the latest proposal
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show me the latest governance proposals
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 5
+
+
+"""
+
+MESSAGE user Show me the latest governance proposals and their IPFS links
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me the latest 3 proposals with more than 100 votes
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (COUNT(?vote) AS ?voteCount)
+  (SUM(?isYes) AS ?yesCount)
+  (SUM(?isNo) AS ?noCount)
+  (SUM(?isAbstain) AS ?abstainCount)
+  ?proposalTimestamp
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter ;
+        c:hasVotingResult ?voteValue .
+  BIND(IF(LCASE(STR(?voteValue)) = "yes", 1, 0) AS ?isYes)
+  BIND(IF(LCASE(STR(?voteValue)) = "no", 1, 0) AS ?isNo)
+  BIND(IF(LCASE(STR(?voteValue)) = "abstain", 1, 0) AS ?isAbstain)
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalTimestamp
+HAVING (COUNT(DISTINCT ?voter) > 100)
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 3
+
+
+
+"""
+
+MESSAGE user Plot a line chart with the number of votes in the latest 10 proposals
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT
+  (COUNT(?vote) AS ?voteCount)
+  ?proposalDate
+WHERE {
+  ?proposal a c:GovernanceProposal .
+
+  ?tx c:hasGovernanceProposal ?proposal ;
+      b:hasTxID ?proposalTxHash .
+
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?proposalTimestamp .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?proposalDate )
+
+  ?vote a c:Vote ;
+        c:votesOn ?proposal ;
+        c:hasVoterId ?voter .
+
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposal ?proposalTxHash ?proposalUrl ?proposalDate
+ORDER BY DESC(?proposalDate)
+LIMIT 10
+
+
+
+"""
+
+MESSAGE user How many proposals launched today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  (COUNT(?proposal) AS ?proposalCount)
+  ?date
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+}
+GROUP BY ?date
+ORDER BY ?date
+
+
+
+"""
+
+MESSAGE user How many proposals launched in the past month?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  (COUNT(?proposal) AS ?proposalCount)
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal .
+  ?block b:hasTx ?tx ;
+         b:hasTimestamp ?timestamp .
+
+  BIND (NOW() - "P30D"^^xsd:dayTimeDuration as ?startTime)
+  FILTER (?timestamp >= ?startTime)
+}
+
+
+
+
+"""
+
+MESSAGE user How many proposals launched in the previous epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?currentEpochNumber
+  ?selectedEpochNumber
+  (COUNT(?proposal) AS ?proposalsInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal .
+
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+
+"""
+
+MESSAGE user How many proposals launched in the current epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT
+  ?currentEpochNumber
+  ?selectedEpochNumber
+  (COUNT(?proposal) AS ?proposalsInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal .
+
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+"""
+
+MESSAGE user How many proposals launched in epoch 500?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (COUNT(?proposal) AS ?proposalsInEpoch)
+WHERE {
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal .
+
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+}
+
+
+
+"""
+
+MESSAGE user How many votes in the latest 10 proposals had a rationale?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  (COUNT(?vote) AS ?voteCount)
+WHERE {
+  {
+    SELECT ?proposal ?proposalDate
+    WHERE {
+      ?proposal a c:GovernanceProposal .
+      ?tx c:hasGovernanceProposal ?proposal ;
+        b:hasTxID ?proposalTxHash .
+
+      ?block b:hasTx ?tx ;
+        b:hasTimestamp ?proposalTimestamp .
+
+      BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?proposalDate )
+    }
+    GROUP BY ?proposal ?proposalDate
+    ORDER BY DESC(?proposalDate)
+    LIMIT 10
+  }
+
+  ?vote a c:Vote ;
+    c:votesOn ?proposal ;
+    c:hasVoteMetadata ?rationale .
+}
+
+
+
+"""
+
+MESSAGE user Show the latest 10 votes with rationale
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?proposalTxHash
+  ?proposalUrl
+  (SUM(?isYes) AS ?yesVote)
+  (SUM(?isNo) AS ?noVote)
+  (SUM(?isAbstain) AS ?abstainVote)
+  ?proposalTimestamp
+  ?voteRationaleUrl
+WHERE {
+  ?vote a c:Vote ;
+    c:votesOn ?proposal ;
+    c:hasVoteMetadata ?rationale .
+
+  ?rationale c:hasUrl ?voteRationaleUrl .
+
+  ?proposal a c:GovernanceProposal .
+  ?tx c:hasGovernanceProposal ?proposal ;
+    b:hasTxID ?proposalTxHash .
+
+  ?block b:hasTx ?tx ;
+    b:hasTimestamp ?proposalTimestamp .
+
+  OPTIONAL {
+    ?proposal c:hasProposalMetadata ?metadata .
+    ?metadata c:hasUrl ?url .
+  }
+
+  BIND(COALESCE(?url, CONCAT("https://cardanoscan.io/transaction/", STR(?proposalTxHash))) AS ?proposalUrl)
+}
+GROUP BY ?proposalTxHash ?proposalUrl ?proposalTimestamp ?voteRationaleUrl
+ORDER BY DESC(?proposalTimestamp)
+LIMIT 10
+
+
+
+"""
+MESSAGE user Which stake pools have the most delegators?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT DISTINCT ?poolId (COUNT(DISTINCT ?account) AS ?numOfAccounts)
+WHERE {
+  ?stakePool a c:StakePool ;
+    b:hasHash ?poolId .
+
+  ?delegation c:hasDelegatee ?stakePool ;
+              c:hasDelegator ?account ;
+              c:hasDelegationTimestamp ?timestamp .
+
+  FILTER NOT EXISTS {
+    ?anotherDelegation c:hasDelegatee ?stakePool ;
+                       c:hasDelegator ?account ;
+                       c:hasDelegationTimestamp ?spendTimestamp .
+    FILTER(?spendTimestamp > ?timestamp)
+  }
+}
+GROUP BY ?poolId
+ORDER BY DESC(?numOfAccounts)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user What's the historical pledge fulfillment rate for each pool?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT DISTINCT ?poolId ((?accountBalance / ?pledge) AS ?fulfilmentRate)
+WHERE {
+  ?stakePool b:hasHash ?poolId ;
+             c:hasStakePoolPledge ?pledge ;
+             c:hasStakePoolRewardAccount ?account .
+
+  ?delegation c:hasDelegatee ?stakePool ;
+              c:hasDelegator ?account ;
+              c:hasDelegationTimestamp ?timestamp .
+
+  FILTER NOT EXISTS {
+    ?anotherDelegation c:hasDelegatee ?stakePool ;
+                       c:hasDelegator ?account ;
+                       c:hasDelegationTimestamp ?spendTimestamp .
+    FILTER(?spendTimestamp > ?timestamp)
+  }
+
+  {
+    SELECT ?account (SUM(?value) AS ?accountBalance)
+    WHERE {
+      ?account c:hasAccountUTXO ?utxo .
+      ?utxo b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?value .
+      FILTER NOT EXISTS {
+        ?utxo c:hasOutputSpendTimestamp ?spendTimestamp .
+      }
+    }
+    GROUP BY ?account
+  }
+}
+
+
+
+"""
+
+MESSAGE user How often do pools update their metadata?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT ?numOfPool ?updateCount (?updateCount / ?numOfPool AS ?updateFrequency)
+WHERE {
+  {
+    SELECT (COUNT(DISTINCT ?pool) AS ?numOfPool)
+    WHERE {
+      ?pool a c:StakePool .
+    }
+  }
+  {
+    SELECT (COUNT(?metadata) AS ?updateCount)
+    WHERE {
+      ?pool a c:StakePool ;
+            c:hasStakePoolMetadata ?metadata .
+    }
+  }
+}
+
+
+
+
+"""
+
+MESSAGE user Which pools have the most consistent block production in 2025?
+MESSAGE assistant """
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?poolId ?timePeriod
+       (?avgSq - (?avg * ?avg) AS ?epochVariance)
+WHERE {
+  {
+    SELECT ?poolId (AVG(?x) AS ?avg) (AVG(?x2) AS ?avgSq)
+    WHERE {
+      ?pool a c:StakePool ;
+            b:hasHash ?poolId ;
+            c:hasStakePoolVRFKeyHash ?vrfHash .
+
+      {
+        SELECT ?vrfHash ?epochNumber (COUNT(?block) AS ?blocksInEpoch)
+        WHERE {
+          ?block a b:Block ;
+                 c:hasSlotLeader ?leader ;
+                 c:hasEpoch ?epoch ;
+                 b:hasTimestamp ?timestamp .
+
+          ?epoch  c:hasEpochNumber ?epochNumber .
+          ?leader c:hasVrfHash ?vrfHash .
+
+          FILTER (
+            ?timestamp >= "2025-01-01T00:00:00Z"^^xsd:dateTime &&
+            ?timestamp <= "2025-12-31T23:59:59Z"^^xsd:dateTime
+          )
+        }
+        GROUP BY ?vrfHash ?epochNumber
+      }
+
+      BIND(xsd:decimal(?blocksInEpoch) AS ?x)
+      BIND(?x * ?x AS ?x2)
+    }
+    GROUP BY ?poolId
+  }
+  BIND("2025" AS ?timePeriod)
+}
+ORDER BY ASC(?epochVariance)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user # Show top 10 pools with the most consistent block production (2025)
+MESSAGE assistant """
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?poolId ?timePeriod
+       (?avgSq - (?avg * ?avg) AS ?epochVariance)
+WHERE {
+  {
+    SELECT ?poolId
+           (AVG(?x)  AS ?avg)
+           (AVG(?x2) AS ?avgSq)
+    WHERE {
+      ?pool a c:StakePool ;
+            b:hasHash ?poolId ;
+            c:hasStakePoolVRFKeyHash ?vrfHash .
+
+      {
+        SELECT ?vrfHash ?epochNumber (COUNT(?block) AS ?blocksInEpoch)
+        WHERE {
+          ?block a b:Block ;
+                 c:hasSlotLeader ?leader ;
+                 c:hasEpoch ?epoch ;
+                 b:hasTimestamp ?timestamp .
+
+          ?epoch   c:hasEpochNumber ?epochNumber .
+          ?leader  c:hasVrfHash ?vrfHash .
+
+          FILTER (
+            ?timestamp >= "2025-01-01T00:00:00Z"^^xsd:dateTime &&
+            ?timestamp <= "2025-12-31T23:59:59Z"^^xsd:dateTime
+          )
+        }
+        GROUP BY ?vrfHash ?epochNumber
+      }
+
+      BIND(xsd:decimal(?blocksInEpoch) AS ?x)
+      BIND(?x * ?x AS ?x2)
+    }
+    GROUP BY ?poolId
+  }
+
+  BIND("2025" AS ?timePeriod)
+}
+ORDER BY ASC(?epochVariance)
+LIMIT 10
+
+
+
+
+"""
+
+MESSAGE user Which pools have the less consistent block production in 2025?
+MESSAGE assistant """
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?poolId ?timePeriod
+       (?avgSq - (?avg * ?avg) AS ?epochVariance)
+WHERE {
+  {
+    SELECT ?poolId
+           (AVG(?x)  AS ?avg)
+           (AVG(?x2) AS ?avgSq)
+    WHERE {
+      ?pool a c:StakePool ;
+            b:hasHash ?poolId ;
+            c:hasStakePoolVRFKeyHash ?vrfHash .
+
+      {
+        SELECT ?vrfHash ?epochNumber (COUNT(?block) AS ?blocksInEpoch)
+        WHERE {
+          ?block a b:Block ;
+                 c:hasSlotLeader ?leader ;
+                 c:hasEpoch ?epoch ;
+                 b:hasTimestamp ?timestamp .
+
+          ?epoch   c:hasEpochNumber ?epochNumber .
+          ?leader  c:hasVrfHash ?vrfHash .
+
+          FILTER (
+            ?timestamp >= "2025-01-01T00:00:00Z"^^xsd:dateTime &&
+            ?timestamp <= "2025-12-31T23:59:59Z"^^xsd:dateTime
+          )
+        }
+        GROUP BY ?vrfHash ?epochNumber
+      }
+
+      BIND(xsd:decimal(?blocksInEpoch) AS ?x)
+      BIND(?x * ?x AS ?x2)
+    }
+    GROUP BY ?poolId
+  }
+
+  BIND("2025" AS ?timePeriod)
+}
+ORDER BY DESC(?epochVariance)
+LIMIT 5
+
+
+
+
+"""
+
+MESSAGE user What's the average lifetime of a stake pool?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT (COUNT(?pool) as ?numOfPools) (AVG(?duration) AS ?averageLifetime)
+WHERE {
+  ?blockReg a b:Block ;
+    b:hasTx ?txReg ;
+    b:hasTimestamp ?registrationTimestamp .
+  ?txReg c:hasCertificate ?certReg .
+  ?certReg a c:StakePoolRegistration ;
+           c:hasStakePool ?pool .
+
+  OPTIONAL {
+    ?blockRet a b:Block ;
+      b:hasTx ?txRet ;
+      b:hasTimestamp ?retirementTimestamp .
+    ?txRet c:hasCertificate ?certRet .
+    ?certRet a c:StakePoolRetirement ;
+             c:hasRetirement ?pool .
+  }
+
+  BIND(
+    COALESCE(?retirementTimestamp, NOW()) AS ?endTimestamp
+  )
+
+  BIND(
+    (?endTimestamp - ?registrationTimestamp) AS ?duration
+  )
+}
+
+
+"""
+
+MESSAGE user Top 5 stake pools by delegated ADA amount
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT DISTINCT ?poolId (SUM(?balanceAtDelegation) AS ?totalStake)
+WHERE {
+  # pick delegations and keep only the latest delegation per account
+  ?delegation a c:Delegation ;
+              c:hasDelegator ?account ;
+              c:hasDelegatee ?pool ;
+              c:hasDelegationTimestamp ?dtime .
+
+  # ensure this is the latest delegation for the account (no later delegation exists)
+  FILTER NOT EXISTS {
+    ?laterDel a c:Delegation ;
+              c:hasDelegator ?account ;
+              c:hasDelegationTimestamp ?laterTime .
+    FILTER( ?laterTime > ?dtime )
+  }
+
+  # pool identifier
+  ?pool b:hasHash ?poolId .
+
+  # compute account balance at delegation time:
+  # sum of unspent UTXO ADA values whose tx timestamp <= delegation time
+  # minus sum of reward withdrawals whose tx timestamp <= delegation time
+  {
+    SELECT ?account
+           ( COALESCE(SUM(?utxoVal), 0) - COALESCE(SUM(?wdVal), 0) AS ?balanceAtDelegation )
+    WHERE {
+      # UTXO ADA values belonging to the account
+      ?account c:hasAccountUTXO ?output .
+      ?output b:hasTokenState ?tokenState .
+      ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+          b:hasValue ?utxoVal .
+      # tx that created the output and its timestamp
+      ?tx c:hasTxOutput ?output ;
+          b:hasTimestamp ?txTime .
+      # include only outputs created on or before delegation time
+      FILTER( ?txTime <= ?dtime )
+
+      # exclude outputs that were spent on or before delegation time
+      FILTER NOT EXISTS {
+        ?output c:hasOutputSpendTimestamp ?spendTime .
+        FILTER( ?spendTime <= ?dtime )
+      }
+      # reward withdrawals tied to the account's stake address (subtract them if before delegation)
+      OPTIONAL {
+        ?account b:hasAddress ?addr .
+        ?addr c:hasRewardWithdrawal ?withdrawal .
+        ?withdrawal c:hasRewardWithdrawTokenState ?tokenState .
+        ?tokenState b:hasValue ?wdVal .
+        # find the tx that includes the withdrawal and its timestamp
+        ?wtx c:hasRewardWithdrawal ?withdrawal ;
+             b:hasTimestamp ?wtxTime .
+        FILTER( ?wtxTime <= ?dtime )
+      }
+    }
+    GROUP BY ?account
+  }
+
+  # make sure balanceAtDelegation is non-negative (optional safety)
+  FILTER( ?balanceAtDelegation >= 0 )
+}
+GROUP BY ?poolId
+ORDER BY DESC(?totalStake)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Top 10 pools stake percentage
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT DISTINCT ?poolId
+       (SUM(?adaAmount) AS ?totalStake)
+       ((SUM(?adaAmount) * 100.0 / ?totalCirculatingAda) AS ?stakePercentage)
+WHERE {
+  # Get all stake pools
+  ?pool a c:StakePool ;
+        b:hasHash ?poolId .
+
+  # Get accounts delegating to this pool
+  ?delegation a c:Delegation ;
+              c:hasDelegatee ?pool ;
+              c:hasDelegator ?account .
+
+  # Get the current UTXO balance for delegating accounts
+  ?account c:hasAccountUTXO ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?adaAmount .
+
+  FILTER NOT EXISTS {
+    ?output c:hasOutputSpendTimestamp ?spendTimestamp .
+  }
+  <https://mobr.ai/ont/cardano#cnt/ada> b:hasTotalSupply ?totalCirculatingAda .
+}
+GROUP BY ?poolId ?totalCirculatingAda
+ORDER BY DESC(?totalStake)
+LIMIT 10
+
+
+
+
+"""
+
+MESSAGE user Is there an SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT
+  (COUNT(?spo) AS ?hasSPO)
+WHERE {
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" .
+}
+
+
+
+"""
+
+MESSAGE user How many times the SPO with id pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au was a slot leader?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT
+  (COUNT(DISTINCT ?block) AS ?slotLeaderCount)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch ;
+    c:hasSlotLeader ?slotLeader .
+
+  ?slotLeader c:hasVrfHash ?vrfHash .
+  ?spo b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?vrfHash .
+}
+
+
+
+"""
+
+MESSAGE user Show latest 5 SPO registrations
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT
+  DISTINCT ?poolId
+  ?registrationTimestamp
+  ?spoVrfKeyHash
+  ?spoFixedCost
+  ?spoFee
+  ?spoPledge
+WHERE
+{
+  ?blockReg a b:Block ;
+    b:hasTx ?txReg ;
+    b:hasTimestamp ?registrationTimestamp .
+  ?txReg c:hasCertificate ?certReg .
+  ?certReg c:hasStakePool ?pool .
+  ?pool b:hasHash ?poolId .
+  OPTIONAL { ?pool c:hasStakePoolVRFKeyHash ?spoVrfKeyHash }
+  OPTIONAL { ?pool c:hasStakePoolFixedCost ?spoFixedCost }
+  OPTIONAL { ?pool c:hasStakePoolFee ?spoFee }
+  OPTIONAL { ?pool c:hasStakePoolPledge ?spoPledge }
+}
+GROUP BY ?registrationTimestamp ?poolId ?spoVrfKeyHash ?spoFixedCost ?spoFee ?spoPledge
+ORDER BY DESC(?registrationTimestamp)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show SPO pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT
+  DISTINCT ?poolId
+  ?registrationTimestamp
+  ?spoVrfKeyHash
+  ?spoFixedCost
+  ?spoFee
+  ?spoPledge
+WHERE
+{
+  ?blockReg a b:Block ;
+    b:hasTx ?txReg ;
+    b:hasTimestamp ?registrationTimestamp .
+  ?txReg c:hasCertificate ?certReg .
+  ?certReg c:hasStakePool ?pool .
+  ?pool b:hasHash "pool18rjrygm3knlt67n3r3prlhnzcjxun7wa8d3l8w9nmlpasquv4au" ;
+    c:hasStakePoolVRFKeyHash ?spoVrfKeyHash .
+
+  OPTIONAL { ?pool c:hasStakePoolFixedCost ?spoFixedCost }
+  OPTIONAL { ?pool c:hasStakePoolFee ?spoFee }
+  OPTIONAL { ?pool c:hasStakePoolPledge ?spoPledge }
+}
+GROUP BY ?registrationTimestamp ?poolId ?spoVrfKeyHash ?spoFixedCost ?spoFee ?spoPledge
+ORDER BY DESC(?registrationTimestamp)
+LIMIT 5
+
+
+
+
+"""
+
+MESSAGE user Show latest 5 SPO
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT
+  DISTINCT ?poolId
+  ?registrationTimestamp
+  ?spoVrfKeyHash
+  ?spoFixedCost
+  ?spoFee
+  ?spoPledge
+WHERE
+{
+  ?blockReg a b:Block ;
+    b:hasTx ?txReg ;
+    b:hasTimestamp ?registrationTimestamp .
+  ?txReg c:hasCertificate ?certReg .
+  ?certReg c:hasStakePool ?pool .
+  ?pool b:hasHash ?poolId .
+  OPTIONAL { ?pool c:hasStakePoolVRFKeyHash ?spoVrfKeyHash }
+  OPTIONAL { ?pool c:hasStakePoolFixedCost ?spoFixedCost }
+  OPTIONAL { ?pool c:hasStakePoolFee ?spoFee }
+  OPTIONAL { ?pool c:hasStakePoolPledge ?spoPledge }
+}
+GROUP BY ?registrationTimestamp ?poolId ?spoVrfKeyHash ?spoFixedCost ?spoFee ?spoPledge
+ORDER BY DESC(?registrationTimestamp)
+LIMIT 5
+
+
+
+
+"""
+
+MESSAGE user List all SPOs and their vrf key hash
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT DISTINCT ?poolId ?spoVrfKeyHash
+WHERE
+{
+  ?blockReg a b:Block ;
+    b:hasTx ?txReg .
+  ?txReg c:hasCertificate ?certReg .
+  ?certReg c:hasStakePool ?pool .
+  ?pool b:hasHash ?poolId .
+  ?pool c:hasStakePoolVRFKeyHash ?spoVrfKeyHash
+}
+GROUP BY ?poolId ?spoVrfKeyHash
+
+
+
+
+"""
+MESSAGE user Show me the latest transaction
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?txHash ?blockHash ?blockNumber ?epoch ?slot (COALESCE(?fee, 0) AS ?txFee) (COALESCE(?outputsValue, 0) AS ?txOutputsValue)
+WHERE {
+  ?transaction a b:Transaction ;
+               b:hasTxID ?txHash ;
+               c:hasAnchor ?block .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasTxOutputValue ?outputsValue }
+  OPTIONAL { ?transaction c:hasFee ?fee }
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show me the latest 5 transactions
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?txHash ?blockHash ?blockNumber ?epoch ?slot (COALESCE(?fee, 0) AS ?txFee) (COALESCE(?outputsValue, 0) AS ?txOutputsValue)
+WHERE {
+  ?transaction a b:Transaction ;
+               b:hasTxID ?txHash ;
+               c:hasAnchor ?block .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasTxOutputValue ?outputsValue }
+  OPTIONAL { ?transaction c:hasFee ?fee }
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me 5 transactions by value of outputs
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?txHash ?blockHash ?blockNumber ?epoch ?slot (COALESCE(?fee, 0) AS ?txFee) ?outputsValue
+WHERE {
+  ?transaction a b:Transaction ;
+               b:hasTxID ?txHash ;
+               c:hasTxOutputValue ?outputsValue ;
+               c:hasAnchor ?block .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasFee ?fee }
+}
+ORDER BY DESC(?outputsValue)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me 5 transactions by outputs
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?txHash ?blockHash ?blockNumber ?epoch ?slot (COALESCE(?fee, 0) AS ?txFee) (COALESCE(?outputsValue, 0) AS ?txOutputsValue) ?outputsCount
+WHERE {
+  ?transaction a b:Transaction ;
+    b:hasTxID ?txHash ;
+    c:hasAnchor ?block .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasTxOutputValue ?outputsValue }
+  OPTIONAL { ?transaction c:hasFee ?fee }
+}
+ORDER BY DESC(?outputsCount)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me 5 transactions by inputs count
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT ?txHash ?blockHash ?blockNumber ?epoch ?slot (COALESCE(?fee, 0) AS ?txFee) ?inputsCount (COALESCE(?outputsCount, 0) AS ?outputs)
+WHERE {
+  ?transaction b:hasTxID ?txHash ;
+    c:hasTxInputCount ?inputsCount .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasTx ?transaction ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasFee ?fee . }
+  OPTIONAL { ?transaction c:hasTxOutputCount ?outputsCount . }
+}
+ORDER BY DESC(?inputsCount)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show me 5 transactions by inputs
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txHash
+  ?blockHash
+  ?blockNumber
+  ?epoch
+  ?slot
+  (COALESCE(?fee, 0) AS ?txFee)
+  ?inputsCount
+  (COALESCE(?outputsCount, 0) AS ?outputs)
+WHERE {
+  ?transaction a b:Transaction ;
+    b:hasTxID ?txHash ;
+    c:hasTxInputCount ?inputsCount ;
+    c:hasAnchor ?block .
+
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasHash ?blockHash ;
+    c:hasSlotNumber ?slot ;
+    c:hasEpoch ?epochObj .
+
+  ?epochObj c:hasEpochNumber ?epoch .
+
+  OPTIONAL { ?transaction c:hasFee ?fee }
+  OPTIONAL { ?transaction c:hasTxOutputCount ?outputsCount . }
+
+}
+ORDER BY DESC(?inputsCount)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show 5 transactions by token transfer
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?txHash ?tokenName (COUNT(?output) as ?numberOfTransfers)
+WHERE {
+  ?tx a b:Transaction ;
+    b:hasTxID ?txHash ;
+    c:hasTxOutput ?output .
+
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token .
+  ?token b:hasTokenName ?tokenName .
+}
+GROUP BY ?txHash ?tokenName
+ORDER BY DESC(?numberOfTransfers)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user Show 5 transactions with largest volume of token transfer
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+SELECT ?txHash ?tokenName (SUM(?value) as ?volume)
+WHERE {
+  ?tx a b:Transaction ;
+    b:hasTxID ?txHash .
+  ?tx c:hasTxOutput ?output .
+  ?output b:hasTokenState ?tokenState .
+  ?tokenState b:hasCurrency ?token ;
+       b:hasValue ?value .
+  ?token b:hasTokenName ?tokenName .
+  FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?spendTimestamp . }
+}
+GROUP BY ?txHash ?tokenName
+ORDER BY DESC(?volume)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user What is the average transaction fee per epoch?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (SUM(xsd:decimal(?fee)) AS ?totalFee)
+  (COUNT(?tx) AS ?txCount)
+  (SUM(xsd:decimal(?fee)) / xsd:decimal(COUNT(?tx)) AS ?avgFee)
+WHERE {
+  ?block c:hasEpoch ?epoch ;
+         b:hasTx ?tx .
+
+  OPTIONAL {?tx c:hasFee ?fee .}
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing the average transaction fee per epoch?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (SUM(xsd:decimal(?fee)) AS ?totalFee)
+  (COUNT(?tx) AS ?txCount)
+  (SUM(xsd:decimal(?fee)) / xsd:decimal(COUNT(?tx)) AS ?avgFee)
+WHERE {
+  ?block c:hasEpoch ?epoch ;
+         b:hasTx ?tx .
+
+  OPTIONAL {?tx c:hasFee ?fee .}
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Which transactions had the highest fees in epoch 300?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?txHash ?fee
+WHERE {
+  ?epoch c:hasEpochNumber "300"^^xsd:decimal .
+  ?block c:hasEpoch ?epoch ;
+    b:hasTx ?tx .
+  ?tx b:hasTxID ?txHash ;
+    c:hasFee ?fee .
+}
+GROUP BY ?txHash ?fee
+ORDER BY DESC(?fee)
+LIMIT 5
+
+
+
+"""
+
+MESSAGE user What is the distribution of transaction count over time?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT ?epochNumber (SUM(?txCount) AS ?epochTxCount)
+WHERE {
+  ?block c:hasEpoch ?epoch ;
+    b:hasTxCount ?txCount .
+  ?epoch c:hasEpochNumber ?epochNumber .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user How many transactions include metadata?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+
+SELECT (COUNT(?tx) AS ?txWithMetadata)
+WHERE {
+  ?tx c:hasTxMetadataCount ?countMetadata .
+  FILTER (?countMetadata > 0)
+}
+
+
+
+"""
+
+MESSAGE user What's the average number of inputs and outputs per transaction?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txCount
+  (?sumInputs / ?txCount AS ?avgInputsPerTx)
+  (?sumOutputs / ?txCount AS ?avgOutputsPerTx)
+WHERE {
+  {
+    SELECT
+      (COUNT(?tx) AS ?txCount)
+      (SUM(COALESCE(?inputsCount, 0)) AS ?sumInputs)
+      (SUM(COALESCE(?outputsCount, 0)) AS ?sumOutputs)
+    WHERE {
+      ?tx a b:Transaction .
+      OPTIONAL { ?tx c:hasTxInputCount ?inputsCount . }
+      OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+    }
+  }
+}
+
+
+
+"""
+
+MESSAGE user Show latest transaction json
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txHash
+  ?json
+WHERE {
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasTx ?tx .
+  ?tx b:hasTxID ?txHash ;
+    c:hasTxMetadata ?metadata .
+  ?metadata c:hasMetadataJSON ?json .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Show latest transaction script
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?txHash
+  ?outputAddr
+  ?scriptHash
+  ?scriptLang
+WHERE {
+  ?block c:hasBlockNumber ?blockNumber ;
+    b:hasTx ?tx .
+  ?tx b:hasTxID ?txHash ;
+    c:hasTxOutput ?output .
+  ?output c:hasAddressId ?outputAddr ;
+    c:hasScript ?script .
+  ?script b:hasHash ?scriptHash ;
+    c:hasScriptLanguage ?scriptLang .
+}
+ORDER BY DESC(?blockNumber)
+LIMIT 1
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing monthly number of transactions and outputs.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+
+  # Extract YYYY-MM
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions and outputs per epoch.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions per epoch.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?epochNumber
+  (COUNT(?tx) AS ?totalTxs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber ?epochNumber .
+}
+GROUP BY ?epochNumber
+ORDER BY ?epochNumber
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing monthly number of transactions, inputs and outputs.
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?inputsCount, 0)) AS ?totalInputs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+      b:hasTx ?tx ;
+      b:hasTimestamp ?timestamp .
+
+  OPTIONAL { ?tx c:hasTxInputCount ?inputsCount . }
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user how many transactions does cardano have per day?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (AVG(?dailyTxCount) AS ?avgTxPerDay)
+WHERE {
+  SELECT ?timePeriod (SUM(?txCount) AS ?dailyTxCount)
+  WHERE {
+    ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+    BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  }
+  GROUP BY ?timePeriod
+}
+
+
+
+"""
+
+MESSAGE user Transaction trends
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outC, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P7D"^^xsd:dayTimeDuration AS ?since)
+
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         b:hasTx ?tx .
+
+  FILTER (?timestamp >= ?since)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outC . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Monthly transaction trends
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outC, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P6M"^^xsd:dayTimeDuration AS ?since)
+
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         b:hasTx ?tx .
+
+  BIND( SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod )
+  FILTER (?timestamp >= ?since)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outC . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+
+"""
+
+MESSAGE user How many transactions there is in cardano?
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(DISTINCT ?tx) AS ?txCount)
+WHERE {
+  ?tx a b:Transaction .
+}
+
+
+
+"""
+
+MESSAGE user tx in the past 15 days
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outC, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P15D"^^xsd:dayTimeDuration AS ?since)
+
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         b:hasTx ?tx .
+
+  FILTER (?timestamp >= ?since)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outC . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user plot a line chart tx in the past 15 days
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outC, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P15D"^^xsd:dayTimeDuration AS ?since)
+
+  ?block a b:Block ;
+         b:hasTimestamp ?timestamp ;
+         b:hasTx ?tx .
+
+  FILTER (?timestamp >= ?since)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outC . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user how many transactions today?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT (COUNT(?tx) AS ?txCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(xsd:date(?timestamp) AS ?date)
+  BIND (xsd:date(NOW()) as ?startDate)
+  FILTER (?date >= ?startDate)
+
+  ?block b:hasTx ?tx .
+}
+
+
+
+"""
+
+MESSAGE user how many transactions in the past week?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+
+SELECT (COUNT(?tx) AS ?txCount)
+WHERE {
+  ?block a b:Block ;
+    b:hasTimestamp ?timestamp .
+
+  BIND (NOW() - "P7D"^^xsd:dayTimeDuration as ?startTime)
+  FILTER (?timestamp >= ?startTime)
+
+  ?block b:hasTx ?tx .
+}
+
+
+
+
+"""
+
+MESSAGE user how many transactions in the previous epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+
+SELECT (COUNT(?tx) AS ?txCountInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND((?currentEpochNumber - 1) AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+  ?block b:hasTx ?tx .
+}
+
+
+
+
+"""
+
+MESSAGE user how many transactions in the current epoch?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+
+SELECT
+  ?currentEpochNumber
+  ?selectedEpochNumber
+  (COUNT(?tx) AS ?txCountInEpoch)
+WHERE {
+  {
+    SELECT (MAX(?epochNumber) AS ?currentEpochNumber)
+    WHERE {
+      ?epoch c:hasEpochNumber ?epochNumber .
+    }
+  }
+
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  BIND(?currentEpochNumber AS ?selectedEpochNumber)
+  ?epoch c:hasEpochNumber ?selectedEpochNumber .
+  ?block b:hasTx ?tx .
+}
+GROUP BY ?currentEpochNumber ?selectedEpochNumber
+
+
+
+"""
+
+MESSAGE user how many transactions in epoch 500?
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+
+SELECT (COUNT(?tx) AS ?txCountInEpoch)
+WHERE {
+  ?block a b:Block ;
+    c:hasEpoch ?epoch .
+
+  ?epoch c:hasEpochNumber "500"^^xsd:decimal .
+  ?block b:hasTx ?tx .
+}
+
+
+
+
+"""
+
+MESSAGE user show me recent tx counting
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?txCountLastHour ?txCountLast24Hours ?txCountLast7Days ?txCountLast30Days
+WHERE {
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLastHour)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "PT1H"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast24Hours)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P1D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast7Days)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast30Days)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+}
+
+
+
+"""
+
+MESSAGE user tps trends
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?since ((SUM(?txCount) / (30 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+    b:hasTxCount ?txCount ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?since)
+  FILTER (?timestamp >= ?since)
+}
+GROUP BY ?since
+ORDER BY ?since
+
+
+
+"""
+
+MESSAGE user plot a line chart showing tps
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?timePeriod ((SUM(?txCount) / (1 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+    b:hasTxCount ?txCount ;
+    b:hasTimestamp ?timestamp .
+
+  BIND(NOW() - "P15D"^^xsd:dayTimeDuration AS ?startTime)
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart showing tps on 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  ((SUM(?txCount) / (1 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+
+  BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user plot a line chart showing daily tps on 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  ((SUM(?txCount) / (1 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+
+  BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+
+  BIND( SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod )
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart showing monthly tps on 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  ((SUM(?txCount) / (30 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+  BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user plot a line chart showing monthly tps
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  ((SUM(?txCount) / (30 * 24 * 60 * 60)) AS ?tps)
+WHERE {
+  ?block a b:Block ;
+      b:hasTxCount ?txCount ;
+      b:hasTimestamp ?timestamp .
+
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+
+"""
+
+MESSAGE user show me recent tps
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?tpsLastHour ?tpsLast24Hours ?tpsLast7Days ?tpsLast30Days
+WHERE {
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLastHour)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "PT1H"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast24Hours)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P1D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast7Days)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P7D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+
+  OPTIONAL {
+    SELECT
+      (SUM(?txCount) AS ?txCountLast30Days)
+    WHERE {
+      ?block a b:Block ;
+             b:hasTxCount ?txCount ;
+             b:hasTimestamp ?timestamp .
+
+      BIND (NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+      FILTER (?timestamp >= ?startTime)
+    }
+  }
+  BIND((?txCountLastHour / (1 * 1 * 60 * 60)) AS ?tpsLastHour)
+  BIND((?txCountLast24Hours / (1 * 24 * 60 * 60)) AS ?tpsLast24Hours)
+  BIND((?txCountLast7Days / (7 * 24 * 60 * 60)) AS ?tpsLast7Days)
+  BIND((?txCountLast30Days / (30 * 24 * 60 * 60)) AS ?tpsLast30Days)
+}
+
+
+
+
+"""
+
+MESSAGE user Plot a line chart showing number of transactions and outputs daily over the last month
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P30D"^^xsd:dayTimeDuration AS ?startTime)
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 10) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line showing monthly tx and output
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line showing tx and output
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  BIND(NOW() - "P15D"^^xsd:dayTimeDuration AS ?startTime)
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  FILTER (?timestamp >= ?startTime)
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Plot a line showing monthly tx and output in 2025
+MESSAGE assistant """
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT
+  ?timePeriod
+  (COUNT(?tx) AS ?totalTxs)
+  (SUM(COALESCE(?outputsCount, 0)) AS ?totalOutputs)
+WHERE {
+  BIND ("2025-01-01T00:00:00Z"^^xsd:dateTime AS ?startTime)
+  BIND ("2025-12-31T23:59:59Z"^^xsd:dateTime AS ?endTime)
+  ?block a b:Block ;
+    b:hasTx ?tx ;
+    b:hasTimestamp ?timestamp .
+  BIND(SUBSTR(STR(?timestamp), 1, 7) AS ?timePeriod)
+  FILTER (?timestamp >= ?startTime && ?timestamp <= ?endTime)
+
+  OPTIONAL { ?tx c:hasTxOutputCount ?outputsCount . }
+}
+GROUP BY ?timePeriod
+ORDER BY ?timePeriod
+
+
+
+"""
+
+MESSAGE user Identify all unspent outputs from this transaction a681bc66bae3b70f3d2ed1336a11efd03b94235812554d7530eb369cc4280ed1
+MESSAGE assistant """
+PREFIX c: <https://mobr.ai/ont/cardano#>
+PREFIX b: <https://mobr.ai/ont/blockchain#>
+
+SELECT ?output ?value
+WHERE {
+  ?output a c:TransactionOutput ;
+       b:hasTokenState ?ts .
+  FILTER(CONTAINS(STR(?output), "a681bc66bae3b70f3d2ed1336a11efd03b94235812554d7530eb369cc4280ed1"))
+  FILTER NOT EXISTS { ?output c:hasOutputSpendTimestamp ?t . }
+  ?ts b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+      b:hasValue ?value .
+}
+ORDER BY DESC(?value)
+
+
+
+"""
+MESSAGE user sum up all tokens and ada on these utxos: 6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001#1 6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001#2 b23599f6ec3e65dd281933dc6348f2138ad6e53136eb8cd03be3bf5ad58a26e3#1 b23599f6ec3e65dd281933dc6348f2138ad6e53136eb8cd03be3bf5ad58a26e3#2 d46e54ce60b10ffc5f137848dc685447cad1bbb6ca908415f8ff80950d0a4da1#2 d46e54ce60b10ffc5f137848dc685447cad1bbb6ca908415f8ff80950d0a4da1#1 b5639f5473712f15314ae5f4d0de8593471c9185f3d158773c6d481bb41fec46#1 c301220584c5d7be4f7b6716bc45c04857ffa8c0b7359eaac3ecd985f89ca380#2 4a1dba2301ab56c8b04c5e1df51bdd52ce9ab2273d358106b726682e806a01f6#2
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  ?tokenName
+  (SUM(?value) AS ?totalValueAll)
+  (SUM(IF(BOUND(?spentTs), 0, ?value)) AS ?totalValueUnspent)
+WHERE {
+  VALUES (?txId ?txIndex) {
+    ("6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001" "1"^^xsd:decimal)
+    ("6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001" "2"^^xsd:decimal)
+    ("b23599f6ec3e65dd281933dc6348f2138ad6e53136eb8cd03be3bf5ad58a26e3" "1"^^xsd:decimal)
+    ("b23599f6ec3e65dd281933dc6348f2138ad6e53136eb8cd03be3bf5ad58a26e3" "2"^^xsd:decimal)
+    ("d46e54ce60b10ffc5f137848dc685447cad1bbb6ca908415f8ff80950d0a4da1" "2"^^xsd:decimal)
+    ("d46e54ce60b10ffc5f137848dc685447cad1bbb6ca908415f8ff80950d0a4da1" "1"^^xsd:decimal)
+    ("b5639f5473712f15314ae5f4d0de8593471c9185f3d158773c6d481bb41fec46" "1"^^xsd:decimal)
+    ("c301220584c5d7be4f7b6716bc45c04857ffa8c0b7359eaac3ecd985f89ca380" "2"^^xsd:decimal)
+    ("4a1dba2301ab56c8b04c5e1df51bdd52ce9ab2273d358106b726682e806a01f6" "2"^^xsd:decimal)
+  }
+
+  ?tx a b:Transaction ;
+      b:hasTxID ?txId ;
+      c:hasTxOutput ?out .
+
+  ?out a c:TransactionOutput ;
+       c:hasTxIndex ?txIndex ;
+       b:hasTokenState ?tokenState .
+
+  OPTIONAL { ?out c:hasOutputSpendTimestamp ?spentTs . }
+  ?tokenState b:hasCurrency ?currency ;
+              b:hasValue ?value .
+
+  ?currency b:hasTokenName ?tokenName .
+}
+GROUP BY ?tokenName
+
+
+
+
+
+"""
+
+MESSAGE user how much ada are on this utxo? 6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001#1
+MESSAGE assistant """
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX b:   <https://mobr.ai/ont/blockchain#>
+PREFIX c:   <https://mobr.ai/ont/cardano#>
+
+SELECT
+  (SUM(?value) AS ?valueOnUTxO)
+  (MAX(IF(BOUND(?spentTs), 1, 0)) AS ?isSpent)
+WHERE {
+  ?tx a b:Transaction ;
+      b:hasTxID "6153c02a4ef7811b6ab39dd4459ab1c4f257b51c38facd400fc2e5ba0a004001" ;
+      c:hasTxOutput ?out .
+
+  ?out a c:TransactionOutput ;
+       c:hasTxIndex "1"^^xsd:decimal ;
+       b:hasTokenState ?tokenState .
+
+  OPTIONAL { ?out c:hasOutputSpendTimestamp ?spentTs . }
+  ?tokenState b:hasCurrency <https://mobr.ai/ont/cardano#cnt/ada> ;
+              b:hasValue ?value .
+}
+
+
+
+"""
