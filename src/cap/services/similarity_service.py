@@ -134,7 +134,7 @@ class SimilarityService:
         """Read all entries from Redis and hand them to EmbeddingService.rebuild()."""
         with tracer.start_as_current_span("similarity_service.rebuild_index"):
             redis_client = get_redis_nl_client()
-            client = await redis_client._get_nl_client()
+            client = await redis_client._get_nlr_client()
 
             entries: list[dict[str, Any]] = []
             async for cache_key in client.scan_iter(match="nlq:cache:*"):
@@ -158,7 +158,7 @@ class SimilarityService:
     ) -> list[dict[str, Any]]:
         """Scan Redis and rank entries by Jaccard token-overlap on normalised queries."""
         redis_client = get_redis_nl_client()
-        client = await redis_client._get_nl_client()
+        client = await redis_client._get_nlr_client()
         normalized_input = QueryNormalizer.normalize(nl_query)
 
         candidates: list[dict[str, Any]] = []

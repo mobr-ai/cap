@@ -62,19 +62,19 @@ class TriplestoreClient:
     async def _get_http_client(self):
         """Get or create reusable HTTP client with optimized settings."""
         if not self._http_client:
-            timeout = httpx.Timeout(300.0, connect=10.0)
+            timeout = httpx.Timeout(360.0, connect=10.0)
             self._http_client = httpx.AsyncClient(
                 timeout=timeout,
                 limits=httpx.Limits(
                     max_keepalive_connections=20,
                     max_connections=50,
-                    keepalive_expiry=300.0
+                    keepalive_expiry=360.0
                 ),
                 http2=True  # Enable HTTP/2 for better performance
             )
         return self._http_client
 
-    async def close(self):
+    async def _close(self):
         """Close the HTTP client connection."""
         if self._http_client:
             await self._http_client.aclose()
@@ -130,13 +130,13 @@ class TriplestoreClient:
                     )
                     response.raise_for_status()
                     ret_ = response.json()
-                    await self.close()
+                    await self._close()
                     return ret_
 
                 except httpx.HTTPStatusError as e:
                     logger.error(f"SPARQL query failed with HTTP error: {e}")
                     logger.error(f"Query: {query}")
-                    await self.close()
+                    await self._close()
                     # Try to extract error details from response
                     try:
                         error_detail = e.response.json()
@@ -149,7 +149,7 @@ class TriplestoreClient:
                 except Exception as e:
                     logger.error(f"SPARQL query failed: {e}")
                     logger.error(f"Query: {query}")
-                    await self.close()
+                    await self._close()
                     raise HTTPException(status_code=500, detail=str(e))
 
             def _execute_sync():
@@ -196,7 +196,7 @@ class TriplestoreClient:
         additional_prefixes: Optional[dict[str, str]] = None
     ) -> bool:
         """Make a CRUD request to the Virtuoso endpoint."""
-        with tracer.start_as_current_span("virtuoso_crud_request") as span:
+        with tracer.start_as_current_span("_make_crud_request") as span:
             span.set_attribute("method", method)
             span.set_attribute("graph_uri", graph_uri)
 
@@ -259,6 +259,7 @@ class TriplestoreClient:
                             )
 
                         logger.debug(f"Successfully executed {method} operation on graph {graph_uri}")
+                        await self._close()
                         return True
 
                     except httpx.TimeoutException:
@@ -281,13 +282,18 @@ class TriplestoreClient:
                         logger.error(error_msg)
                         raise HTTPException(status_code=503, detail=error_msg)
 
+                await self._close()
+
             except HTTPException:
+                await self._close()
                 raise
             except Exception as e:
                 error_msg = f"Unexpected error during {method} operation: {str(e)}"
                 span.set_attribute("error", error_msg)
                 logger.error(error_msg)
+                await self._close()
                 raise HTTPException(status_code=500, detail=error_msg)
+
 
     async def create_graph(
             self,

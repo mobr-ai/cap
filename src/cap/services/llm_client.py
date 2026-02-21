@@ -42,7 +42,7 @@ class LLMClient:
         self,
         base_url: Optional[str] = None,
         llm_model: str = None,
-        timeout: float = 300.0
+        timeout: float = 360.0
     ):
         """
         Initialize llm client.
@@ -98,13 +98,19 @@ class LLMClient:
     async def _get_nl_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
+            timeout = httpx.Timeout(self.timeout, connect=10.0)
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                timeout=timeout,
+                limits=httpx.Limits(
+                    max_keepalive_connections=5,
+                    max_connections=10,
+                    keepalive_expiry=self.timeout
+                ),
+                http2=True  # Enable HTTP/2 for better performance
             )
         return self._client
 
-    async def close(self):
+    async def _close(self):
         """Close the HTTP client."""
         if self._client:
             await self._client.aclose()
@@ -128,6 +134,9 @@ class LLMClient:
 
         except Exception:
             return False
+
+        finally:
+            await self._close()
 
 
     async def generate_stream(
@@ -199,6 +208,8 @@ class LLMClient:
         if leftover:
             yield leftover
 
+        await self._close()
+
 
     async def generate_complete(
         self,
@@ -241,6 +252,8 @@ class LLMClient:
         tf = TagFilter()
         tf.reset()
         cleaned = tf.push(content) + tf.flush()
+
+        await self._close()
         return cleaned
 
 
@@ -302,6 +315,7 @@ class LLMClient:
         if leftover:
             yield leftover
 
+        await self._close()
 
     async def nl_to_sparql(
         self,
@@ -345,6 +359,7 @@ class LLMClient:
                 conversation_history=conversation_history,
             )
 
+            logger.info(f"LLM is generating SPARQL - prompt size: {len(nl_prompt)}")
             sparql_response = await self.generate_complete(
                 prompt=nl_prompt,
                 model=self.llm_model,
@@ -682,5 +697,5 @@ async def cleanup_llm_client():
     """Cleanup global llm client."""
     global _llm_client
     if _llm_client:
-        await _llm_client.close()
+        await _llm_client._close()
         _llm_client = None

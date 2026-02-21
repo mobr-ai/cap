@@ -141,7 +141,7 @@ async def clear_cache():
     with tracer.start_as_current_span("clear_cache") as span:
         try:
             redis_client = get_redis_nl_client()
-            client = await redis_client._get_nl_client()
+            client = await redis_client._get_nlr_client()
 
             # Count keys before deletion
             cache_keys = []
@@ -186,7 +186,7 @@ async def get_cache_info():
     with tracer.start_as_current_span("cache_info") as span:
         try:
             redis_client = get_redis_nl_client()
-            client = await redis_client._get_nl_client()
+            client = await redis_client._get_nlr_client()
 
             # Count cache entries
             cache_count = 0

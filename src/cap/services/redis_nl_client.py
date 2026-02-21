@@ -37,7 +37,7 @@ class RedisNLClient:
         self.ttl = ttl
         self._client: Optional[redis.Redis] = None
 
-    async def _get_nl_client(self) -> redis.Redis:
+    async def _get_nlr_client(self) -> redis.Redis:
         """Get or create Redis client."""
         if self._client is None:
             self._client = redis.Redis(
@@ -75,7 +75,7 @@ class RedisNLClient:
             span.set_attribute("nl_query", nl_query)
 
             try:
-                client = await self._get_nl_client()
+                client = await self._get_nlr_client()
                 normalized = QueryNormalizer.normalize(nl_query)
                 cache_key = self._make_cache_key(normalized)
 
@@ -154,7 +154,7 @@ class RedisNLClient:
         """Retrieve cached query and restore placeholders."""
         with tracer.start_as_current_span("get_cached_query_with_original") as span:
             try:
-                client = await self._get_nl_client()
+                client = await self._get_nlr_client()
 
                 # Try exact normalized match first
                 cache_key = self._make_cache_key(normalized_query)
@@ -237,7 +237,7 @@ class RedisNLClient:
     async def get_query_count(self, nl_query: str) -> int:
         """Get the number of times a query has been asked."""
         try:
-            client = await self._get_nl_client()
+            client = await self._get_nlr_client()
             normalized = QueryNormalizer.normalize(nl_query)
             count_key = self._make_count_key(normalized)
             count = await client.get(count_key)
@@ -252,7 +252,7 @@ class RedisNLClient:
             span.set_attribute("limit", limit)
 
             try:
-                client = await self._get_nl_client()
+                client = await self._get_nlr_client()
                 count_keys = []
 
                 async for key in client.scan_iter(match="nlq:count:*"):
@@ -288,7 +288,7 @@ class RedisNLClient:
     async def get_query_variations(self, nl_query: str) -> list[str]:
         """Get cached variations of a query."""
         normalized = QueryNormalizer.normalize(nl_query)
-        client = await self._get_nl_client()
+        client = await self._get_nlr_client()
 
         variations = []
         async for key in client.scan_iter(match=f"nlq:cache:*{normalized}*"):
@@ -299,7 +299,7 @@ class RedisNLClient:
     async def health_check(self) -> bool:
         """Check if Redis is available."""
         try:
-            client = await self._get_nl_client()
+            client = await self._get_nlr_client()
             await client.ping()
             return True
         except Exception as e:
@@ -329,7 +329,7 @@ class RedisNLClient:
 
                 queries = QueryFileParser.parse(content)
                 stats["total_queries"] = len(queries)
-                client = await self._get_nl_client()
+                client = await self._get_nlr_client()
                 ttl_value = ttl or self.ttl
                 skipped_keys = []
                 cached_keys = []
