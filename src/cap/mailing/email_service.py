@@ -22,7 +22,7 @@ CAP_UNSUB_URL = os.environ.get("CAP_UNSUB_URL", f"{PUBLIC_BASE_URL}/unsubscribe"
 HERE = Path(__file__).resolve().parent
 
 def _load_translations():
-    # Try module-local file first (matches your tree)
+    # Try module-local file first (matches tree)
     candidates = [
         HERE / "translation.json",
         HERE / "i18n" / "cap_emails.json",              # optional alt name

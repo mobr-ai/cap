@@ -52,7 +52,7 @@ class DashboardItemOut(DashboardItemBase):
     id: int
     dashboard_id: int
     position: int
-    
+
     # index-of-total, only valid when order=position (manual)
     position_min: Optional[int] = None
     position_max: Optional[int] = None
@@ -306,7 +306,7 @@ def update_item(
 
         item.position, neighbor.position = neighbor.position, item.position
 
-    # Title (NOTE: your schema currently requires title always; consider Optional below)
+    # Title (NOTE: schema currently requires title always; consider Optional below)
     if payload.title is not None:
         item.title = payload.title
 
@@ -429,7 +429,7 @@ def add_item(
         id=it.id,
         dashboard_id=it.dashboard_id,
         position=it.position,
-        position_min=idx, 
+        position_min=idx,
         position_max=total,
         can_reorder=True,
         created_at=it.created_at,
@@ -532,7 +532,7 @@ def pin_artifact(
         id=it.id,
         dashboard_id=it.dashboard_id,
         position=it.position,
-        position_min=idx, 
+        position_min=idx,
         position_max=total,
         created_at=it.created_at,
         can_reorder=True,

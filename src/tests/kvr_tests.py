@@ -74,7 +74,7 @@ class NLQueryTester:
     async def get_kvr_from_query(query:str):
         llm_client = get_llm_client()
         redis_client = get_redis_nl_client()
-        _, sparql_query, sparql_queries, is_sequential, sparql_valid = await nlq_to_sparql(
+        _, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit = await nlq_to_sparql(
             user_query=query,
             redis_client=redis_client,
             llm_client=llm_client,
@@ -87,7 +87,7 @@ class NLQueryTester:
         sparql_results = sparql_dict["sparql_results"]
 
         if has_data:
-            print("sparql_results")
+            print(f"sparql_results (cache hit {cache_hit})")
             print(sparql_results)
             kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query)
             if kv_results:

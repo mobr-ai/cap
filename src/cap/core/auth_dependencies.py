@@ -98,7 +98,7 @@ def _current_user_factory(require_confirmed: bool = True) -> Callable:
             raise HTTPException(401, detail="userNotFound", headers={"WWW-Authenticate": "Bearer"})
 
         if require_confirmed and not bool(user.is_confirmed):
-            # 403 is consistent with your login flow when not confirmed
+            # 403 is consistent with login flow when not confirmed
             raise HTTPException(403, detail="confirmationError")
 
         return user

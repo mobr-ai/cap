@@ -275,7 +275,7 @@ def resend_setup_link(data: ResendSetupLinkIn, request: Request, db: Session = D
     if user.password_hash:
         raise HTTPException(400, detail="passwordAlreadySet")
 
-    # Create a fresh token (reuse your existing generator)
+    # Create a fresh token (reusing existing generator)
     token = new_confirmation_token()
     user.confirmation_token = token
     db.commit()

@@ -32,6 +32,7 @@ async def nlq_to_sparql(
     normalized = QueryNormalizer.normalize(user_query)
     cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
 
+    cache_hit = False
     sparql_query = ""
     sparql_queries = None
 
@@ -46,6 +47,8 @@ async def nlq_to_sparql(
             else:
                 sparql_query = cached_sparql
             sparql_valid = True
+            cache_hit = True
+
         except (json.JSONDecodeError, TypeError):
             is_sequential = False
             sparql_query = cached_sparql
@@ -70,7 +73,7 @@ async def nlq_to_sparql(
             logger.error(f"SPARQL generation error: {e}")
             sparql_valid = False
 
-    return normalized, sparql_query, sparql_queries, is_sequential, sparql_valid
+    return normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit
 
 async def query_with_stream_response(
     query, context, db=None, user=None, conversation_history=None):
@@ -118,7 +121,7 @@ async def query_with_stream_response(
                 was_from_cache = cached_data is not None
 
                 # Generate or retrieve SPARQL
-                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid = await nlq_to_sparql(
+                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, _ = await nlq_to_sparql(
                     user_query=user_query,
                     redis_client=redis_client,
                     llm_client=llm_client,

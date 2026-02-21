@@ -43,7 +43,7 @@ class SPARQLGenerationTester:
                     try:
                         print(f"Testing {query}")
                         llm_resp = await self.oc.nl_to_sparql(query, "")
-                        is_sequential, sparql_content = detect_and_parse_sparql(llm_resp, query)
+                        _, sparql_content = detect_and_parse_sparql(llm_resp, query)
                         query_to_validate = force_limit_cap(sparql_content, 0)
                         res = await self.tc.execute_query(query_to_validate)
 

@@ -16,7 +16,7 @@ from cap.util.vega_util import VegaUtil
 from cap.util.cardano_scan import convert_sparql_results_to_links
 from cap.util.sparql_util import detect_and_parse_sparql
 from cap.services.msg_formatter import MessageFormatter
-from cap.services.similarity_service import SimilarityService
+from cap.services.similarity_service import SimilarityService, SearchStrategy
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
@@ -48,11 +48,11 @@ class LLMClient:
         Initialize llm client.
 
         Args:
-            base_url: llm API base URL (default: http://localhost:8000)
+            base_url: llm API base URL (default: http://localhost:8001)
             llm_model: Model for converting NL to SPARQL
             timeout: Request timeout in seconds
         """
-        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:8000")).rstrip("/")
+        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:8001")).rstrip("/")
         self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-AWQ"))
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
@@ -303,30 +303,41 @@ class LLMClient:
             yield leftover
 
 
-
     async def nl_to_sparql(
         self,
         natural_query: str,
-        conversation_history: list[dict] | None
+        conversation_history: list[dict] | None,
+        use_ontology: bool = True,
+        use_fewshot: bool = True,
+        fewshot_strategy: SearchStrategy = SearchStrategy.auto,
+        fewshot_top_n: int = 5,
+        _eval_retrieved_out: list[dict] | None = None,
     ) -> str:
         """Convert natural language query to SPARQL."""
         with tracer.start_as_current_span("nl_to_sparql") as span:
             span.set_attribute("query", natural_query)
 
+            op = ""
+            if use_ontology:
+                op = self.ontology_prompt
+
             # Use fresh prompt from environment
             system_prompt = ""
             nl_prompt = f"""
                 {self.nl_to_sparql_prompt}
-                {self.ontology_prompt}
+                {op}
 
                 User Question: {natural_query}
-
             """
 
-            nl_prompt = await self._add_few_shot_learning(
-                nl_query=natural_query,
-                prompt=nl_prompt
-            )
+            if use_fewshot and fewshot_strategy != SearchStrategy.none:
+                nl_prompt = await self._add_few_shot_learning(
+                    nl_query=natural_query,
+                    prompt=nl_prompt,
+                    strategy=fewshot_strategy,
+                    top_n=fewshot_top_n,
+                    _eval_retrieved_out=_eval_retrieved_out,
+                )
 
             # Prepare messages with history and all context
             nl_prompt = self._add_history(
@@ -584,17 +595,27 @@ class LLMClient:
             #     }
             #     yield f"\n__METADATA__:{json.dumps(metadata)}"
 
-    async def _add_few_shot_learning(self, nl_query: str, prompt:str) -> str:
-        """Use similar queries as few-shot examples."""
-        top_n = 5
-        min_similarity = 0.0
 
-        # Find similar cached queries and format as examples
+    async def _add_few_shot_learning(
+        self,
+        nl_query: str,
+        prompt: str,
+        strategy: SearchStrategy = SearchStrategy.auto,
+        top_n: int = 5,
+        min_similarity: float = 0.0,
+        _eval_retrieved_out: list[dict] | None = None,
+    ) -> str:
+        """Use similar queries as few-shot examples."""
+
         similar = await SimilarityService.find_similar_queries(
+            strategy=strategy,
             nl_query=nl_query,
             top_n=top_n,
-            min_similarity=min_similarity
+            min_similarity=min_similarity,
         )
+
+        if _eval_retrieved_out is not None:
+            _eval_retrieved_out.extend(similar)
 
         messages = MessageFormatter.format_similar_queries_to_examples(
             similar_queries=similar,

@@ -9,7 +9,7 @@ Leveraging LLMs and analytics mechanisms to provide natural language queries, CA
 
 ### Prerequisites
 
-Before running CAP, ensure you have the following installed on your system:
+Before running CAP, ensure you have the following installed:
 
 - **Python 3.11+**
 - **Docker & Docker Compose**

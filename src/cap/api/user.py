@@ -117,7 +117,7 @@ def update_display_name(
         db.commit()
         return {"display_name": None}
 
-    # Minimal safety: length bound to your DB column (30)
+    # Minimal safety: length bound to DB column (30)
     if len(name) > 30:
         raise HTTPException(status_code=400, detail="displayNameTooLong")
 
@@ -223,7 +223,7 @@ def delete_avatar(
 # Account delete (anonymize)
 # -----------------------------
 def _generate_anonymous_username(user_id: int) -> str:
-    # Unique, stable-ish placeholder that satisfies your USERNAME_REGEX
+    # Unique, stable-ish placeholder that satisfies USERNAME_REGEX
     # e.g. deleted_12345_20251031
     ts = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"deleted_{user_id}_{ts}"

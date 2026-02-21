@@ -79,6 +79,9 @@ web_modules/
 .env.production.local
 .env.local
 
+# embeddings
+chroma*
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -120,11 +123,11 @@ dist
 .tern-port
 
 # Stores VSCode versions used for testing VSCode extensions
-.vscode 
+.vscode
 .vscode-test
 
 # Local dev
-.python-version 
+.python-version
 docker-compose.yml
 
 # yarn v2
@@ -137,8 +140,10 @@ docker-compose.yml
 # project specific
 .env
 .env.docker
+.env.eval
 .DS_Store
 __pycache__
+.pytest_cache
 .coverage
 _pytest.out
 _docker.out

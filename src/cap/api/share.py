@@ -57,7 +57,7 @@ ALLOWED_MIMES = set(
 # Where files are stored inside the container (bind-mounted on server)
 SHARE_IMAGE_DIR = Path(os.getenv("SHARE_IMAGE_DIR", "/var/lib/cap/share-images")).resolve()
 
-# Public base URL for absolute OG tags (your env already uses this)
+# Public base URL for absolute OG tags (env already uses this)
 PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "").strip().rstrip("/")
 
 
@@ -401,7 +401,7 @@ def get_shared_page(
     og_image = _abs_url_from_base(base, image_path)
     og_url = _abs_url_from_base(base, page_path)
 
-    # If your SPA route (dashboard widget view) is known, you can pass it as target_url
+    # If SPA route (dashboard widget view) is known, you can pass it as target_url
     # and we’ll set og:site_name / og:url to the share page, while providing a normal link to the app.
     page_title = (title or i18n.get("default_title", "CAP")).strip()[:120]
     page_desc = (description or i18n.get(
@@ -444,7 +444,7 @@ def get_shared_page(
         "t_preview_title": i18n.get("preview_title"),
     }
     html = render_shared_page(ctx, html)
-    
+
     # Cache HTML a bit, but not too long; crawlers will refetch anyway.
     headers = {
         "Cache-Control": "public, max-age=300",

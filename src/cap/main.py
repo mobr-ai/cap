@@ -220,7 +220,7 @@ assets_dir = os.path.join(FRONTEND_DIST, "assets")
 if os.path.isdir(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-# Share page static (your repo uses "shared_pages")
+# Share page static ("shared_pages")
 SHARED_PAGES_DIR = os.path.join(CAP_DIR, "shared_pages")
 if os.path.isdir(SHARED_PAGES_DIR):
     app.mount(

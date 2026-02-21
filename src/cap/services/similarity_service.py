@@ -12,7 +12,7 @@ consumer of the policy. Neither RedisNLClient nor nl_service know it exists.
 import json
 import logging
 from typing import Any
-
+from enum import Enum
 from opentelemetry import trace
 
 from cap.rdf.cache.query_normalizer import QueryNormalizer
@@ -30,6 +30,13 @@ tracer = trace.get_tracer(__name__)
 _regen_state = RegenerationState()
 
 
+class SearchStrategy(str, Enum):
+    auto = "auto"
+    embeddings = "embeddings"
+    jaccard = "jaccard"
+    none = "none"
+
+
 class SimilarityService:
     """
     Similarity search over the NL query cache.
@@ -45,6 +52,7 @@ class SimilarityService:
 
     @staticmethod
     async def find_similar_queries(
+        strategy: SearchStrategy,
         nl_query: str,
         top_n: int = 5,
         min_similarity: float = 0.0,
@@ -54,39 +62,44 @@ class SimilarityService:
             span.set_attribute("input_query", nl_query)
 
             # --- Primary: embedding search ---
-            try:
-                await SimilarityService._ensure_index_is_fresh()
-                results = await get_embedding_service().search(
-                    nl_query=nl_query,
-                    top_n=top_n,
-                    min_similarity=min_similarity,
-                )
-                span.set_attribute("strategy", "embedding")
-                logger.info(f"Embedding search: {len(results)} results for '{nl_query}'.")
-                return results
+            if strategy == SearchStrategy.auto or strategy == SearchStrategy.embeddings:
+                try:
+                    await SimilarityService._ensure_index_is_fresh()
+                    results = await get_embedding_service().search(
+                        nl_query=nl_query,
+                        top_n=top_n,
+                        min_similarity=min_similarity,
+                    )
+                    span.set_attribute("strategy", "embedding")
+                    logger.info(f"Embedding search: {len(results)} results for '{nl_query}'.")
+                    return results
 
-            except Exception as embedding_exc:
-                logger.warning(
-                    f"Embedding search failed ({embedding_exc}); "
-                    "falling back to Jaccard similarity."
-                )
-                span.set_attribute("strategy", "jaccard_fallback")
-                span.set_attribute("embedding_error", str(embedding_exc))
+                except Exception as embedding_exc:
+                    logger.warning(
+                        f"Embedding search failed ({embedding_exc}); "
+                        "falling back to Jaccard similarity."
+                    )
+                    span.set_attribute("strategy", "jaccard_fallback")
+                    span.set_attribute("embedding_error", str(embedding_exc))
 
             # --- Fallback: Jaccard over Redis ---
-            try:
-                results = await SimilarityService._jaccard_search(
-                    nl_query=nl_query,
-                    top_n=top_n,
-                    min_similarity=min_similarity,
-                )
-                logger.info(f"Jaccard fallback: {len(results)} results for '{nl_query}'.")
-                return results
+            if strategy == SearchStrategy.auto or strategy == SearchStrategy.jaccard:
+                try:
+                    results = await SimilarityService._jaccard_search(
+                        nl_query=nl_query,
+                        top_n=top_n,
+                        min_similarity=min_similarity,
+                    )
+                    logger.info(f"Jaccard fallback: {len(results)} results for '{nl_query}'.")
+                    return results
 
-            except Exception as jaccard_exc:
-                span.set_attribute("jaccard_error", str(jaccard_exc))
-                logger.error(f"Jaccard fallback also failed: {jaccard_exc}", exc_info=True)
-                return []
+                except Exception as jaccard_exc:
+                    span.set_attribute("jaccard_error", str(jaccard_exc))
+                    logger.error(f"Jaccard fallback also failed: {jaccard_exc}", exc_info=True)
+                    return []
+
+        return []
+
 
     @staticmethod
     async def notify_new_cache_entry() -> None:
