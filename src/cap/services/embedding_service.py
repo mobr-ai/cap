@@ -16,6 +16,8 @@ from chromadb.config import Settings as ChromaSettings
 from opentelemetry import trace
 from sentence_transformers import SentenceTransformer
 
+from cap.services.redis_nl_client import get_redis_nl_client
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -206,10 +208,18 @@ class EmbeddingService:
                     similarity = float(1.0 - distance)
                     if similarity < min_similarity:
                         continue
+
+                    cached_normalized = meta.get("normalized_query", "")
+                    original_nl = meta.get("original_query", "")
+                    redis_client = get_redis_nl_client()
+                    sparql_data = await redis_client.get_cached_query_with_original(
+                        normalized_query=cached_normalized,
+                        original_query=original_nl,
+                    )
                     results.append({
                         "original_query": meta.get("original_query", ""),
                         "normalized_query": meta.get("normalized_query", ""),
-                        "sparql_query": meta.get("sparql_query", ""),
+                        "sparql_query": sparql_data,
                         "is_sequential": meta.get("is_sequential", "False") == "True",
                         "precached": meta.get("precached", "False") == "True",
                         "similarity_score": similarity,
