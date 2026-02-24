@@ -5,19 +5,19 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
-# Install Poetry for group control
 RUN pip install --no-cache-dir poetry==1.8.3
 
-# Copy dependency manifests first (cache-friendly)
+# Copy manifests first (cache-friendly)
 COPY pyproject.toml poetry.lock README.md ./
 
-# Install only MAIN deps (no dev, no rag), and do NOT install the project itself here
+# Ensure lock matches pyproject (without upgrading versions), then install main deps
 RUN --mount=type=cache,target=/root/.cache/pypoetry \
     --mount=type=cache,target=/root/.cache/pip \
     poetry config virtualenvs.create false \
+ && poetry lock --no-update --no-interaction --no-ansi \
  && poetry install --only main --no-root --no-interaction --no-ansi
 
-# Copy code last (so code changes don’t invalidate deps)
+# Copy code last
 COPY src/ src/
 
 EXPOSE 8000
