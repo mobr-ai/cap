@@ -1,0 +1,15 @@
+.git
+__pycache__/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+node_modules/
+.vscode/
+.idea/
+*.log
