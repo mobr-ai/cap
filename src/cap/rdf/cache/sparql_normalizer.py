@@ -18,41 +18,53 @@ class SPARQLNormalizer:
         self.counters = PlaceholderCounters()
         self.placeholder_map: dict[str, str] = {}
 
-    def normalize(self, sparql_query: str, counters: Optional[PlaceholderCounters] = None) -> Tuple[str, dict[str, str]]:
+    def normalize(
+        self,
+        sparql_query: str,
+        counters: Optional[PlaceholderCounters] = None,
+        normalize: bool = False
+    ) -> Tuple[str, dict[str, str]]:
         """Extract literals and instances from SPARQL, replace with typed placeholders."""
+
         if counters:
             self.counters = counters
 
         self.placeholder_map = {}
 
-        # Extract and preserve prefixes
-        prefixes, query_body = self._extract_prefixes(sparql_query)
+        sparql_spec = sparql_query
+        if normalize:
+            # Extract and preserve prefixes
+            prefixes, query_body = self._extract_prefixes(sparql_query)
 
-        # Process query body
-        normalized = self._process_query_body(query_body)
+            # Process query body
+            sparql_spec = self._process_query_body(query_body)
 
-        # Restore prefixes
-        if prefixes:
-            normalized = prefixes + "\n\n" + normalized
+            # Restore prefixes
+            if prefixes:
+                sparql_spec = prefixes + "\n\n" + sparql_spec
 
-        return normalized, self.placeholder_map
+        return sparql_spec, self.placeholder_map
 
     def normalize_with_shared_counters(
         self,
         sparql_query: str,
-        shared_counters: PlaceholderCounters
+        shared_counters: PlaceholderCounters,
+        normalize: bool = False
     ) -> Tuple[str, dict[str, str]]:
         """Normalize using externally managed counters for sequential queries."""
+
         self.counters = shared_counters  # Use shared counters
         self.placeholder_map = {}
 
-        prefixes, query_body = self._extract_prefixes(sparql_query)
-        normalized = self._process_query_body(query_body)
+        sparql_spec = sparql_query
+        if normalize:
+            prefixes, query_body = self._extract_prefixes(sparql_query)
+            sparql_spec = self._process_query_body(query_body)
 
-        if prefixes:
-            normalized = prefixes + "\n\n" + normalized
+            if prefixes:
+                sparql_spec = prefixes + "\n\n" + sparql_spec
 
-        return normalized, self.placeholder_map
+        return sparql_spec, self.placeholder_map
 
     def _extract_prefixes(self, sparql_query: str) -> Tuple[str, str]:
         """Extract PREFIX declarations from SPARQL."""

@@ -26,18 +26,22 @@ async def nlq_to_sparql(
     user_query: str,
     redis_client: RedisNLClient,
     llm_client: LLMClient,
-    conversation_history: list[dict]
+    conversation_history: list[dict],
+    normalize: bool = False
 ):
 
-    normalized = QueryNormalizer.normalize(user_query)
-    cached_data = await redis_client.get_cached_query_with_original(normalized, user_query)
+    nl_query = user_query
+    if normalize:
+        nl_query = QueryNormalizer.normalize(user_query)
+
+    cached_data = await redis_client.get_cached_query_with_original(nl_query, user_query)
 
     cache_hit = False
     sparql_query = ""
     sparql_queries = None
 
     if cached_data:
-        logger.info(f"Cache HIT for {user_query} -> {normalized}")
+        logger.info(f"Cache HIT for {user_query} -> {nl_query}")
         cached_sparql = cached_data["sparql_query"]
         is_sequential = cached_data.get("is_sequential", False)
 
@@ -54,7 +58,7 @@ async def nlq_to_sparql(
             sparql_query = cached_sparql
             sparql_valid = True
     else:
-        logger.info(f"Cache MISS for {user_query} -> {normalized}")
+        logger.info(f"Cache MISS for {user_query} -> {nl_query}")
 
         try:
             raw_sparql_response = await llm_client.nl_to_sparql(
@@ -73,7 +77,7 @@ async def nlq_to_sparql(
             logger.error(f"SPARQL generation error: {e}")
             sparql_valid = False
 
-    return normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit
+    return nl_query, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit
 
 async def query_with_stream_response(
     query, context, db=None, user=None, conversation_history=None):
@@ -303,8 +307,5 @@ async def stream_with_timeout_messages(
     except Exception as e:
         # Log unexpected errors
         logger.error(f"Error in stream wrapper: {e}")
-        # Yield error message to client if still connected
-        try:
-            yield f"error: Stream error: {str(e)}\n"
-        except:
-            pass
+        raise
+

@@ -54,7 +54,7 @@ class SPARQLFixTester:
             print(f"✓ Test passed for {sparql_file})")
             pprint(f"   SPARQL: {query}")
             pprint(f"   Validated to: {new_query}")
-            pprint(f"   Normalized to: {new_query}")
+            pprint(f"   Normalized to: {normalized}")
 
 
 async def main():

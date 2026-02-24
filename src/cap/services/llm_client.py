@@ -135,9 +135,6 @@ class LLMClient:
         except Exception:
             return False
 
-        finally:
-            await self._close()
-
 
     async def generate_stream(
         self,
@@ -208,114 +205,6 @@ class LLMClient:
         if leftover:
             yield leftover
 
-        await self._close()
-
-
-    async def generate_complete(
-        self,
-        prompt: str,
-        model: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1
-    ) -> str:
-        """
-        vLLM OpenAI-compatible non-streaming Chat Completions.
-        Removes <think>...</think> blocks from the returned content.
-        """
-        client = await self._get_nl_client()
-
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        request_data = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": False,
-        }
-
-        response = await client.post(
-            f"{self.base_url}/v1/chat/completions",
-            json=request_data,
-        )
-        response.raise_for_status()
-
-        data = response.json()
-        content = (
-            data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-        )
-
-        tf = TagFilter()
-        tf.reset()
-        cleaned = tf.push(content) + tf.flush()
-
-        await self._close()
-        return cleaned
-
-
-    async def chat_stream(
-        self,
-        messages: list[dict],
-        model: str,
-        temperature: float = 0.1
-    ) -> AsyncIterator[str]:
-        client = await self._get_nl_client()
-
-        tf = TagFilter()
-        tf.reset()
-
-        request_data = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": True,
-        }
-
-        async with client.stream(
-            "POST",
-            f"{self.base_url}/v1/chat/completions",
-            json=request_data,
-            timeout=None,
-        ) as response:
-            response.raise_for_status()
-
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-                if not line.startswith("data: "):
-                    continue
-
-                payload = line[len("data: "):].strip()
-                if payload == "[DONE]":
-                    break
-
-                try:
-                    chunk = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-
-                delta = (
-                    chunk.get("choices", [{}])[0]
-                        .get("delta", {})
-                        .get("content")
-                )
-
-                if not delta:
-                    continue
-
-                safe = tf.push(delta)
-                if safe:
-                    yield safe
-
-        leftover = tf.flush()
-        if leftover:
-            yield leftover
-
-        await self._close()
 
     async def nl_to_sparql(
         self,
@@ -360,12 +249,16 @@ class LLMClient:
             )
 
             logger.info(f"LLM is generating SPARQL - prompt size: {len(nl_prompt)}")
-            sparql_response = await self.generate_complete(
+            chunks = []
+            async for chunk in self.generate_stream(
                 prompt=nl_prompt,
                 model=self.llm_model,
                 system_prompt=system_prompt,
-                temperature=0.0
-            )
+                temperature=0.0,
+            ):
+                chunks.append(chunk)
+
+            sparql_response = "".join(chunks)
 
             if not sparql_response.strip():
                 logger.warning("--- Empty SPARQL from model")

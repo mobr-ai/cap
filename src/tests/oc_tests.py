@@ -36,7 +36,7 @@ async def test_health_check():
         return False
 
     finally:
-        await client.close()
+        await client._close()
 
 async def test_generate_complete():
     """Test 2: Generate Complete - Non-streaming text generation."""
@@ -55,12 +55,16 @@ async def test_generate_complete():
         print(f"System: '{system_prompt}'")
         print("\nGenerating response...\n")
 
-        response = await client.generate_complete(
+        chunks = []
+        async for chunk in client.generate_stream(
             prompt=prompt,
-            model=client.llm_model,  # Using base model for demo
+            model=client.llm_model,
             system_prompt=system_prompt,
-            temperature=0.3
-        )
+            temperature=0.0,
+        ):
+            chunks.append(chunk)
+
+        response = "".join(chunks)
 
         print("Response received:")
         print("-" * 70)
@@ -72,7 +76,7 @@ async def test_generate_complete():
         raise
 
     finally:
-        await client.close()
+        await client._close()
 
 async def test_generate_stream():
     """Test 3: Generate Stream - Streaming text generation."""
@@ -108,7 +112,7 @@ async def test_generate_stream():
         raise
 
     finally:
-        await client.close()
+        await client._close()
 
 async def test_nl_to_sparql():
     """Test 4: NL to SPARQL - Convert natural language to SPARQL query."""
@@ -140,7 +144,7 @@ async def test_nl_to_sparql():
         raise
 
     finally:
-        await client.close()
+        await client._close()
 
 async def test_contextualize_answer():
     """Test 5: Contextualize Answer - Generate natural language answer from results."""
@@ -205,7 +209,7 @@ Be conversational and clear. Format dates nicely."""
         raise
 
     finally:
-        await client.close()
+        await client._close()
 
 async def test_clean_sparql():
     """Test 6: Clean SPARQL - Demonstrate SPARQL cleaning logic."""
@@ -269,7 +273,7 @@ LIMIT 10"""
 
     print("\nSPARQL cleaning demonstration completed")
 
-    await client.close()
+    await client._close()
 
 async def test_full_pipeline():
     """Test 7: Full Pipeline - End-to-end example."""
@@ -337,7 +341,7 @@ LIMIT 1
         raise
 
     finally:
-        await client.close()
+        await client._close()
 
 async def safe_run(test_func):
     try:

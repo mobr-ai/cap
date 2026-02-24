@@ -68,7 +68,8 @@ class RedisNLClient:
         self,
         nl_query: str,
         sparql_query: str,
-        ttl: Optional[int] = None
+        ttl: Optional[int] = None,
+        normalize: bool = False
     ) -> int:
         """Cache query with placeholder normalization."""
         with tracer.start_as_current_span("cache_sparql_query") as span:
@@ -76,21 +77,24 @@ class RedisNLClient:
 
             try:
                 client = await self._get_nlr_client()
-                normalized = QueryNormalizer.normalize(nl_query)
-                cache_key = self._make_cache_key(normalized)
+                user_query = nl_query
+                if normalize:
+                    user_query = QueryNormalizer.normalize(nl_query)
+
+                cache_key = self._make_cache_key(user_query)
+                count_key = self._make_count_key(user_query)
 
                 # Checking if query already exists
                 if await client.exists(cache_key):
                     return 0  # Indicates duplicate, not cached
 
                 # Process SPARQL (single or sequential)
-                normalized_sparql, placeholder_map = self._normalize_sparql(sparql_query)
-                count_key = self._make_count_key(normalized)
+                sparql_spec, placeholder_map = self._normalize_sparql(sparql_query, normalize)
 
                 cache_data = {
                     "original_query": nl_query,
-                    "normalized_query": normalized,
-                    "sparql_query": normalized_sparql,
+                    "normalized_query": user_query,
+                    "sparql_query": sparql_spec,
                     "placeholder_map": placeholder_map,
                     "is_sequential": isinstance(sparql_query, str) and sparql_query.strip().startswith('['),
                     "precached": False
@@ -108,20 +112,107 @@ class RedisNLClient:
                 logger.error(f"Failed to cache query: {e}")
                 return -1  # cache error
 
-    def _normalize_sparql(self, sparql_query: str) -> Tuple[str, dict[str, str]]:
+    async def precache_from_file(
+        self,
+        file_path: str,
+        ttl: Optional[int] = None,
+        normalize: bool = False
+    ) -> dict[str, Any]:
+        """Pre-cache natural language to SPARQL mappings from a file."""
+        with tracer.start_as_current_span("precache_from_file") as span:
+            span.set_attribute("file_path", file_path)
+
+            stats = {
+                "total_queries": 0,
+                "cached_successfully": 0,
+                "failed": 0,
+                "skipped_duplicates": 0,
+                "errors": []
+            }
+
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                queries = QueryFileParser.parse(content)
+                stats["total_queries"] = len(queries)
+                client = await self._get_nlr_client()
+                ttl_value = ttl or self.ttl
+                skipped_keys = []
+                cached_keys = []
+
+                for nl_query, sparql_query in queries:
+                    try:
+                        user_query = nl_query
+                        if normalize:
+                            user_query = QueryNormalizer.normalize(nl_query)
+
+                        cache_key = self._make_cache_key(user_query)
+                        success = await self.cache_query(nl_query, sparql_query, ttl_value, normalize)
+                        if success == 1:
+                            # major trust on predefined (precached) queries
+                            cached_data = await client.get(cache_key)
+                            if cached_data:
+                                data = json.loads(cached_data)
+                                data["precached"] = True
+                                await client.setex(cache_key, ttl_value, json.dumps(data))
+                                cached_keys.append(cache_key)
+
+                            logger.debug (f"query cached ")
+                            logger.debug (f"    nl query {nl_query} ")
+                            logger.debug (f"    sparql query {sparql_query} ")
+                            logger.debug (f"    ttl {ttl_value} ")
+
+                            stats["cached_successfully"] += 1
+                        elif success == 0:
+                            stats["skipped_duplicates"] += 1
+                            skipped_keys.append(cache_key)
+                        else:
+                            stats["failed"] += 1
+                            error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
+                            stats["errors"].append(error_msg)
+                            logger.error(error_msg)
+
+                    except Exception as e:
+                        stats["failed"] += 1
+                        error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
+                        stats["errors"].append(error_msg)
+                        logger.error(error_msg)
+
+                logger.info(
+                    f"Pre-caching completed: {stats['cached_successfully']} cached, "
+                    f"{stats['failed']} failed, {stats['skipped_duplicates']} skipped"
+                )
+
+                nl_queries = [nl for nl, _ in queries]
+                logger.info(
+                    f"Original queries: \n{nl_queries} \n"
+                    f"Cached keys: \n{cached_keys} \n"
+                    f"Skipped keys: \n{skipped_keys} \n"
+                )
+                return stats
+
+            except Exception as e:
+                error_msg = f"Error during pre-caching: {str(e)}"
+                span.set_attribute("error", error_msg)
+                logger.error(error_msg)
+                stats["errors"].append(error_msg)
+                return stats
+
+    def _normalize_sparql(self, sparql_query: str, normalize: bool = False) -> Tuple[str, dict[str, str]]:
         """Normalize SPARQL query (handles single and sequential)."""
         try:
             parsed = json.loads(sparql_query)
             if isinstance(parsed, list):
-                return self._normalize_sequential_sparql(parsed)
+                return self._normalize_sequential_sparql(parsed, normalize)
             else:
                 normalizer = SPARQLNormalizer()
-                return normalizer.normalize(sparql_query)
+                return normalizer.normalize(sparql_query, normalize)
         except (json.JSONDecodeError, TypeError):
             normalizer = SPARQLNormalizer()
-            return normalizer.normalize(sparql_query)
+            return normalizer.normalize(sparql_query, normalize)
 
-    def _normalize_sequential_sparql(self, queries: list[dict]) -> Tuple[str, dict[str, str]]:
+    def _normalize_sequential_sparql(self, queries: list[dict], normalize: bool = False) -> Tuple[str, dict[str, str]]:
         """Normalize sequential SPARQL queries with global counters."""
         normalized_queries = []
         all_placeholders = {}
@@ -133,7 +224,8 @@ class RedisNLClient:
             normalizer.counters = counters  # Share counter state
             norm_q, placeholders = normalizer.normalize_with_shared_counters(
                 query_info['query'],
-                counters
+                counters,
+                normalize
             )
             # Check for key collisions before merging
             collision_keys = set(all_placeholders.keys()) & set(placeholders.keys())
@@ -305,88 +397,6 @@ class RedisNLClient:
         except Exception as e:
             logger.warning(f"Redis health check failed: {e}")
             return False
-
-    async def precache_from_file(
-        self,
-        file_path: str,
-        ttl: Optional[int] = None
-    ) -> dict[str, Any]:
-        """Pre-cache natural language to SPARQL mappings from a file."""
-        with tracer.start_as_current_span("precache_from_file") as span:
-            span.set_attribute("file_path", file_path)
-
-            stats = {
-                "total_queries": 0,
-                "cached_successfully": 0,
-                "failed": 0,
-                "skipped_duplicates": 0,
-                "errors": []
-            }
-
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                queries = QueryFileParser.parse(content)
-                stats["total_queries"] = len(queries)
-                client = await self._get_nlr_client()
-                ttl_value = ttl or self.ttl
-                skipped_keys = []
-                cached_keys = []
-
-                for nl_query, sparql_query in queries:
-                    try:
-                        normalized_nl = QueryNormalizer.normalize(nl_query)
-                        cache_key = self._make_cache_key(normalized_nl)
-                        success = await self.cache_query(nl_query, sparql_query, ttl_value)
-                        if success == 1:
-                            cached_data = await client.get(cache_key)
-                            if cached_data:
-                                data = json.loads(cached_data)
-                                data["precached"] = True
-                                await client.setex(cache_key, ttl_value, json.dumps(data))
-                                cached_keys.append(cache_key)
-
-                            logger.debug (f"query cached ")
-                            logger.debug (f"    nl query {nl_query} ")
-                            logger.debug (f"    sparql query {sparql_query} ")
-                            logger.debug (f"    ttl {ttl_value} ")
-
-                            stats["cached_successfully"] += 1
-                        elif success == 0:
-                            stats["skipped_duplicates"] += 1
-                            skipped_keys.append(cache_key)
-                        else:
-                            stats["failed"] += 1
-                            error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
-                            stats["errors"].append(error_msg)
-                            logger.error(error_msg)
-
-                    except Exception as e:
-                        stats["failed"] += 1
-                        error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
-                        stats["errors"].append(error_msg)
-                        logger.error(error_msg)
-
-                logger.info(
-                    f"Pre-caching completed: {stats['cached_successfully']} cached, "
-                    f"{stats['failed']} failed, {stats['skipped_duplicates']} skipped"
-                )
-
-                nl_queries = [nl for nl, _ in queries]
-                logger.info(
-                    f"Original queries: \n{nl_queries} \n"
-                    f"Cached keys: \n{cached_keys} \n"
-                    f"Skipped keys: \n{skipped_keys} \n"
-                )
-                return stats
-
-            except Exception as e:
-                error_msg = f"Error during pre-caching: {str(e)}"
-                span.set_attribute("error", error_msg)
-                logger.error(error_msg)
-                stats["errors"].append(error_msg)
-                return stats
 
 
 # Global client instance

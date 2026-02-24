@@ -126,18 +126,25 @@ Current utc date and time: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}.
 This is the data you MUST consider in your answer:
 {kv_for_llm}
 """
-    final_answer = await llm.generate_complete(
+    if len(prompt) > 18000:
+        prompt = prompt[:18000]
+
+    chunks = []
+    async for chunk in llm.generate_stream(
         prompt=prompt,
         model=llm.llm_model,
         system_prompt="",
         temperature=0.1,
-    )
+    ):
+        chunks.append(chunk)
+
+    final_answer = "".join(chunks)
+
     t_final_end = time.time()
 
     final_answer_ms = int((t_final_end - t_final_start) * 1000)
     t1 = time.time()
 
-    await cleanup_llm_client()
     return PipelineRun(
         cache_hit=cache_hit,
         retrieved=retrieved,
