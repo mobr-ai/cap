@@ -7,17 +7,15 @@ ENV PYTHONPATH=/app/src
 
 RUN pip install --no-cache-dir poetry==1.8.3
 
-# Copy manifests first (cache-friendly)
+# Copy manifests first for layer caching
 COPY pyproject.toml poetry.lock README.md ./
 
-# Ensure lock matches pyproject (without upgrading versions), then install main deps
+# Install exactly what the lock says
 RUN --mount=type=cache,target=/root/.cache/pypoetry \
     --mount=type=cache,target=/root/.cache/pip \
     poetry config virtualenvs.create false \
- && poetry lock --no-update --no-interaction --no-ansi \
  && poetry install --only main --no-root --no-interaction --no-ansi
 
-# Copy code last
 COPY src/ src/
 
 EXPOSE 8000
