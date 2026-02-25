@@ -1,4 +1,12 @@
 # CAP - Cardano Analytics Platform
+<p align="center">
+  <img src="https://github.com/mobr-ai/cap-frontend/raw/refs/heads/main/public/icons/logo.svg" width="180" />
+</p>
+
+<p align="center">
+  <b>Cardano Analytics Platform Powered by LLM</b><br/>
+  Semantic Knowledge Graph • Natural Language → SPARQL • Real-Time On-Chain Data
+</p>
 
 ## What is CAP?
 Leveraging LLMs and analytics mechanisms to provide natural language queries, CAP simplifies Cardano data analysis through real-time insights and intuitive, customizable dashboards.
