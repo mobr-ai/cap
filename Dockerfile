@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.6
 
-FROM python:3.11-slim AS base
+# pinning to patch tag, instead of
+# FROM python:3.11-slim AS base
+FROM python:3.11.8-slim-bookworm AS base
+
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
@@ -22,7 +25,7 @@ RUN pip install --no-cache-dir poetry==1.8.3
 FROM base AS cap_deps
 
 # Copy manifests first for caching
-COPY pyproject.toml poetry.lock README.md ./
+COPY pyproject.toml poetry.lock ./
 
 # IMPORTANT:
 # - DO NOT use --only if you want rag too.
@@ -30,7 +33,7 @@ COPY pyproject.toml poetry.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/pypoetry \
     --mount=type=cache,target=/root/.cache/pip \
     poetry config virtualenvs.create false \
- && poetry install --only main,rag --no-root --no-interaction --no-ansi 
+ && poetry install --with rag --without dev --no-root --no-interaction --no-ansi
 
 # ------------------------------------------------------------
 # 2) cap_server: reuses deps layer, only copies code
