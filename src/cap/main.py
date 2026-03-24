@@ -135,8 +135,12 @@ async def lifespan(app: FastAPI):
     try:
         llm_client = get_llm_client()
         try:
+            check = llm_client.ontology_prompt
+            logger.info(f"Ontology prompt is {check}")
+
             await llm_client.warmup_intent_indices()
             logger.info("Intent indices warmed up successfully")
+
         except Exception:
             logger.exception("Failed to warm up intent indices during startup")
 
