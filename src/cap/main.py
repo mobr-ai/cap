@@ -173,7 +173,7 @@ def create_application() -> FastAPI:
         allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Client-Request-Id"],
         expose_headers=["Content-Disposition", "X-Conversation-Id", "X-User-Message-Id"],
     )
 

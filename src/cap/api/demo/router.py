@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import asyncio
 from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, Request
@@ -107,18 +108,18 @@ async def demo_nl_query(
 
     delay_ms = req.delay_ms if req.delay_ms is not None else 0
 
-    def _sleep(ms: int):
+    async def _sleep(ms: int):
         if ms and ms > 0:
-            time.sleep(ms / 1000.0)
+            await asyncio.sleep(ms / 1000.0)
 
     async def stream_demo() -> AsyncGenerator[bytes, None]:
         nonlocal kv_results_dict, deferred_raw_kv
 
         yield b"status: Planning...\n"
-        _sleep(delay_ms)
+        await _sleep(delay_ms)
 
         yield b"status: Querying knowledge graph...\n"
-        _sleep(delay_ms)
+        await _sleep(delay_ms)
 
         # KV block (defer persistence until qid exists)
         if scene and scene.get("kv"):
@@ -126,13 +127,13 @@ async def demo_nl_query(
             raw_kv = json.dumps(scene["kv"])
             yield (raw_kv + "\n").encode("utf-8")
             yield b"_kv_results_end_\n"
-            _sleep(delay_ms)
+            await _sleep(delay_ms)
 
             deferred_raw_kv = raw_kv
             kv_results_dict = scene["kv"]
 
         yield b"status: Writing answer...\n"
-        _sleep(delay_ms)
+        await _sleep(delay_ms)
 
         payloads = list(iter_sse_markdown_events(assistant_text or "", max_len=96))
 
@@ -152,7 +153,7 @@ async def demo_nl_query(
                     if i == carrier_idx:
                         continue
                     yield f"data: {payload}\n".encode("utf-8")
-                    _sleep(max(0, int(delay_ms / 3)))
+                    await _sleep(max(0, int(delay_ms / 3)))
 
                 carrier = payloads[carrier_idx]
 
