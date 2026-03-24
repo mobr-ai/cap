@@ -121,7 +121,8 @@ class LLMClient:
         if settings.LLM_ONTOLOGY_PATH != "":
             onto = get_file_content(settings.LLM_ONTOLOGY_PATH)
             return f"ALWAYS USE THIS ONTOLOGY:\n{onto}"
-
+        else:
+            logger.warning("** MINI ONTOLOGY NOT FOUND!!!")
         return ""
 
     @property

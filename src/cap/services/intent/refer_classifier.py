@@ -1,7 +1,11 @@
+import logging
+from pathlib import Path
+
 from cap.services.embedding_service import get_embedding_service
 from cap.services.intent.example_loader import ExampleLoader
 from cap.services.intent.models import ReferDecision
 
+logger = logging.getLogger(__name__)
 
 class ReferClassifier:
     def __init__(
@@ -10,7 +14,12 @@ class ReferClassifier:
         collection_name: str = "refer_classifier_examples",
         min_confidence: float = 0.58,
     ) -> None:
-        self._dataset_path = dataset_path
+
+        path = Path(dataset_path)
+        if not path.exists():
+            logger.warning(f"-- dataset file not found: {dataset_path}")
+
+        self._dataset_path = path
         self._collection_name = collection_name
         self._min_confidence = min_confidence
 

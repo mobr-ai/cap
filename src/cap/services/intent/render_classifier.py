@@ -1,7 +1,11 @@
+import logging
+from pathlib import Path
+
 from cap.services.embedding_service import get_embedding_service
 from cap.services.intent.example_loader import ExampleLoader
 from cap.services.intent.models import RenderDecision
 
+logger = logging.getLogger(__name__)
 
 class RenderClassifier:
     def __init__(
@@ -11,7 +15,12 @@ class RenderClassifier:
         min_family_confidence: float = 0.56,
         min_chart_confidence: float = 0.56,
     ) -> None:
-        self._dataset_path = dataset_path
+
+        path = Path(dataset_path)
+        if not path.exists():
+            logger.warning(f"-- dataset file not found: {dataset_path}")
+
+        self._dataset_path = path
         self._collection_name = collection_name
         self._min_family_confidence = min_family_confidence
         self._min_chart_confidence = min_chart_confidence
