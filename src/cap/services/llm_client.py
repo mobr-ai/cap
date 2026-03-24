@@ -71,13 +71,13 @@ class LLMClient:
         self._refer_classifier = ReferClassifier(
             dataset_path=os.getenv(
                 "REFER_CLASSIFIER_DATASET_PATH",
-                "./datasets/refer_classifier_examples.en.jsonl",
+                "datasets/refer_classifier_examples.en.jsonl",
             )
         )
         self._render_classifier = RenderClassifier(
             dataset_path=os.getenv(
                 "RENDER_CLASSIFIER_DATASET_PATH",
-                "./datasets/render_classifier_examples.en.jsonl",
+                "datasets/render_classifier_examples.en.jsonl",
             )
         )
         self._intent_warmup_lock = asyncio.Lock()
@@ -138,6 +138,7 @@ class LLMClient:
             timeout = httpx.Timeout(self.timeout, connect=10.0)
             headers = {}
             if self.api_key:
+                logger.info("**** Using openai")
                 headers["Authorization"] = f"Bearer {self.api_key}"
 
             self._client = httpx.AsyncClient(
