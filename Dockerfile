@@ -41,6 +41,7 @@ RUN --mount=type=cache,target=/root/.cache/pypoetry \
 FROM cap_deps AS cap_server
 
 COPY src/ src/
+COPY datasets/ datasets/
 
 EXPOSE 8000
 
