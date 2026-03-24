@@ -22,7 +22,7 @@ class SPARQLNormalizer:
         self,
         sparql_query: str,
         counters: Optional[PlaceholderCounters] = None,
-        normalize: bool = False
+        normalize: bool = True
     ) -> Tuple[str, dict[str, str]]:
         """Extract literals and instances from SPARQL, replace with typed placeholders."""
 
@@ -49,7 +49,7 @@ class SPARQLNormalizer:
         self,
         sparql_query: str,
         shared_counters: PlaceholderCounters,
-        normalize: bool = False
+        normalize: bool = True
     ) -> Tuple[str, dict[str, str]]:
         """Normalize using externally managed counters for sequential queries."""
 

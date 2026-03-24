@@ -1,0 +1,25 @@
+{"text": "and this one?", "label": "refer", "confidence_hint": "high"}
+{"text": "same for transaction", "label": "refer", "confidence_hint": "high"}
+{"text": "make it visual", "label": "refer", "confidence_hint": "high"}
+{"text": "why?", "label": "refer", "confidence_hint": "medium"}
+{"text": "as a table", "label": "refer", "confidence_hint": "high"}
+{"text": "do the same for stake pools", "label": "refer", "confidence_hint": "high"}
+{"text": "show that as a chart", "label": "refer", "confidence_hint": "high"}
+{"text": "can you turn it into a bar chart?", "label": "refer", "confidence_hint": "high"}
+{"text": "now compare with the current epoch", "label": "refer", "confidence_hint": "high"}
+{"text": "and for hosky instead", "label": "refer", "confidence_hint": "high"}
+{"text": "what about the previous epoch?", "label": "refer", "confidence_hint": "high"}
+{"text": "same output, but daily", "label": "refer", "confidence_hint": "high"}
+{"text": "make the previous answer more visual", "label": "refer", "confidence_hint": "high"}
+{"text": "can you explain that result?", "label": "refer", "confidence_hint": "medium"}
+{"text": "use the same query but show the top 10", "label": "refer", "confidence_hint": "high"}
+{"text": "how many transactions today?", "label": "not_refer", "confidence_hint": "high"}
+{"text": "show me the latest 5 blocks", "label": "not_refer", "confidence_hint": "high"}
+{"text": "plot a line chart showing monthly tps", "label": "not_refer", "confidence_hint": "high"}
+{"text": "what is the total supply of ADA?", "label": "not_refer", "confidence_hint": "high"}
+{"text": "list the top 10 stake pools by stake amount", "label": "not_refer", "confidence_hint": "high"}
+{"text": "how many NFTs were minted today?", "label": "not_refer", "confidence_hint": "high"}
+{"text": "show me the latest proposal", "label": "not_refer", "confidence_hint": "high"}
+{"text": "give me a table for the main Cardano concept definitions", "label": "not_refer", "confidence_hint": "high"}
+{"text": "what is the current Cardano height and the current height you have in your database", "label": "not_refer", "confidence_hint": "high"}
+{"text": "show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over March of 2025", "label": "not_refer", "confidence_hint": "high"}

@@ -1,6 +1,7 @@
 """
 llm client for interacting with models
 """
+import asyncio
 import os
 import logging
 import json
@@ -17,6 +18,9 @@ from cap.util.cardano_scan import convert_sparql_results_to_links
 from cap.util.sparql_util import detect_and_parse_sparql
 from cap.services.msg_formatter import MessageFormatter
 from cap.services.similarity_service import SimilarityService, SearchStrategy
+from cap.services.intent.context_assembler import ConversationContextAssembler
+from cap.services.intent.refer_classifier import ReferClassifier
+from cap.services.intent.render_classifier import RenderClassifier
 from cap.rdf.cache.semantic_matcher import SemanticMatcher
 
 logger = logging.getLogger(__name__)
@@ -52,15 +56,48 @@ class LLMClient:
             llm_model: Model for converting NL to SPARQL
             timeout: Request timeout in seconds
         """
-        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "http://localhost:8001")).rstrip("/")
-        self.llm_model = (llm_model or os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-AWQ"))
+        self.base_url = (base_url or os.getenv("LLM_BASE_URL", "https://api.openai.com")).rstrip("/")
+        self.llm_model = (
+            llm_model
+            or os.getenv("LLM_MODEL_NAME")
+            or os.getenv("OPENAI_MODEL")
+            or "gpt-4.1-mini"
+        )
+        self.api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY", "")
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
+        self._context_assembler = ConversationContextAssembler()
+        self._refer_classifier = ReferClassifier(
+            dataset_path=os.getenv(
+                "REFER_CLASSIFIER_DATASET_PATH",
+                "./datasets/refer_classifier_examples.en.jsonl",
+            )
+        )
+        self._render_classifier = RenderClassifier(
+            dataset_path=os.getenv(
+                "RENDER_CLASSIFIER_DATASET_PATH",
+                "./datasets/render_classifier_examples.en.jsonl",
+            )
+        )
+        self._intent_warmup_lock = asyncio.Lock()
+        self._intent_warmed_up = False
 
     def _load_prompt(self, env_key: str, default: str = "") -> str:
         """Load prompt from environment, refreshed on each call."""
         return os.getenv(env_key, default)
+
+    async def warmup_intent_indices(self, force: bool = False) -> None:
+        if self._intent_warmed_up and not force:
+            return
+
+        async with self._intent_warmup_lock:
+            if self._intent_warmed_up and not force:
+                return
+
+            await self._refer_classifier.warmup()
+            await self._render_classifier.warmup()
+            self._intent_warmed_up = True
 
     @property
     def nl_to_sparql_prompt(self) -> str:
@@ -99,6 +136,10 @@ class LLMClient:
         """Get or create HTTP client."""
         if self._client is None:
             timeout = httpx.Timeout(self.timeout, connect=10.0)
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+
             self._client = httpx.AsyncClient(
                 timeout=timeout,
                 limits=httpx.Limits(
@@ -106,6 +147,7 @@ class LLMClient:
                     max_connections=10,
                     keepalive_expiry=self.timeout
                 ),
+                headers=headers,
                 http2=True  # Enable HTTP/2 for better performance
             )
         return self._client
@@ -216,22 +258,27 @@ class LLMClient:
         fewshot_top_n: int = 3,
         _eval_retrieved_out: list[dict] | None = None,
     ) -> str:
-        """Convert natural language query to SPARQL."""
         with tracer.start_as_current_span("nl_to_sparql") as span:
             span.set_attribute("query", natural_query)
 
-            op = ""
-            if use_ontology:
-                op = self.ontology_prompt
+            ontology_block = self.ontology_prompt if use_ontology else ""
 
-            # Use fresh prompt from environment
-            system_prompt = ""
+            refer_decision = await self._refer_classifier.classify(natural_query)
+            span.set_attribute("refer_label", refer_decision.label)
+            span.set_attribute("refer_confidence", refer_decision.confidence)
+
+            assembled_history = await self._context_assembler.assemble(
+                current_query=natural_query,
+                conversation_history=conversation_history,
+                refer_decision=refer_decision,
+            )
+
             nl_prompt = f"""
-                {self.nl_to_sparql_prompt}
-                {op}
+{self.nl_to_sparql_prompt}
+{ontology_block}
 
-                User Question: {natural_query}
-            """
+User Question: {natural_query}
+""".strip()
 
             if use_fewshot and fewshot_strategy != SearchStrategy.none:
                 nl_prompt = await self._add_few_shot_learning(
@@ -242,55 +289,48 @@ class LLMClient:
                     _eval_retrieved_out=_eval_retrieved_out,
                 )
 
-            # Prepare messages with history and all context
-            nl_prompt = self._add_history(
-                prompt=nl_prompt,
-                conversation_history=conversation_history,
+            if assembled_history:
+                nl_prompt = self._add_history(
+                    prompt=nl_prompt,
+                    conversation_history=assembled_history,
+                )
+
+            logger.info(
+                "LLM is generating SPARQL - prompt size=%s refer=%s history_items=%s",
+                len(nl_prompt),
+                refer_decision.label,
+                len(assembled_history),
             )
 
-            logger.info(f"LLM is generating SPARQL - prompt size: {len(nl_prompt)}")
             chunks = []
             async for chunk in self.generate_stream(
                 prompt=nl_prompt,
                 model=self.llm_model,
-                system_prompt=system_prompt,
+                system_prompt="",
                 temperature=0.0,
             ):
                 chunks.append(chunk)
 
             sparql_response = "".join(chunks)
-
             if not sparql_response.strip():
-                logger.warning("--- Empty SPARQL from model")
-                logger.warning(f"prompt: '{nl_prompt}'")
-                logger.warning("--- ---")
+                logger.warning("Empty SPARQL response for query '%s'", natural_query)
                 return ""
 
-            logger.info(f"LLM-generated SPARQL: -----\n {sparql_response} \n -----")
             is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
             if is_sequential:
-                # For backward compatibility, return first query if sequential (or raise/log)
                 logger.warning("Sequential SPARQL detected in single nl_to_sparql call; using first query")
-                return content[0]['query'] if content else ""
-            else:
-                span.set_attribute("sparql_length", len(content))
-                return content
+                return content[0]["query"] if content else ""
+
+            span.set_attribute("sparql_length", len(content))
+            return content
 
     @staticmethod
     def _categorize_query(user_query: str, result_type: str) -> str:
-        """
-        Categorizes a natural language query into result types:
-        - "bar_chart"
-        - "pie_chart"
-        - "table"
-        - "single_value"
-        """
         low_uq = user_query.lower().strip()
 
-        if result_type != "multiple" and result_type != "single":
+        if result_type not in {"multiple", "single"}:
             return ""
 
-        # Chart-related queries
         new_type = ""
         if result_type == "multiple":
             if matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["bar"]):
@@ -309,64 +349,78 @@ class LLMClient:
         elif result_type == "single" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["pie"]):
             new_type = "pie_chart"
 
-        # Tabular or list queries
-        if new_type == "" and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
+        if not new_type and matches_keyword(low_uq, SemanticMatcher.CHART_GROUPS["table"]):
             new_type = "table"
 
         return new_type
 
-    @staticmethod
-    def format_kv(user_query: str, sparql_query:str, kv_results: dict) -> str:
-        result_type = kv_results["result_type"]
-        result_type = LLMClient._categorize_query(user_query, result_type)
-        if result_type != "":
+    async def _classify_render_type(
+        self,
+        user_query: str,
+        kv_results: dict[str, Any],
+    ) -> str:
+        current = LLMClient._categorize_query(user_query, kv_results["result_type"])
+        if current:
+            return current
+
+        decision = await self._render_classifier.classify(user_query)
+        if not decision.family:
+            return ""
+
+        if decision.family == "table":
+            return "table"
+
+        if decision.family == "text":
+            return ""
+
+        subtype_to_result = {
+            "line": "line_chart",
+            "bar": "bar_chart",
+            "scatter": "scatter_chart",
+            "bubble": "bubble_chart",
+            "pie": "pie_chart",
+            "heatmap": "heatmap",
+            "treemap": "treemap",
+        }
+        return subtype_to_result.get(decision.chart_subtype or "", "")
+
+
+    async def format_kv(self, user_query: str, sparql_query: str, kv_results: dict) -> tuple[str, str]:
+        result_type = await self._classify_render_type(user_query, kv_results)
+
+        if result_type:
             kv_results["result_type"] = result_type
 
-            # Convert to Vega format for chart types
-            if result_type in ["bar_chart", "pie_chart", "line_chart", "scatter_chart", "bubble_chart", "treemap", "heatmap", "table"]:
+            if result_type in {
+                "bar_chart",
+                "pie_chart",
+                "line_chart",
+                "scatter_chart",
+                "bubble_chart",
+                "treemap",
+                "heatmap",
+                "table",
+            }:
                 vega_data = VegaUtil.convert_to_vega_format(
                     kv_results,
                     user_query,
-                    sparql_query
+                    sparql_query,
                 )
 
-                # Determine columns based on chart type
                 columns = []
                 if kv_results.get("data"):
-                    if isinstance(kv_results.get("data"), list):
+                    if isinstance(kv_results["data"], list):
                         columns = list(kv_results["data"][0].keys())
-                    elif isinstance(kv_results.get("data"), dict):
+                    elif isinstance(kv_results["data"], dict):
                         columns = list(kv_results["data"].keys())
 
-                # Check if we have series labels from vega conversion (for line charts)
-                series_labels = vega_data.get("_series_labels")
-                label_key = vega_data.get("_label_key")
-                x_key = vega_data.get("_x_key")
-                y_keys = vega_data.get("_y_keys", [])
+                metadata_columns = vega_data.get("_columns")
+                formatted_columns = (
+                    metadata_columns
+                    if metadata_columns
+                    else [VegaUtil._format_column_name(col) for col in columns]
+                )
 
-                if series_labels and label_key:
-                    # Build formatted columns: [x_label, y_label, ...series_labels]
-                    formatted_columns = []
-
-                    # Add x-axis label
-                    if x_key:
-                        formatted_columns.append(VegaUtil._format_column_name(x_key))
-
-                    # Add y-axis labels (do we need this?)
-                    for y_key in y_keys:
-                        pass
-
-                    # Add series labels (replacing the label_key column)
-                    formatted_columns.extend(series_labels)
-                else:
-                    # Standard case: format all column names OR use metadata columns
-                    metadata_columns = vega_data.get("_columns")
-                    if metadata_columns:
-                        formatted_columns = metadata_columns
-                    else:
-                        formatted_columns = [VegaUtil._format_column_name(col) for col in columns]
-
-                # Remove internal metadata from vega_data
                 vega_data = {k: v for k, v in vega_data.items() if not k.startswith("_")}
 
                 output_data = {
@@ -374,17 +428,12 @@ class LLMClient:
                     "data": vega_data,
                     "metadata": {
                         "count": kv_results.get("count", 0),
-                        "columns": formatted_columns
-                    }
+                        "columns": formatted_columns,
+                    },
                 }
-                kv_formatted = json.dumps(output_data, indent=2)
-                logger.info(f"output_data: \n {kv_formatted}")
-            else:
-                kv_formatted = json.dumps(kv_results, indent=2)
-        else:
-            kv_formatted = json.dumps(kv_results, indent=2)
+                return json.dumps(output_data, indent=2), result_type
 
-        return kv_formatted, result_type
+        return json.dumps(kv_results, indent=2), result_type
 
 
     async def generate_answer_with_context(
@@ -413,7 +462,7 @@ class LLMClient:
             result_type = ""
             if kv_results:
                 try:
-                    kv_formatted, result_type = LLMClient.format_kv(
+                    kv_formatted, result_type = await self.format_kv(
                         user_query=user_query,
                         sparql_query=sparql_query,
                         kv_results=kv_results

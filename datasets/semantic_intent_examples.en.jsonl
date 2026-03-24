@@ -1,0 +1,49 @@
+{"text": "and this one?", "task": "refer_classifier", "label": "refer"}
+{"text": "same for transaction", "task": "refer_classifier", "label": "refer"}
+{"text": "make it visual", "task": "refer_classifier", "label": "refer"}
+{"text": "why?", "task": "refer_classifier", "label": "refer"}
+{"text": "as a table", "task": "refer_classifier", "label": "refer"}
+{"text": "do the same for stake pools", "task": "refer_classifier", "label": "refer"}
+{"text": "show that as a chart", "task": "refer_classifier", "label": "refer"}
+{"text": "can you turn it into a bar chart?", "task": "refer_classifier", "label": "refer"}
+{"text": "now compare with the current epoch", "task": "refer_classifier", "label": "refer"}
+{"text": "and for hosky instead", "task": "refer_classifier", "label": "refer"}
+{"text": "what about the previous epoch?", "task": "refer_classifier", "label": "refer"}
+{"text": "same output, but daily", "task": "refer_classifier", "label": "refer"}
+{"text": "make the previous answer more visual", "task": "refer_classifier", "label": "refer"}
+{"text": "can you explain that result?", "task": "refer_classifier", "label": "refer"}
+{"text": "use the same query but show the top 10", "task": "refer_classifier", "label": "refer"}
+{"text": "how many transactions today?", "task": "refer_classifier", "label": "not_refer"}
+{"text": "show me the latest 5 blocks", "task": "refer_classifier", "label": "not_refer"}
+{"text": "plot a line chart showing monthly tps", "task": "refer_classifier", "label": "not_refer"}
+{"text": "what is the total supply of ADA?", "task": "refer_classifier", "label": "not_refer"}
+{"text": "list the top 10 stake pools by stake amount", "task": "refer_classifier", "label": "not_refer"}
+{"text": "how many NFTs were minted today?", "task": "refer_classifier", "label": "not_refer"}
+{"text": "show me the latest proposal", "task": "refer_classifier", "label": "not_refer"}
+{"text": "give me a table for the main Cardano concept definitions", "task": "refer_classifier", "label": "not_refer"}
+{"text": "what is the current Cardano height and the current height you have in your database", "task": "refer_classifier", "label": "not_refer"}
+{"text": "show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over March of 2025", "task": "refer_classifier", "label": "not_refer"}
+{"text": "give me a nice table for the main Cardano concepts", "task": "render_classifier", "family": "table", "chart_subtype": null, "canonical_intent": "definitions_table"}
+{"text": "give me a table for the main Cardano concept definitions", "task": "render_classifier", "family": "table", "chart_subtype": null, "canonical_intent": "definitions_table"}
+{"text": "show a table with the top 10 tokens by transfer count", "task": "render_classifier", "family": "table", "chart_subtype": null, "canonical_intent": "ranking_table"}
+{"text": "list the latest 5 blocks", "task": "render_classifier", "family": "table", "chart_subtype": null, "canonical_intent": "latest_records_table"}
+{"text": "show me the latest 5 transactions", "task": "render_classifier", "family": "table", "chart_subtype": null, "canonical_intent": "latest_records_table"}
+{"text": "plot a line chart showing monthly number of transactions", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "time_series_line"}
+{"text": "plot a line chart showing number of new wallets per year", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "time_series_line"}
+{"text": "trace a line chart showing the number of NFTs minted daily in the last month", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "time_series_line"}
+{"text": "plot a bar chart showing monthly smart contract deployments", "task": "render_classifier", "family": "chart", "chart_subtype": "bar", "canonical_intent": "categorical_bar"}
+{"text": "plot a bar chart showing number of daily transactions over the last month", "task": "render_classifier", "family": "chart", "chart_subtype": "bar", "canonical_intent": "time_bucket_bar"}
+{"text": "compare the last 52 epochs using a bubble chart: y = TPS, x = epoch number, bubble size = average transaction fee", "task": "render_classifier", "family": "chart", "chart_subtype": "bubble", "canonical_intent": "bubble_comparison"}
+{"text": "scatter chart showing transaction fee vs transaction value for a random sample of 1000 transactions from the last 24 hours", "task": "render_classifier", "family": "chart", "chart_subtype": "scatter", "canonical_intent": "scatter_relationship"}
+{"text": "plot a pie chart to show how much the top 1% ADA holders represent from the total supply on the Cardano network", "task": "render_classifier", "family": "chart", "chart_subtype": "pie", "canonical_intent": "part_to_whole_pie"}
+{"text": "show where fees concentrate by plotting a heatmap of average transaction fee by day and hour over the current epoch", "task": "render_classifier", "family": "chart", "chart_subtype": "heatmap", "canonical_intent": "density_heatmap"}
+{"text": "treemap breaking down NFT mints by policy ID in the current epoch", "task": "render_classifier", "family": "chart", "chart_subtype": "treemap", "canonical_intent": "hierarchy_treemap"}
+{"text": "asset trends", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "generic_trend_chart"}
+{"text": "current trends", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "generic_trend_chart"}
+{"text": "monthly transaction trends", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "generic_trend_chart"}
+{"text": "transaction trends", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "generic_trend_chart"}
+{"text": "TPS trends", "task": "render_classifier", "family": "chart", "chart_subtype": "line", "canonical_intent": "generic_trend_chart"}
+{"text": "show me recent TPS", "task": "render_classifier", "family": "text", "chart_subtype": null, "canonical_intent": "text_or_default_summary"}
+{"text": "what is the total supply of ADA?", "task": "render_classifier", "family": "text", "chart_subtype": null, "canonical_intent": "scalar_answer"}
+{"text": "what is your sync status?", "task": "render_classifier", "family": "text", "chart_subtype": null, "canonical_intent": "status_answer"}
+{"text": "how many transactions today?", "task": "render_classifier", "family": "text", "chart_subtype": null, "canonical_intent": "scalar_answer"}

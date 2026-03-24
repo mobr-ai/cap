@@ -27,7 +27,7 @@ async def nlq_to_sparql(
     redis_client: RedisNLClient,
     llm_client: LLMClient,
     conversation_history: list[dict],
-    normalize: bool = False
+    normalize: bool = True
 ):
 
     nl_query = user_query

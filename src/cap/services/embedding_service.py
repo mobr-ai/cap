@@ -12,6 +12,7 @@ import logging
 from typing import Any, Optional
 
 import chromadb
+from chromadb.api import ClientAPI
 from chromadb.config import Settings as ChromaSettings
 from opentelemetry import trace
 from sentence_transformers import SentenceTransformer
@@ -54,8 +55,8 @@ class EmbeddingService:
         self._collection_name = collection_name
 
         self._model: Optional[SentenceTransformer] = None
-        self._chroma_client: Optional[chromadb.PersistentClient] = None
-        self._collection = None
+        self._chroma_client: ClientAPI = None
+        self._collections: dict[str, Any] = {}
         self._rebuild_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
@@ -70,24 +71,24 @@ class EmbeddingService:
 
         return self._model
 
-    def _get_collection(self):
+    def _get_collection(self, collection_name: str):
         if self._chroma_client is None:
             self._chroma_client = chromadb.PersistentClient(
                 path=self._chroma_path,
                 settings=ChromaSettings(anonymized_telemetry=False),
             )
-        if self._collection is None:
-            self._collection = self._chroma_client.get_or_create_collection(
-                name=self._collection_name,
+        if collection_name not in self._collections:
+            self._collections[collection_name] = self._chroma_client.get_or_create_collection(
+                name=collection_name,
                 metadata={"hnsw:space": "cosine"},
             )
-        return self._collection
+        return self._collections[collection_name]
 
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
-
-    async def rebuild(self, cached_entries: list[dict[str, Any]]) -> int:
+    async def rebuild(
+        self,
+        cached_entries: list[dict[str, Any]],
+        collection_name: str = _COLLECTION_NAME
+    ) -> int:
         """
         Atomically rebuild the ChromaDB collection from `cached_entries`.
 
@@ -112,10 +113,6 @@ class EmbeddingService:
 
                     logger.info(f"Encoding {len(passages)} queries for embedding index …")
 
-                    # Initialise the model on the event-loop thread before handing
-                    # work to the executor. SentenceTransformer is not thread-safe
-                    # during construction; only the stateless encode() call is safe
-                    # to run in a worker thread.
                     model = self._get_model()
                     embeddings = await loop.run_in_executor(
                         None,
@@ -128,14 +125,14 @@ class EmbeddingService:
                     )
 
                     # Wipe the collection and repopulate atomically
-                    collection = self._get_collection()
-                    self._chroma_client.delete_collection(self._collection_name)
-                    self._collection = self._chroma_client.get_or_create_collection(
-                        name=self._collection_name,
+                    self._get_collection(collection_name)  # ensure client is initialized
+                    self._chroma_client.delete_collection(collection_name)
+                    self._collections[collection_name] = self._chroma_client.get_or_create_collection(
+                        name=collection_name,
                         metadata={"hnsw:space": "cosine"},
                     )
 
-                    self._collection.upsert(
+                    self._collections[collection_name].upsert(
                         ids=[f"nlq_{i}" for i in range(len(cached_entries))],
                         embeddings=embeddings,
                         documents=original_queries,
@@ -166,6 +163,7 @@ class EmbeddingService:
         nl_query: str,
         top_n: int = 5,
         min_similarity: float = 0.0,
+        collection_name: str = _COLLECTION_NAME,
     ) -> list[dict[str, Any]]:
         """
         Return the top-N most similar cached queries by cosine similarity.
@@ -178,7 +176,7 @@ class EmbeddingService:
             span.set_attribute("input_query", nl_query)
 
             try:
-                collection = self._get_collection()
+                collection = self._get_collection(collection_name)
 
                 if collection.count() == 0:
                     logger.debug("ChromaDB collection is empty — returning no results.")
@@ -234,6 +232,84 @@ class EmbeddingService:
                 logger.error(f"Embedding search failed: {exc}", exc_info=True)
                 raise
 
+    async def encode_texts(self, texts: list[str], prefix: str = "") -> list[list[float]]:
+        loop = asyncio.get_event_loop()
+        model = self._get_model()
+        return await loop.run_in_executor(
+            None,
+            lambda: model.encode(
+                [f"{prefix}{text}" for text in texts],
+                batch_size=64,
+                show_progress_bar=False,
+                normalize_embeddings=True,
+            ).tolist(),
+        )
+
+    @staticmethod
+    def cosine_similarity(a: list[float], b: list[float]) -> float:
+        return float(sum(x * y for x, y in zip(a, b)))
+
+    async def rebuild_dataset_collection(
+        self,
+        collection_name: str,
+        rows: list[dict[str, Any]],
+        text_key: str = "text",
+    ) -> int:
+        async with self._rebuild_lock:
+            if not rows:
+                return 0
+
+            texts = [row[text_key] for row in rows]
+            embeddings = await self.encode_texts(texts, prefix=_PASSAGE_PREFIX)
+
+            self._get_collection(collection_name)
+            self._chroma_client.delete_collection(collection_name)
+            self._collections[collection_name] = self._chroma_client.get_or_create_collection(
+                name=collection_name,
+                metadata={"hnsw:space": "cosine"},
+            )
+
+            self._collections[collection_name].upsert(
+                ids=[f"{collection_name}_{i}" for i in range(len(rows))],
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=rows,
+            )
+            return len(rows)
+
+    async def search_dataset_collection(
+        self,
+        collection_name: str,
+        query_text: str,
+        top_n: int = 5,
+    ) -> list[dict[str, Any]]:
+        collection = self._get_collection(collection_name)
+        if collection.count() == 0:
+            return []
+
+        query_embedding = await self.encode_texts([query_text], prefix=_QUERY_PREFIX)
+        raw = collection.query(
+            query_embeddings=query_embedding,
+            n_results=min(top_n, collection.count()),
+            include=["documents", "metadatas", "distances"],
+        )
+
+        results: list[dict[str, Any]] = []
+        for document, metadata, distance in zip(
+            raw.get("documents", [[]])[0],
+            raw.get("metadatas", [[]])[0],
+            raw.get("distances", [[]])[0],
+        ):
+            results.append(
+                {
+                    "document": document,
+                    "metadata": metadata,
+                    "similarity_score": float(1.0 - distance),
+                }
+            )
+
+        results.sort(key=lambda x: x["similarity_score"], reverse=True)
+        return results
 
 # ---------------------------------------------------------------------------
 # Module-level singleton

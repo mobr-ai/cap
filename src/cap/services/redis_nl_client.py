@@ -69,7 +69,7 @@ class RedisNLClient:
         nl_query: str,
         sparql_query: str,
         ttl: Optional[int] = None,
-        normalize: bool = False
+        normalize: bool = True
     ) -> int:
         """Cache query with placeholder normalization."""
         with tracer.start_as_current_span("cache_sparql_query") as span:
@@ -116,7 +116,7 @@ class RedisNLClient:
         self,
         file_path: str,
         ttl: Optional[int] = None,
-        normalize: bool = False
+        normalize: bool = True
     ) -> dict[str, Any]:
         """Pre-cache natural language to SPARQL mappings from a file."""
         with tracer.start_as_current_span("precache_from_file") as span:
@@ -199,7 +199,7 @@ class RedisNLClient:
                 stats["errors"].append(error_msg)
                 return stats
 
-    def _normalize_sparql(self, sparql_query: str, normalize: bool = False) -> Tuple[str, dict[str, str]]:
+    def _normalize_sparql(self, sparql_query: str, normalize: bool = True) -> Tuple[str, dict[str, str]]:
         """Normalize SPARQL query (handles single and sequential)."""
         try:
             parsed = json.loads(sparql_query)
@@ -212,7 +212,7 @@ class RedisNLClient:
             normalizer = SPARQLNormalizer()
             return normalizer.normalize(sparql_query, normalize)
 
-    def _normalize_sequential_sparql(self, queries: list[dict], normalize: bool = False) -> Tuple[str, dict[str, str]]:
+    def _normalize_sequential_sparql(self, queries: list[dict], normalize: bool = True) -> Tuple[str, dict[str, str]]:
         """Normalize sequential SPARQL queries with global counters."""
         normalized_queries = []
         all_placeholders = {}

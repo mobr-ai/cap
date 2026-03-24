@@ -16,7 +16,7 @@ from cap.api.nl_query import router as nl_router
 from cap.telemetry import setup_telemetry, instrument_app
 from cap.rdf.triplestore import TriplestoreClient
 from cap.config import settings
-from cap.services.llm_client import cleanup_llm_client
+from cap.services.llm_client import get_llm_client, cleanup_llm_client
 from cap.services.redis_nl_client import cleanup_redis_nl_client
 
 from cap.database.session import engine
@@ -133,9 +133,15 @@ async def initialize_required_graphs(client: TriplestoreClient) -> None:
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     try:
+        llm_client = get_llm_client()
+        try:
+            await llm_client.warmup_intent_indices()
+            logger.info("Intent indices warmed up successfully")
+        except Exception:
+            logger.exception("Failed to warm up intent indices during startup")
+
         yield
     finally:
-        # Shutdown
         await cleanup_llm_client()
         await cleanup_redis_nl_client()
         logger.info("Application shutdown completed")
