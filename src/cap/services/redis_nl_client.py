@@ -169,7 +169,7 @@ class RedisNLClient:
                             skipped_keys.append(cache_key)
                         else:
                             stats["failed"] += 1
-                            error_msg = f"Failed to cache '{nl_query}...': {str(e)}"
+                            error_msg = f"Failed to cache '{nl_query}...'"
                             stats["errors"].append(error_msg)
                             logger.error(error_msg)
 
