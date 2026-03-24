@@ -128,6 +128,7 @@ class NLNormalizationTester:
             await cleanup_redis_nl_client()
             await self.redis_client.precache_from_file(self.input_pairs)
             print("="*60)
+            exit(0)
 
         for txt_file in txt_files:
             print(f"Testing queries in file: {txt_file}")

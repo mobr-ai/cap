@@ -22,7 +22,7 @@ class SPARQLNormalizer:
         self,
         sparql_query: str,
         counters: Optional[PlaceholderCounters] = None,
-        normalize: bool = True
+        normalize_query: bool = True
     ) -> Tuple[str, dict[str, str]]:
         """Extract literals and instances from SPARQL, replace with typed placeholders."""
 
@@ -32,7 +32,7 @@ class SPARQLNormalizer:
         self.placeholder_map = {}
 
         sparql_spec = sparql_query
-        if normalize:
+        if normalize_query:
             # Extract and preserve prefixes
             prefixes, query_body = self._extract_prefixes(sparql_query)
 
@@ -49,7 +49,7 @@ class SPARQLNormalizer:
         self,
         sparql_query: str,
         shared_counters: PlaceholderCounters,
-        normalize: bool = True
+        normalize_query: bool = True
     ) -> Tuple[str, dict[str, str]]:
         """Normalize using externally managed counters for sequential queries."""
 
@@ -57,7 +57,7 @@ class SPARQLNormalizer:
         self.placeholder_map = {}
 
         sparql_spec = sparql_query
-        if normalize:
+        if normalize_query:
             prefixes, query_body = self._extract_prefixes(sparql_query)
             sparql_spec = self._process_query_body(query_body)
 

@@ -199,20 +199,20 @@ class RedisNLClient:
                 stats["errors"].append(error_msg)
                 return stats
 
-    def _normalize_sparql(self, sparql_query: str, normalize: bool = True) -> Tuple[str, dict[str, str]]:
+    def _normalize_sparql(self, sparql_query: str, normalize_query: bool = True) -> Tuple[str, dict[str, str]]:
         """Normalize SPARQL query (handles single and sequential)."""
         try:
             parsed = json.loads(sparql_query)
             if isinstance(parsed, list):
-                return self._normalize_sequential_sparql(parsed, normalize)
+                return self._normalize_sequential_sparql(parsed, normalize_query)
             else:
                 normalizer = SPARQLNormalizer()
-                return normalizer.normalize(sparql_query, normalize)
+                return normalizer.normalize(sparql_query=sparql_query, normalize_query=normalize_query)
         except (json.JSONDecodeError, TypeError):
             normalizer = SPARQLNormalizer()
-            return normalizer.normalize(sparql_query, normalize)
+            return normalizer.normalize(sparql_query=sparql_query, normalize_query=normalize_query)
 
-    def _normalize_sequential_sparql(self, queries: list[dict], normalize: bool = True) -> Tuple[str, dict[str, str]]:
+    def _normalize_sequential_sparql(self, queries: list[dict], normalize_query: bool = True) -> Tuple[str, dict[str, str]]:
         """Normalize sequential SPARQL queries with global counters."""
         normalized_queries = []
         all_placeholders = {}
@@ -225,7 +225,7 @@ class RedisNLClient:
             norm_q, placeholders = normalizer.normalize_with_shared_counters(
                 query_info['query'],
                 counters,
-                normalize
+                normalize_query
             )
             # Check for key collisions before merging
             collision_keys = set(all_placeholders.keys()) & set(placeholders.keys())
