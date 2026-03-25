@@ -26,54 +26,42 @@ class VegaUtil:
     def _is_numeric_value(value: Any) -> bool:
         """
         Determine if a value should be treated as numeric for visualization purposes.
-
-        This is the central logic for distinguishing numeric values from categorical/temporal values.
-
-        Args:
-            value: The value to check (can be nested dict, str, int, float, etc.)
-
-        Returns:
-            True if the value should be treated as numeric, False if categorical/temporal
         """
-        # Extract actual value from nested structures
         if isinstance(value, dict):
+            datatype = str(value.get("datatype", "")).lower()
+            literal_type = str(value.get("type", "")).lower()
+
+            if literal_type == "literal" and any(t in datatype for t in (
+                "int", "integer", "decimal", "float", "double",
+                "long", "short", "byte", "nonnegativeinteger", "nonpositiveinteger",
+                "positiveinteger", "negativeinteger"
+            )):
+                return True
+
             value = value.get('value', value.get('ada', value.get('lovelace', None)))
 
-        # Native numeric types are always numeric
         if isinstance(value, (int, float)):
             return True
 
-        # Handle string values
         if isinstance(value, str):
             clean_val = value.strip()
 
-            # Empty strings are not numeric
             if not clean_val:
                 return False
 
-            # Date-like strings (contains date separators) are categorical
             if '-' in clean_val or '/' in clean_val:
                 return False
-
-            # Time-like strings (contains time separators) are categorical
             if ':' in clean_val:
                 return False
-
-            # Very short strings (1-2 chars) are likely categorical codes
-            # e.g., "00", "01", "Q1", "A", etc.
             if len(clean_val) <= 2:
                 return False
 
-            # Try to parse as float
             try:
-                float_val = float(clean_val)
-                # If successful and contains decimal point or scientific notation, it's numeric
-                # Otherwise it might be a categorical ID (e.g., "12345" for an account number)
-                return '.' in clean_val or 'e' in clean_val.lower() or 'E' in clean_val
+                float(clean_val)
+                return True
             except ValueError:
                 return False
 
-        # Everything else is not numeric
         return False
 
     @staticmethod
