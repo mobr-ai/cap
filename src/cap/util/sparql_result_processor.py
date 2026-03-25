@@ -306,13 +306,6 @@ def _flatten_binding(binding: dict[str, Any], ada_variables: set[str] = None,
                 converted_value = _convert_lovelace_to_ada(converted_value)
             except (ValueError, TypeError):
                 pass  # Keep original value if not numeric
-        # Also check if this binding has "Cardano ADA" as tokenName for numeric fields
-        elif has_cardano_ada_token and isinstance(converted_value, str) and var_name != 'tokenName':
-            try:
-                float(converted_value)
-                converted_value = _convert_lovelace_to_ada(converted_value)
-            except (ValueError, TypeError):
-                pass  # Keep original value if not numeric
 
         # Handle token name hex conversion
         if var_name in token_name_variables and isinstance(converted_value, str):
