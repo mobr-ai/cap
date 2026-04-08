@@ -15,6 +15,7 @@ class ConversationContextAssembler:
         conversation_history: list[dict[str, Any]] | None,
         refer_decision: ReferDecision,
     ) -> list[dict[str, Any]]:
+
         if refer_decision.label != "refer" or not conversation_history:
             return []
 

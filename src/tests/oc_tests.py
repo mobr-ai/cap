@@ -128,7 +128,7 @@ async def test_nl_to_sparql():
         print(f"Natural Language Query: '{natural_query}'")
         print("\nGenerating SPARQL...\n")
 
-        sparql_query = await client.nl_to_sparql(
+        sparql_query, refer_decision = await client.nl_to_sparql(
             natural_query=natural_query, conversation_history=None
         )
 

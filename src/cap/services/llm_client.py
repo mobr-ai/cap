@@ -61,10 +61,15 @@ class LLMClient:
             llm_model
             or os.getenv("LLM_MODEL_NAME")
             or os.getenv("OPENAI_MODEL")
-            or "gpt-4.1-mini"
+            or "gpt-5.4"
         )
         self.api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY", "")
         self.timeout = timeout
+        self.fewshot_top_n = (
+            os.getenv("FEWSHOT_TOP_N")
+            or 3
+        )
+
         self._client: Optional[httpx.AsyncClient] = None
 
         self._context_assembler = ConversationContextAssembler()
@@ -257,7 +262,7 @@ class LLMClient:
         use_ontology: bool = True,
         use_fewshot: bool = True,
         fewshot_strategy: SearchStrategy = SearchStrategy.auto,
-        fewshot_top_n: int = 3,
+        fewshot_top_n: int = -1,
         _eval_retrieved_out: list[dict] | None = None,
     ) -> str:
         with tracer.start_as_current_span("nl_to_sparql") as span:
@@ -282,12 +287,16 @@ class LLMClient:
 User Question: {natural_query}
 """.strip()
 
+            fstn = fewshot_top_n
+            if fstn == -1:
+                fstn = self.fewshot_top_n
+
             if use_fewshot and fewshot_strategy != SearchStrategy.none:
                 nl_prompt = await self._add_few_shot_learning(
                     nl_query=natural_query,
                     prompt=nl_prompt,
                     strategy=fewshot_strategy,
-                    top_n=fewshot_top_n,
+                    top_n=fstn,
                     _eval_retrieved_out=_eval_retrieved_out,
                 )
 
@@ -316,15 +325,15 @@ User Question: {natural_query}
             sparql_response = "".join(chunks)
             if not sparql_response.strip():
                 logger.warning("Empty SPARQL response for query '%s'", natural_query)
-                return ""
+                return "", refer_decision
 
             is_sequential, content = detect_and_parse_sparql(sparql_response, natural_query)
             if is_sequential:
                 logger.warning("Sequential SPARQL detected in single nl_to_sparql call; using first query")
-                return content[0]["query"] if content else ""
+                return content[0]["query"], refer_decision if content else "", refer_decision
 
             span.set_attribute("sparql_length", len(content))
-            return content
+            return content, refer_decision
 
     @staticmethod
     def _categorize_query(user_query: str, result_type: str) -> str:

@@ -82,7 +82,7 @@ async def run_pipeline(
             use_ontology=use_ontology,
             use_fewshot=use_fewshot,
             fewshot_strategy=fewshot_strategy,
-            fewshot_top_n=3,
+            fewshot_top_n=5,
             _eval_retrieved_out=retrieved,
         )
 

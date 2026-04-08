@@ -39,6 +39,7 @@ async def nlq_to_sparql(
     cache_hit = False
     sparql_query = ""
     sparql_queries = None
+    refer_decision = None
 
     if cached_data:
         logger.info(f"Cache HIT for {user_query} -> {nl_query}")
@@ -61,7 +62,7 @@ async def nlq_to_sparql(
         logger.info(f"Cache MISS for {user_query} -> {nl_query}")
 
         try:
-            raw_sparql_response = await llm_client.nl_to_sparql(
+            raw_sparql_response, refer_decision = await llm_client.nl_to_sparql(
                 natural_query=user_query,
                 conversation_history=conversation_history
             )
@@ -77,7 +78,7 @@ async def nlq_to_sparql(
             logger.error(f"SPARQL generation error: {e}")
             sparql_valid = False
 
-    return nl_query, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit
+    return nl_query, sparql_query, sparql_queries, is_sequential, sparql_valid, cache_hit, refer_decision
 
 async def query_with_stream_response(
     query, context, db=None, user=None, conversation_history=None):
@@ -113,6 +114,8 @@ async def query_with_stream_response(
         was_from_cache = False
         sparql_query = ""
         sparql_queries = None
+        ch = conversation_history
+        refer_decision = None
 
         # Stage 1 & 2: NL to SPARQL with retry on execution error
         while retry_count <= max_retries:
@@ -120,11 +123,11 @@ async def query_with_stream_response(
                 logger.info(f"Stage 1: convert NL to SPARQL (attempt {retry_count + 1}/{max_retries + 1})")
 
                 # Generate or retrieve SPARQL
-                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, was_from_cache = await nlq_to_sparql(
+                normalized, sparql_query, sparql_queries, is_sequential, sparql_valid, was_from_cache, refer_decision = await nlq_to_sparql(
                     user_query=user_query,
                     redis_client=redis_client,
                     llm_client=llm_client,
-                    conversation_history=conversation_history
+                    conversation_history=ch
                 )
 
                 # Stage 2: Execute SPARQL
@@ -181,8 +184,8 @@ async def query_with_stream_response(
                 yield StatusMessage.processing_query()
 
                 # Create new conversation history with error feedback (don't mutate original)
-                conversation_history = list(conversation_history) if conversation_history else []
-                conversation_history.append({
+                ch = list(ch) if ch else []
+                ch.append({
                     "role": "user",
                     "content": f"The SPARQL query you generated failed with this error:\n\n{str(error_msg)}\n\nPlease analyze the error and generate a corrected SPARQL query. Original question: {query}"
                 })
@@ -206,13 +209,16 @@ async def query_with_stream_response(
                 kv_results = convert_sparql_to_kv(sparql_results, sparql_query=sparql_query_str)
                 formatted_results = format_for_llm(kv_results, max_items=10000)
 
+            if not refer_decision or refer_decision.label != "refer":
+                ch = None
+
             context_stream = llm_client.generate_answer_with_context(
                 user_query=user_query,
                 sparql_query=sparql_query_str,
                 sparql_results=formatted_results,
                 kv_results=kv_results,
                 system_prompt="",
-                conversation_history=conversation_history
+                conversation_history=ch
             )
             llm_latency_ms = int((time.time() - llm_start) * 1000)
 
