@@ -16,6 +16,17 @@ if __name__ == "__main__":
     # Define test cases
     test_cases = [
         {
+            "name": "Current Month",
+            "query": '''
+                PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+                SELECT ?currentMonth
+                WHERE {
+                    BIND(SUBSTR(STR(NOW()), 1, 7) AS ?currentMonth)
+                }
+            '''
+        },
+        {
             "name": "Subtract 7 days",
             "query": '''
                 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>

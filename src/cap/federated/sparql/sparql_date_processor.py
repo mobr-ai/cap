@@ -47,6 +47,18 @@ class SparqlDateProcessor:
         re.IGNORECASE | re.MULTILINE
     )
 
+    BIND_WRAPPED_ARITHMETIC_PATTERN = re.compile(
+        r'BIND\s*\(\s*\(\s*'  # BIND((
+        r'(NOW\(\s*\)|(?:"[^"]+"\^\^xsd:dateTime))'  # NOW() or a dateTime literal
+        r'\s*([+\-])\s*'  # operator + or -
+        r'"([^"]+)"\^\^xsd:(dayTimeDuration|duration|yearMonthDuration)'  # duration
+        r'\s*\)\s+'  # close the extra expression parenthesis
+        r'[aA][sS]\s+'  # as (case insensitive)
+        r'(\?[\w]+)'  # variable name
+        r'\s*\)',  # close BIND
+        re.IGNORECASE | re.MULTILINE
+    )
+
     DATETIME_LITERAL_PATTERN = re.compile(
         r'"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+\-]\d{2}:\d{2})?)"'
         r'\^\^xsd:dateTime'
@@ -61,6 +73,27 @@ class SparqlDateProcessor:
         r'([^)]*?)'  # capture rest of expression
         r'\)',  # )
         re.IGNORECASE | re.MULTILINE
+    )
+
+    BIND_START_PATTERN = re.compile(
+        r'\bBIND\s*\(',
+        re.IGNORECASE | re.MULTILINE
+    )
+
+    BIND_AS_PATTERN = re.compile(
+        r'\s+[aA][sS]\s+(\?[\w]+)\s*$'
+    )
+
+    NOW_CALL_PATTERN = re.compile(
+        r'\bNOW\s*\(\s*\)',
+        re.IGNORECASE
+    )
+
+    DATE_ARITHMETIC_IN_BIND_PATTERN = re.compile(
+        r'(?:NOW\s*\(\s*\)|(?:"[^"]+"\^\^xsd:dateTime))'
+        r'\s*[+\-]\s*'
+        r'"[^"]+"\^\^xsd:(?:dayTimeDuration|duration|yearMonthDuration)',
+        re.IGNORECASE
     )
 
     def __init__(self, reference_time: datetime | None = None):
@@ -327,6 +360,96 @@ class SparqlDateProcessor:
             logger.error(f"Original: {match.group(0)}")
             return match.group(0)
 
+    def _find_matching_parenthesis(self, text: str, open_paren_index: int) -> int:
+        """Find the closing parenthesis matching text[open_paren_index]."""
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index in range(open_paren_index, len(text)):
+            char = text[index]
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == '\\':
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char == '(':
+                depth += 1
+            elif char == ')':
+                depth -= 1
+                if depth == 0:
+                    return index
+
+        return -1
+
+    def _replace_non_arithmetic_now_bind_text(self, bind_text: str) -> tuple[str, bool]:
+        """
+        Replace NOW() inside a non-arithmetic BIND expression with a fixed xsd:dateTime literal.
+        """
+        open_paren_index = bind_text.find('(')
+        if open_paren_index == -1 or not bind_text.endswith(')'):
+            return bind_text, False
+
+        inner = bind_text[open_paren_index + 1:-1].strip()
+        as_match = self.BIND_AS_PATTERN.search(inner)
+        if not as_match:
+            return bind_text, False
+
+        expression = inner[:as_match.start()].strip()
+        variable = as_match.group(1)
+
+        if not self.NOW_CALL_PATTERN.search(expression):
+            return bind_text, False
+
+        if self.DATE_ARITHMETIC_IN_BIND_PATTERN.search(expression):
+            return bind_text, False
+
+        formatted_now = self._format_datetime(self._get_now())
+        rewritten_expression = self.NOW_CALL_PATTERN.sub(
+            f'"{formatted_now}"^^xsd:dateTime',
+            expression
+        )
+
+        replacement = f'BIND ({rewritten_expression} as {variable})'
+        return replacement, replacement != bind_text
+
+    def _replace_non_arithmetic_now_binds(self, query: str) -> tuple[str, int]:
+        """Replace non-arithmetic NOW() BIND expressions in a query."""
+        result = []
+        replacement_count = 0
+        search_from = 0
+
+        while True:
+            match = self.BIND_START_PATTERN.search(query, search_from)
+            if not match:
+                result.append(query[search_from:])
+                break
+
+            open_paren_index = query.find('(', match.start(), match.end())
+            close_paren_index = self._find_matching_parenthesis(query, open_paren_index)
+            if close_paren_index == -1:
+                result.append(query[search_from:])
+                break
+
+            bind_text = query[match.start():close_paren_index + 1]
+            replacement, changed = self._replace_non_arithmetic_now_bind_text(bind_text)
+
+            result.append(query[search_from:match.start()])
+            result.append(replacement)
+            if changed:
+                replacement_count += 1
+
+            search_from = close_paren_index + 1
+
+        return ''.join(result), replacement_count
+
     def _replace_bind(self, match: re.Match) -> str:
         """
         Replace a single BIND statement with calculated date.
@@ -435,6 +558,12 @@ class SparqlDateProcessor:
         processed_query = query
         if has_bind:
             processed_query = self.BIND_PATTERN.sub(count_and_replace_bind, processed_query)
+            processed_query = self.BIND_WRAPPED_ARITHMETIC_PATTERN.sub(
+                count_and_replace_bind,
+                processed_query
+            )
+            processed_query, now_bind_replacement_count = self._replace_non_arithmetic_now_binds(processed_query)
+            replacement_count += now_bind_replacement_count
 
         # Replace all matching FILTER statements
         if has_filter:
