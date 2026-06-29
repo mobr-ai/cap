@@ -606,3 +606,36 @@ class TelegramRenderedImage(Base):
     storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("NOW()"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
+class TelegramGuestUsagePeriod(Base):
+    __tablename__ = "telegram_guest_usage_period"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    feature_code: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        server_default=text("'telegram_guest_nl_query'"),
+        index=True,
+    )
+    period_start: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    period_end: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    used_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    limit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("3"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("NOW()"), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=text("NOW()"),
+        onupdate=text("NOW()"),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_user_id",
+            "feature_code",
+            "period_start",
+            "period_end",
+            name="uq_telegram_guest_usage_user_feature_window",
+        ),
+        Index("idx_telegram_guest_usage_user_feature", "telegram_user_id", "feature_code"),
+    )

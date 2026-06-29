@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from sqlalchemy.exc import IntegrityError
 import json
 import secrets
 from datetime import datetime
@@ -24,8 +26,16 @@ from cap.services.telegram_auth import (
     verify_telegram_webhook_secret,
 )
 from cap.services.telegram_chart_renderer import telegram_render_dir, render_telegram_image
+from cap.services.telegram_guest_access import (
+    TelegramGuestLimitDenied,
+    check_telegram_guest_query_access,
+    consume_telegram_guest_query_success,
+)
 
 router = APIRouter(prefix="/api/v1/telegram", tags=["telegram"])
+
+
+TELEGRAM_GUEST_RUNNER_USERNAME = "telegram_guest_runner"
 
 
 class TelegramLinkRequest(BaseModel):
@@ -93,6 +103,80 @@ def _extract_text_and_kv(chunks: list[str]) -> tuple[str, dict[str, Any] | None]
 
     return answer, kv
 
+
+def _get_or_create_telegram_guest_runner_user(db: Session) -> User:
+    """
+    Internal CAP user used only to execute public guest Telegram queries.
+
+    Guest limits are NOT calculated on this user.
+    Guest limits are calculated by telegram_user_id in telegram_guest_usage_period.
+    """
+    user = db.query(User).filter(User.username == TELEGRAM_GUEST_RUNNER_USERNAME).first()
+    if user:
+        return user
+
+    user = User(
+        username=TELEGRAM_GUEST_RUNNER_USERNAME,
+        display_name="Telegram Guest",
+        is_confirmed=False,
+    )
+
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except IntegrityError:
+        db.rollback()
+        user = db.query(User).filter(User.username == TELEGRAM_GUEST_RUNNER_USERNAME).first()
+        if not user:
+            raise
+        return user
+
+
+def _raise_guest_limit(exc: TelegramGuestLimitDenied) -> None:
+    raise HTTPException(status_code=429, detail=exc.payload) from exc
+
+
+def _upsert_telegram_chat_binding(
+    *,
+    db: Session,
+    data: TelegramQueryRequest,
+    default_cap_user_id: int | None,
+) -> None:
+    if data.telegram_chat_id is None:
+        return
+
+    binding = (
+        db.query(TelegramChatBinding)
+        .filter(TelegramChatBinding.telegram_chat_id == data.telegram_chat_id)
+        .first()
+    )
+
+    if not binding:
+        binding = TelegramChatBinding(
+            telegram_chat_id=data.telegram_chat_id,
+            chat_type=data.chat_type or "unknown",
+            title=data.chat_title,
+            created_by_telegram_user_id=data.telegram_user_id,
+            default_cap_user_id=default_cap_user_id,
+        )
+    else:
+        binding.chat_type = data.chat_type or binding.chat_type
+        binding.title = data.chat_title or binding.title
+
+        if binding.default_cap_user_id is None and default_cap_user_id is not None:
+            binding.default_cap_user_id = default_cap_user_id
+
+        binding.updated_at = datetime.now()
+
+    db.add(binding)
+    db.commit()
+
+    if not binding.is_enabled:
+        raise HTTPException(403, detail="telegramChatDisabled")
+
+
 async def _run_telegram_query(
     *,
     db: Session,
@@ -101,11 +185,15 @@ async def _run_telegram_query(
     telegram_chat_id: int | None,
     query: str,
     context: str | None,
+    check_cap_billing: bool = True,
+    consume_cap_billing: bool = True,
+    consume_success: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    try:
-        check_nl_query_access(db, cap_user)
-    except BillingAccessDenied as exc:
-        raise HTTPException(status_code=402, detail=exc.payload) from exc
+    if check_cap_billing:
+        try:
+            check_nl_query_access(db, cap_user)
+        except BillingAccessDenied as exc:
+            raise HTTPException(status_code=402, detail=exc.payload) from exc
 
     chunks: list[str] = []
     final_state_out: dict[str, Any] = {}
@@ -134,7 +222,11 @@ async def _run_telegram_query(
         )
 
     if answer:
-        consume_nl_query_success(db, cap_user)
+        if consume_cap_billing:
+            consume_nl_query_success(db, cap_user)
+
+        if consume_success is not None:
+            consume_success()
 
     return {
         "answer": answer or "I could not generate a text answer.",
@@ -144,6 +236,40 @@ async def _run_telegram_query(
             "parse_mode": "HTML",
         },
     }
+
+
+async def _run_telegram_guest_query(
+    *,
+    db: Session,
+    telegram_user_id: int,
+    telegram_chat_id: int | None,
+    query: str,
+    context: str | None,
+) -> dict[str, Any]:
+    try:
+        check_telegram_guest_query_access(db, telegram_user_id=telegram_user_id)
+    except TelegramGuestLimitDenied as exc:
+        _raise_guest_limit(exc)
+
+    guest_runner = _get_or_create_telegram_guest_runner_user(db)
+
+    try:
+        return await _run_telegram_query(
+            db=db,
+            cap_user=guest_runner,
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=telegram_chat_id,
+            query=query,
+            context=context,
+            check_cap_billing=False,
+            consume_cap_billing=False,
+            consume_success=lambda: consume_telegram_guest_query_success(
+                db,
+                telegram_user_id=telegram_user_id,
+            ),
+        )
+    except TelegramGuestLimitDenied as exc:
+        _raise_guest_limit(exc)
 
 
 @router.post("/link")
@@ -204,8 +330,10 @@ async def query_from_telegram_bot(
 ):
     """
     Called by your Telegram bot backend.
-    Authentication is server-to-server via x-cap-telegram-api-key.
-    The telegram_user_id must come from Telegram's update.from.id, not from user text.
+
+    Linked Telegram users use their CAP account and normal CAP billing.
+    Unlinked Telegram users are allowed as guests with a Telegram-specific
+    daily limit.
     """
     verify_internal_bot_request(request)
 
@@ -214,41 +342,35 @@ async def query_from_telegram_bot(
         .filter(TelegramAccount.telegram_user_id == data.telegram_user_id)
         .first()
     )
-    if not account:
-        raise HTTPException(403, detail="telegramAccountNotLinked")
 
-    cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
-    if not cap_user:
-        raise HTTPException(404, detail="capUserNotFound")
+    if account:
+        cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
+        if not cap_user:
+            raise HTTPException(404, detail="capUserNotFound")
 
-    if data.telegram_chat_id is not None:
-        binding = (
-            db.query(TelegramChatBinding)
-            .filter(TelegramChatBinding.telegram_chat_id == data.telegram_chat_id)
-            .first()
+        _upsert_telegram_chat_binding(
+            db=db,
+            data=data,
+            default_cap_user_id=cap_user.user_id,
         )
-        if not binding:
-            binding = TelegramChatBinding(
-                telegram_chat_id=data.telegram_chat_id,
-                chat_type=data.chat_type or "unknown",
-                title=data.chat_title,
-                created_by_telegram_user_id=data.telegram_user_id,
-                default_cap_user_id=cap_user.user_id,
-            )
-        else:
-            binding.chat_type = data.chat_type or binding.chat_type
-            binding.title = data.chat_title or binding.title
-            binding.updated_at = datetime.now()
 
-        db.add(binding)
-        db.commit()
+        return await _run_telegram_query(
+            db=db,
+            cap_user=cap_user,
+            telegram_user_id=data.telegram_user_id,
+            telegram_chat_id=data.telegram_chat_id,
+            query=data.query,
+            context=data.context,
+        )
 
-        if not binding.is_enabled:
-            raise HTTPException(403, detail="telegramChatDisabled")
-
-    return await _run_telegram_query(
+    _upsert_telegram_chat_binding(
         db=db,
-        cap_user=cap_user,
+        data=data,
+        default_cap_user_id=None,
+    )
+
+    return await _run_telegram_guest_query(
+        db=db,
         telegram_user_id=data.telegram_user_id,
         telegram_chat_id=data.telegram_chat_id,
         query=data.query,
@@ -282,9 +404,16 @@ async def telegram_webhook(
         .first()
     )
     if not account:
+        result = await _run_telegram_guest_query(
+            db=db,
+            telegram_user_id=int(sender["id"]),
+            telegram_chat_id=int(chat["id"]) if chat.get("id") is not None else None,
+            query=text,
+            context=None,
+        )
         return {
-            "status": "unlinked",
-            "answer": "Please link your Telegram account to CAP first.",
+            "status": "guest",
+            **result,
         }
 
     cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
