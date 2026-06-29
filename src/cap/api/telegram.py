@@ -1,7 +1,6 @@
-from collections.abc import Callable
-from sqlalchemy.exc import IntegrityError
 import json
 import secrets
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -9,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cap.core.auth_dependencies import get_current_user_unconfirmed
@@ -25,7 +25,7 @@ from cap.services.telegram_auth import (
     verify_telegram_init_data,
     verify_telegram_webhook_secret,
 )
-from cap.services.telegram_chart_renderer import telegram_render_dir, render_telegram_image
+from cap.services.telegram_chart_renderer import render_telegram_image, telegram_render_dir
 from cap.services.telegram_guest_access import (
     TelegramGuestLimitDenied,
     check_telegram_guest_query_access,
