@@ -209,15 +209,17 @@ async def _run_telegram_query(
         chunks.append(chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk))
 
     answer, _streamed_kv = _extract_text_and_kv(chunks)
+    graph_kv = final_state_out.get("kv_results")
+    render_kv = graph_kv if isinstance(graph_kv, dict) else _streamed_kv
 
     image = None
-    if _streamed_kv:
+    if render_kv:
         image = render_telegram_image(
             db=db,
             cap_user=cap_user,
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_chat_id,
-            kv_results=_streamed_kv,
+            kv_results=render_kv,
             absolute=True,
         )
 

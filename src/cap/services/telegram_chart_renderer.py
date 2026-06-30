@@ -292,8 +292,13 @@ def _normalize_telegram_chart_payload(
         or kv_results.get("nl_query")
     )
 
+    message = kv_results.get("message")
+
     converted_payload = _extract_converted_vega_payload(kv_results)
     if converted_payload is not None:
+        converted_payload = dict(converted_payload)
+        if message and not converted_payload.get("values"):
+            converted_payload["_message"] = message
         return result_type, converted_payload, title
 
     user_query = kv_results.get("user_query") or kv_results.get("nl_query") or ""
@@ -312,6 +317,10 @@ def _normalize_telegram_chart_payload(
         raw_data=kv_results.get("data"),
         user_query=user_query,
     )
+
+    if message and not converted.get("values"):
+        converted = dict(converted)
+        converted["_message"] = message
 
     return result_type, converted, title
 
@@ -372,8 +381,108 @@ def render_telegram_image(
     }
 
 
+def _scalar(value: Any) -> Any:
+    """
+    Telegram renderer helper.
+
+    SPARQL values can arrive as raw scalars, or as dicts such as:
+    {"value": "123.4", "type": "literal", ...}
+    {"ada": "0.17", "lovelace": "..."}
+    """
+    if isinstance(value, dict):
+        for key in ("ada", "value", "lovelace"):
+            if key in value:
+                return value[key]
+        return ""
+
+    return value
+
+
+def _number(value: Any, default: float | None = None) -> float | None:
+    value = _scalar(value)
+
+    if value is None or value == "":
+        return default
+
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _first_existing(columns: list[str], candidates: list[str]) -> str | None:
+    lower_to_real = {str(col).lower(): col for col in columns}
+
+    for candidate in candidates:
+        real = lower_to_real.get(candidate.lower())
+        if real:
+            return real
+
+    return None
+
+
+def _numeric_column(
+    rows: list[dict[str, Any]],
+    columns: list[str],
+    *,
+    exclude: set[str] | None = None,
+) -> str | None:
+    exclude = exclude or set()
+
+    for col in columns:
+        if col in exclude:
+            continue
+
+        for row in rows:
+            if _number(row.get(col)) is not None:
+                return col
+
+    return None
+
+
+def _empty_figure(title: str | None, message: str = "No results found") -> go.Figure:
+    fig = go.Figure()
+
+    fig.add_annotation(
+        text=message,
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font={"size": 28},
+    )
+
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+
+    fig.update_layout(
+        title=title or "",
+        width=1200,
+        height=760,
+        margin={"l": 50, "r": 50, "t": 90, "b": 50},
+        font={"size": 18},
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+    )
+
+    return fig
+
+
+def _short_label(value: Any, max_len: int = 26) -> str:
+    text = str(_scalar(value) or "")
+
+    if len(text) <= max_len:
+        return text
+
+    return f"{text[:12]}…{text[-10:]}"
+
+
 def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None) -> go.Figure:
     values = vega.get("values") or []
+
+    if not values and result_type != "table":
+        return _empty_figure(title, str(vega.get("_message") or "No results found"))
 
     if result_type == "table":
         df = _table_to_dataframe(vega).head(25)
@@ -438,23 +547,95 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
         return _layout(fig, title, x_title=x_title, y_title=y_title)
 
     if result_type == "bubble_chart":
-        sizes = [max(float(v.get("size") or v.get("z") or 1), 1.0) for v in values]
+        rows = [row for row in values if isinstance(row, dict)]
+        if not rows:
+            return _empty_figure(title, str(vega.get("_message") or "No results found"))
+
+        columns = list(rows[0].keys())
+
+        # IMPORTANT:
+        # VegaConverter may output normalized rows:
+        #   {"x": ..., "y": ..., "size": ...}
+        # while metadata keeps original semantic keys:
+        #   _x_key = "epochNumber", _y_key = "tps", _size_key = "avgFee"
+        #
+        # For plotting, use the actual keys present in each row.
+        # For labels, use the semantic metadata keys when available.
+
+        x_value_key = (
+            "x" if "x" in columns
+            else _first_existing(columns, ["epochNumber", "epoch", "timePeriod", "date", "day"])
+            or columns[0]
+        )
+
+        y_value_key = (
+            "y" if "y" in columns
+            else _first_existing(columns, ["tps", "TPS", "value", "amount"])
+            or _numeric_column(rows, columns, exclude={x_value_key})
+        )
+
+        size_value_key = (
+            "size" if "size" in columns
+            else "z" if "z" in columns
+            else _first_existing(columns, ["avgFee", "averageFee", "fee", "totalTx", "count"])
+            or _numeric_column(
+                rows,
+                columns,
+                exclude={x_value_key, y_value_key} if y_value_key else {x_value_key},
+            )
+        )
+
+        if not y_value_key:
+            return _empty_figure(title, "Could not determine bubble chart Y values")
+
+        x_values = [_scalar(row.get(x_value_key)) for row in rows]
+        y_values = [_number(row.get(y_value_key)) for row in rows]
+
+        raw_sizes = [
+            _number(row.get(size_value_key), 1.0) if size_value_key else 1.0
+            for row in rows
+        ]
+
+        # Avoid invisible bubbles when size values are small decimals,
+        # for example avgFee ~= 0.30 ADA.
+        numeric_sizes = [float(size or 1.0) for size in raw_sizes]
+        min_size = min(numeric_sizes) if numeric_sizes else 1.0
+        max_size = max(numeric_sizes) if numeric_sizes else 1.0
+
+        if max_size == min_size:
+            marker_sizes = [35 for _ in numeric_sizes]
+        else:
+            marker_sizes = [
+                20 + ((size - min_size) / (max_size - min_size)) * 60
+                for size in numeric_sizes
+            ]
+
         fig = go.Figure(
             data=[
                 go.Scatter(
-                    x=[v.get("x") for v in values],
-                    y=[v.get("y") for v in values],
+                    x=x_values,
+                    y=y_values,
                     mode="markers",
                     marker={
-                        "size": sizes,
-                        "sizemode": "area",
-                        "sizeref": max(sizes) / 80 if sizes else 1,
+                        "size": marker_sizes,
+                        "sizemode": "diameter",
+                        "opacity": 0.75,
                     },
-                    text=[v.get("label", "") for v in values],
+                    text=[
+                        "<br>".join(
+                            f"{col}: {_scalar(row.get(col))}"
+                            for col in columns
+                            if row.get(col) is not None
+                        )
+                        for row in rows
+                    ],
                 )
             ]
         )
-        x_title, y_title = _axis_titles(result_type, vega, default_x="X", default_y="Y")
+
+        x_title = _axis_title(vega.get("_x_key") or x_value_key) or "X"
+        y_title = _axis_title(vega.get("_y_key") or y_value_key) or "Y"
+
         return _layout(fig, title, x_title=x_title, y_title=y_title)
 
     if result_type == "heatmap":
@@ -465,15 +646,72 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
         return _layout(fig, title, x_title=x_title, y_title=y_title)
 
     if result_type == "treemap":
+        rows = [row for row in values if isinstance(row, dict)]
+        if not rows:
+            return _empty_figure(title, str(vega.get("_message") or "No results found"))
+
+        columns = list(rows[0].keys())
+
+        label_key = (
+            _first_existing(
+                columns,
+                [
+                    "label",
+                    "name",
+                    "category",
+                    "policyId",
+                    "policyID",
+                    "policy_id",
+                    "tokenName",
+                    "assetName",
+                ],
+            )
+            or columns[0]
+        )
+
+        value_key = (
+            _first_existing(
+                columns,
+                [
+                    "value",
+                    "amount",
+                    "mintCount",
+                    "count",
+                    "total",
+                    "transfers",
+                    "deployments",
+                ],
+            )
+            or _numeric_column(rows, columns, exclude={label_key})
+        )
+
+        parent_key = _first_existing(columns, ["parent", "group", "categoryParent"])
+
+        if not value_key:
+            return _empty_figure(title, "Could not determine treemap values")
+
+        labels = [_short_label(row.get(label_key)) for row in rows]
+        parents = [
+            _short_label(row.get(parent_key)) if parent_key and row.get(parent_key) else ""
+            for row in rows
+        ]
+        numeric_values = [_number(row.get(value_key), 0.0) for row in rows]
+
+        if not any(value and value > 0 for value in numeric_values):
+            return _empty_figure(title, str(vega.get("_message") or "No positive values to plot"))
+
         fig = go.Figure(
             data=[
                 go.Treemap(
-                    labels=[v.get("label") or v.get("name") or v.get("category") for v in values],
-                    parents=[v.get("parent", "") for v in values],
-                    values=[v.get("value") for v in values],
+                    labels=labels,
+                    parents=parents,
+                    values=numeric_values,
+                    customdata=[_scalar(row.get(label_key)) for row in rows],
+                    hovertemplate="%{customdata}<br>Value: %{value}<extra></extra>",
                 )
             ]
         )
+
         return _layout(fig, title)
 
     raise ValueError(f"Unsupported Telegram render type: {result_type}")
