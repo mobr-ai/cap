@@ -171,7 +171,7 @@ def check_telegram_guest_query_access(
         raise TelegramGuestLimitDenied(
             {
                 "code": "telegramGuestDailyLimitReached",
-                "message": f"Daily guest limit reached. Try again in {state['wait_text']}.",
+                "message": f"Daily guest limit reached. Try again in {state['wait_text']}. Ready to go beyond guest access? Apply for CAP’s closed beta and help shape the platform: https://cap.mobr.ai/beta",
                 "access": state,
             }
         )
