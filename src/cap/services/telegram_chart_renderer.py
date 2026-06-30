@@ -1,3 +1,8 @@
+import io
+import logging
+import urllib.request
+from urllib.parse import urlparse
+
 import hashlib
 import os
 import secrets
@@ -8,14 +13,16 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
 from cap.database.model import TelegramRenderedImage, User
 from cap.services.vega.facade import VegaConverter
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_TELEGRAM_RENDER_DIR = "/var/lib/cap/telegram-renders"
 DEFAULT_PUBLIC_BASE_URL = "http://localhost:8000"
-
+DEFAULT_CAP_LOGO_URL = "https://cap.mobr.ai/icons/logo.png"
 
 def telegram_render_dir() -> Path:
     return Path(
@@ -27,8 +34,52 @@ def _public_base_url() -> str:
     return (os.getenv("PUBLIC_BASE_URL") or DEFAULT_PUBLIC_BASE_URL).rstrip("/")
 
 
-def _cap_logo_path() -> str:
-    return os.getenv("CAP_LOGO_PATH", "")
+def _cap_logo_source() -> str:
+    """
+    Supports both:
+    - CAP_LOGO_URL=https://cap.mobr.ai/icons/logo.png
+    - CAP_LOGO_PATH=/local/path/logo.png
+
+    Defaults to the hosted CAP logo.
+    """
+    return (
+        os.getenv("CAP_LOGO_URL")
+        or os.getenv("CAP_LOGO_PATH")
+        or DEFAULT_CAP_LOGO_URL
+    ).strip()
+
+
+def _load_cap_logo() -> Image.Image | None:
+    source = _cap_logo_source()
+
+    if not source:
+        return None
+
+    try:
+        parsed = urlparse(source)
+
+        if parsed.scheme in {"http", "https"}:
+            request = urllib.request.Request(
+                source,
+                headers={"User-Agent": "CAP-Telegram-Renderer/1.0"},
+            )
+
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = response.read()
+
+            return Image.open(io.BytesIO(data)).convert("RGBA")
+
+        logo_path = Path(source)
+
+        if not logo_path.exists():
+            logger.warning("CAP logo path does not exist: %s", source)
+            return None
+
+        return Image.open(logo_path).convert("RGBA")
+
+    except Exception:
+        logger.exception("Failed to load CAP logo for Telegram watermark")
+        return None
 
 
 def _image_ttl_days() -> int:
@@ -40,31 +91,82 @@ def _ensure_dir() -> Path:
     render_dir.mkdir(parents=True, exist_ok=True)
     return render_dir
 
-def _watermark_png(image_path: Path) -> None:
-    cap_logo_path = _cap_logo_path()
-    if not cap_logo_path:
-        return
 
-    logo_path = Path(cap_logo_path)
-    if not logo_path.exists():
-        return
+def _watermark_footer_text() -> str:
+    return os.getenv("CAP_WATERMARK_TEXT", "https://cap.mobr.ai").strip()
+
+
+def _watermark_png(image_path: Path) -> None:
+    logo = _load_cap_logo()
 
     base = Image.open(image_path).convert("RGBA")
-    logo = Image.open(logo_path).convert("RGBA")
-
-    max_w = int(base.width * 0.55)
-    ratio = max_w / logo.width
-    logo = logo.resize((max_w, int(logo.height * ratio)))
-
-    alpha = logo.getchannel("A")
-    alpha = ImageEnhance.Brightness(alpha).enhance(0.08)
-    logo.putalpha(alpha)
-
-    x = (base.width - logo.width) // 2
-    y = (base.height - logo.height) // 2
-
     layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
-    layer.paste(logo, (x, y), logo)
+
+    # Optional large background logo
+    if logo is not None:
+        max_w = int(base.width)
+        max_h = int(base.height)
+
+        scale = min(max_w / logo.width, max_h / logo.height)
+        new_size = (
+            max(1, int(logo.width * scale)),
+            max(1, int(logo.height * scale)),
+        )
+        logo = logo.resize(new_size, Image.LANCZOS)
+
+        alpha = logo.getchannel("A")
+        alpha = ImageEnhance.Brightness(alpha).enhance(0.5)
+        logo.putalpha(alpha)
+
+        x = (base.width - logo.width) // 2
+        y = (base.height - logo.height) // 2
+        layer.paste(logo, (x, y), logo)
+
+    # Bottom-left text
+    text = _watermark_footer_text()
+    if text:
+        draw = ImageDraw.Draw(layer)
+
+        # reasonable size for 1200x760 images
+        font_size = max(18, int(base.width * 0.018))
+
+        try:
+            # Try a common system font first
+            font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+
+        padding_x = 24
+        padding_y = 18
+
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+
+        x = padding_x
+        y = base.height - text_h - padding_y
+
+        # subtle white backing to improve readability
+        bg_pad_x = 10
+        bg_pad_y = 6
+        draw.rounded_rectangle(
+            (
+                x - bg_pad_x,
+                y - bg_pad_y,
+                x + text_w + bg_pad_x,
+                y + text_h + bg_pad_y,
+            ),
+            radius=8,
+            fill=(255, 255, 255, 150),
+        )
+
+        # dark semi-transparent text
+        draw.text(
+            (x, y),
+            text,
+            font=font,
+            fill=(55, 55, 55, 180),
+        )
 
     out = Image.alpha_composite(base, layer).convert("RGB")
     out.save(image_path, "PNG", optimize=True)
