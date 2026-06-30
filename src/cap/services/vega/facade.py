@@ -23,7 +23,7 @@ class VegaConverter(
 
     x_candidates = [
         'yearMonth', 'year', 'month', 'date', 'timePeriod', 'timestamp', 'ts',
-        'epoch', 'epochNumber', 'x', 'index', 'blockHeight', 'blockNumber',
+        'hour', 'hourOfDay', 'hour_of_day', 'epoch', 'epochNumber', 'x', 'index', 'blockHeight', 'blockNumber',
         'name', 'label', 'category'
     ]
 

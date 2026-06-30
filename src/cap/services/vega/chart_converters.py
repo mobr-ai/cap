@@ -183,6 +183,67 @@ class VegaChartConverter:
 
         return labels
 
+
+    @classmethod
+    def _is_hour_field(cls, data: list[DataRow], key: str) -> bool:
+        """Return True for fields that represent hour-of-day buckets, not dates."""
+        key_lower = key.lower()
+        if key_lower not in {"hour", "hours", "hourofday", "hour_of_day", "txhour", "tx_hour"}:
+            return False
+
+        for item in data:
+            if not isinstance(item, dict) or item.get(key) is None:
+                continue
+
+            raw = cls._extract_raw_value(item.get(key))
+            raw_str = str(raw).strip()
+
+            # Accept 0-23, 00-23, and labels already rendered as HH:00 / HHh.
+            if raw_str.endswith(":00"):
+                raw_str = raw_str[:-3]
+            if raw_str.endswith("h"):
+                raw_str = raw_str[:-1]
+
+            try:
+                hour = int(raw_str)
+            except (TypeError, ValueError):
+                return False
+
+            if hour < 0 or hour > 23:
+                return False
+
+        return True
+
+    @classmethod
+    def _format_hour_value(cls, value: Any) -> str:
+        raw = cls._extract_raw_value(value)
+        raw_str = str(raw).strip()
+
+        if raw_str.endswith(":00"):
+            raw_str = raw_str[:-3]
+        if raw_str.endswith("h"):
+            raw_str = raw_str[:-1]
+
+        try:
+            return f"{int(raw_str):02d}:00"
+        except (TypeError, ValueError):
+            return str(raw)
+
+    @classmethod
+    def _hour_sort_value(cls, value: Any) -> int | None:
+        raw = cls._extract_raw_value(value)
+        raw_str = str(raw).strip()
+
+        if raw_str.endswith(":00"):
+            raw_str = raw_str[:-3]
+        if raw_str.endswith("h"):
+            raw_str = raw_str[:-1]
+
+        try:
+            return int(raw_str)
+        except (TypeError, ValueError):
+            return None
+
     @classmethod
     def _convert_line_chart(cls, data: Any, user_query: str) -> dict[str, Any]:
         """Convert data to line chart format with multi-series support."""
@@ -225,31 +286,42 @@ class VegaChartConverter:
 
         # Build line chart data with series index
         values = []
+        x_is_hour = cls._is_hour_field(data, x_key)
         repetition_count = cls._detect_repetition_pattern(data, x_key)
 
         if repetition_count > 1 and len(series_keys) == 1:
             # Single variable contains multiple series via repetition
             for idx, item in enumerate(data):
                 series_idx = idx % repetition_count
-                x_display = cls._format_x_value(item.get(x_key), x_key)
+                raw_x = item.get(x_key)
+                x_display = cls._format_hour_value(raw_x) if x_is_hour else cls._format_x_value(raw_x, x_key)
+                x_sort = cls._hour_sort_value(raw_x) if x_is_hour else None
                 y_val = cls._extract_y_value(item.get(series_keys[0]))
 
                 if y_val is not None:
                     try:
-                        values.append({"x": x_display, "y": y_val, "c": series_idx})
+                        point = {"x": x_display, "y": y_val, "c": series_idx}
+                        if x_sort is not None:
+                            point["x_order"] = x_sort
+                        values.append(point)
                     except Exception as e:
                         logger.warning(f"Failed to build series {series_idx}: {e}")
         else:
             # Multiple variables each represent a series
             for item in data:
-                x_display = cls._format_x_value(item.get(x_key), x_key)
+                raw_x = item.get(x_key)
+                x_display = cls._format_hour_value(raw_x) if x_is_hour else cls._format_x_value(raw_x, x_key)
+                x_sort = cls._hour_sort_value(raw_x) if x_is_hour else None
 
                 for series_idx, series_key in enumerate(series_keys):
                     y_val = cls._extract_y_value(item.get(series_key))
 
                     if y_val is not None:
                         try:
-                            values.append({"x": x_display, "y": y_val, "c": series_idx})
+                            point = {"x": x_display, "y": y_val, "c": series_idx}
+                            if x_sort is not None:
+                                point["x_order"] = x_sort
+                            values.append(point)
                         except Exception as e:
                             logger.warning(f"Failed to build series {series_idx}: {e}")
 
@@ -280,7 +352,18 @@ class VegaChartConverter:
             "_series_labels": series_labels if series_labels else None,
             "_label_key": label_key,  # Which column was used for series labels
             "_x_key": x_key,  # X-axis column
-            "_y_keys": series_keys  # Y-axis column(s)
+            "_y_keys": series_keys,  # Y-axis column(s)
+            "_field_types": {
+                "x": "ordinal" if x_is_hour else ("temporal" if cls._is_date_field(data, x_key) else "nominal"),
+                "y": "quantitative",
+                "color": "nominal",
+            },
+            "_sort_fields": {
+                "x": "x_order" if x_is_hour else None,
+            },
+            "_axis_format": {
+                "x": None if x_is_hour else None,
+            },
         }
         logger.debug(f"converted to line chart: {line_chart}")
         return line_chart
