@@ -10,8 +10,11 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "<new_revision>"
-down_revision: str | Sequence[str] | None = "1a4dda3a21c3"
+revision: str = "202606300001"
+down_revision: str | Sequence[str] | None = (
+    "20260626225720_merge_alembic_heads",
+    "add_telegram_guest_usage",
+)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
