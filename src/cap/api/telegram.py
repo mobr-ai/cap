@@ -185,10 +185,13 @@ async def _run_telegram_query(
     telegram_chat_id: int | None,
     query: str,
     context: str | None,
+    telegram_account_id: int | None = None,
+    request_source: str = "telegram_guest",
     check_cap_billing: bool = True,
     consume_cap_billing: bool = True,
     consume_success: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
+
     if check_cap_billing:
         try:
             check_nl_query_access(db, cap_user)
@@ -205,6 +208,10 @@ async def _run_telegram_query(
         user=cap_user,
         conversation_history=[],
         final_state_out=final_state_out,
+        request_source=request_source,
+        telegram_account_id=telegram_account_id,
+        telegram_user_id=telegram_user_id,
+        telegram_chat_id=telegram_chat_id,
     ):
         chunks.append(chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk))
 
@@ -230,8 +237,10 @@ async def _run_telegram_query(
         if consume_success is not None:
             consume_success()
 
+        answer += "\nhttps://cap.mobr.ai"
+
     return {
-        "answer": answer or "I could not generate a text answer.",
+        "answer": answer or "I could not generate an answer.",
         "image": image,
         "telegram": {
             "send_as": "photo" if image else "message",
@@ -261,6 +270,8 @@ async def _run_telegram_guest_query(
             cap_user=guest_runner,
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_chat_id,
+            telegram_account_id=None,
+            request_source="telegram_guest",
             query=query,
             context=context,
             check_cap_billing=False,
@@ -361,6 +372,8 @@ async def query_from_telegram_bot(
             cap_user=cap_user,
             telegram_user_id=data.telegram_user_id,
             telegram_chat_id=data.telegram_chat_id,
+            telegram_account_id=account.id,
+            request_source="telegram_linked",
             query=data.query,
             context=data.context,
         )

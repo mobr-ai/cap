@@ -392,12 +392,55 @@ class QueryMetrics(Base):
     __tablename__ = "query_metrics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("user.user_id"), index=True, nullable=True)
+
+    # CAP identity, nullable because Telegram guests may not have a CAP user
+    user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("user.user_id"),
+        index=True,
+        nullable=True,
+    )
+
+    # Telegram identity, nullable because normal CAP web users do not have Telegram context
+    telegram_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("telegram_account.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    telegram_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        index=True,
+        nullable=True,
+    )
+    telegram_chat_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        index=True,
+        nullable=True,
+    )
+
+    # Where the query came from: cap_web, telegram_linked, telegram_guest
+    request_source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text("'cap_web'"),
+        index=True,
+    )
 
     nl_query: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_query: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     detected_language: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
-    sparql_query: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Store SPARQL and SQL separately.
+    sparql_query: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    sql_query: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+
+    # onchain, offchain, federated
+    query_source: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+
+    has_sparql: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    has_sql: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
     is_sequential: Mapped[bool] = mapped_column(Boolean, default=False)
     is_federated: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -406,6 +449,7 @@ class QueryMetrics(Base):
     kv_results: Mapped[Any | None] = mapped_column(JSON)
 
     sparql_valid: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    sql_valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     semantic_valid: Mapped[bool] = mapped_column(Boolean, nullable=False)
     query_succeeded: Mapped[bool] = mapped_column(Boolean, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -418,6 +462,7 @@ class QueryMetrics(Base):
 
     llm_latency_ms: Mapped[int | None] = mapped_column(Integer)
     sparql_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    sql_latency_ms: Mapped[int | None] = mapped_column(Integer)
     total_latency_ms: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("NOW()"), index=True)
@@ -425,6 +470,10 @@ class QueryMetrics(Base):
     __table_args__ = (
         Index("idx_query_metrics_language_date", "detected_language", "created_at"),
         Index("idx_query_metrics_user_date", "user_id", "created_at"),
+        Index("idx_query_metrics_telegram_user_date", "telegram_user_id", "created_at"),
+        Index("idx_query_metrics_telegram_account_date", "telegram_account_id", "created_at"),
+        Index("idx_query_metrics_request_source_date", "request_source", "created_at"),
+        Index("idx_query_metrics_query_source_date", "query_source", "created_at"),
         Index("idx_query_metrics_performance", "total_latency_ms", "created_at"),
     )
 

@@ -22,6 +22,10 @@ async def query_with_stream_response(
     user=None,
     conversation_history=None,
     final_state_out: dict[str, Any] | None = None,
+    request_source: str = "cap_web",
+    telegram_account_id: int | None = None,
+    telegram_user_id: int | None = None,
+    telegram_chat_id: int | None = None,
 ):
     start_time = time.time()
     final_state = {}
@@ -89,19 +93,35 @@ async def query_with_stream_response(
             execution_result = final_state.get("execution_result")
             user_id = user.user_id if user else None
 
+            sparql_query = federated_query.sparql if federated_query else ""
+            sql_query = federated_query.sql if federated_query else ""
+            query_source = (
+                federated_query.source.value
+                if federated_query and federated_query.source
+                else None
+            )
+
             MetricsService.record_query_metrics(
                 db=db,
                 nl_query=query,
                 normalized_query=final_state.get("normalized_query", ""),
-                sparql_query=federated_query.model_dump_json() if federated_query else "",
+                sparql_query=sparql_query,
+                sql_query=sql_query,
+                query_source=query_source,
                 kv_results=json_safe(final_state.get("kv_results")),
                 is_sequential=False,
-                sparql_valid=bool(final_state.get("query_valid")),
+                sparql_valid=bool(sparql_query and final_state.get("query_valid")),
+                sql_valid=bool(sql_query and final_state.get("query_valid")),
                 query_succeeded=bool(execution_result and execution_result.has_data),
                 llm_latency_ms=0,
                 sparql_latency_ms=0,
+                sql_latency_ms=0,
                 total_latency_ms=total_latency_ms,
                 user_id=user_id,
+                telegram_account_id=telegram_account_id,
+                telegram_user_id=telegram_user_id,
+                telegram_chat_id=telegram_chat_id,
+                request_source=request_source,
                 error_message=final_state.get("error"),
             )
         except Exception as metrics_error:

@@ -278,6 +278,7 @@ async def natural_language_query(
                 db.query(QueryMetrics)
                 .filter(
                     QueryMetrics.user_id == current_user.user_id,
+                    QueryMetrics.request_source == "cap_web",
                     QueryMetrics.nl_query == request.query,
                     QueryMetrics.created_at >= since,
                 )
