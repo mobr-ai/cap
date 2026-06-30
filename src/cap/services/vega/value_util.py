@@ -187,8 +187,12 @@ class VegaValue:
 
     @classmethod
     def _extract_y_value(cls, y_val: Any) -> Any:
-        """Extract numeric value from potentially nested structures."""
+        """Extract the actual numeric value from potentially nested structures."""
         if isinstance(y_val, dict):
+            if "value" in y_val:
+                return y_val["value"]
+            if "ada" in y_val:
+                return y_val["ada"]
             return next(iter(y_val.values()), 0)
         return y_val
 
