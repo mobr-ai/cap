@@ -183,9 +183,231 @@ def _axis_title(value: Any | None) -> str | None:
     return VegaConverter._format_column_name(text)
 
 
+def _semantic_label(
+    vega: dict[str, Any],
+    semantic_key: str,
+    fallback_key: str | None = None,
+    fallback: str | None = None,
+) -> str | None:
+    """
+    Returns a human-readable label for semantic metadata keys such as:
+      _x_key, _y_key, _size_key, _label_key, _color_key
+    """
+    value = vega.get(semantic_key) or fallback_key or fallback
+
+    if value is None:
+        return None
+
+    return _axis_title(value)
+
+
 def _columns(vega: dict[str, Any]) -> list[str]:
     columns = vega.get("_columns") or []
     return columns if isinstance(columns, list) else []
+
+
+def _unique_in_order(values: list[dict[str, Any]], key: str) -> list[Any]:
+    seen = set()
+    out = []
+
+    for row in values:
+        if not isinstance(row, dict) or key not in row:
+            continue
+
+        value = row.get(key)
+
+        if value in seen:
+            continue
+
+        seen.add(value)
+        out.append(value)
+
+    return out
+
+
+def _format_label(value: Any) -> str:
+    return VegaConverter._format_column_name(str(_scalar(value)))
+
+
+def _is_zero_based_index_series(series_values: list[Any]) -> bool:
+    try:
+        ints = [int(value) for value in series_values]
+    except Exception:
+        return False
+
+    return sorted(ints) == list(range(len(ints)))
+
+
+def _infer_x_column_from_metadata(
+    *,
+    vega: dict[str, Any],
+    values: list[dict[str, Any]],
+) -> str | None:
+    columns = _columns(vega)
+
+    if not columns:
+        return None
+
+    explicit_x = vega.get("_x_key")
+    if explicit_x:
+        explicit_x_formatted = _axis_title(explicit_x)
+        for col in columns:
+            if col == explicit_x or col == explicit_x_formatted:
+                return col
+
+    # Common timestamp / date column names.
+    for candidate in (
+        "ts",
+        "timestamp",
+        "time",
+        "date",
+        "day",
+        "hour",
+        "datetime",
+        "block_time",
+        "created_at",
+    ):
+        for col in columns:
+            normalized = str(col).replace(" ", "_").lower()
+            if normalized == candidate:
+                return col
+
+    # Fallback: if x values look like datetimes, prefer the first metadata
+    # column that looks temporal.
+    sample_x = None
+    for row in values:
+        if isinstance(row, dict) and row.get("x") is not None:
+            sample_x = row.get("x")
+            break
+
+    if sample_x is not None:
+        sample_text = str(sample_x)
+        if "T" in sample_text or "-" in sample_text or ":" in sample_text:
+            for col in columns:
+                normalized = str(col).lower()
+                if normalized in {"ts", "time", "date"} or "time" in normalized or "date" in normalized:
+                    return col
+
+    return columns[0]
+
+
+def _series_label_map(
+    *,
+    vega: dict[str, Any],
+    values: list[dict[str, Any]],
+    series_key: str = "c",
+) -> dict[Any, str]:
+    """
+    Maps normalized series ids like c=0, c=1, c=2 back to semantic labels.
+
+    Example:
+      values:
+        {"x": "...", "y": 0.23, "c": 0}
+        {"x": "...", "y": 0.22, "c": 1}
+
+      metadata.columns:
+        ["Source", "Ts", "Price", "Ema 20", "Bb Upper", "Bb Middle", "Bb Lower"]
+
+      output:
+        {
+          0: "Price",
+          1: "Ema 20",
+          2: "Bb Upper",
+          3: "Bb Middle",
+          4: "Bb Lower",
+        }
+    """
+    series_values = _unique_in_order(values, series_key)
+
+    if not series_values:
+        return {}
+
+    # 1) Prefer explicit labels if the converter already provides them.
+    explicit = (
+        vega.get("_series_labels")
+        or vega.get("_series_label_map")
+        or vega.get("_c_labels")
+        or vega.get("_color_labels")
+    )
+
+    if isinstance(explicit, dict):
+        return {
+            raw: str(
+                explicit.get(raw)
+                or explicit.get(str(raw))
+                or explicit.get(int(raw)) if str(raw).isdigit() else explicit.get(str(raw))
+                or raw
+            )
+            for raw in series_values
+        }
+
+    if isinstance(explicit, list) and len(explicit) >= len(series_values):
+        return {
+            raw: _format_label(explicit[idx])
+            for idx, raw in enumerate(series_values)
+        }
+
+    # 2) Then use _y_keys if available.
+    y_keys = vega.get("_y_keys")
+    if isinstance(y_keys, list) and len(y_keys) >= len(series_values):
+        return {
+            raw: _format_label(y_keys[idx])
+            for idx, raw in enumerate(series_values)
+        }
+
+    # 3) Infer from metadata.columns.
+    columns = _columns(vega)
+    if not columns:
+        return {raw: str(raw) for raw in series_values}
+
+    if not _is_zero_based_index_series(series_values):
+        return {raw: _format_label(raw) for raw in series_values}
+
+    n = len(series_values)
+    x_column = _infer_x_column_from_metadata(vega=vega, values=values)
+
+    candidate_labels: list[str] = []
+
+    if x_column and x_column in columns:
+        after_x = columns[columns.index(x_column) + 1:]
+        if len(after_x) >= n:
+            candidate_labels = after_x[:n]
+
+    # Fallback for cases like:
+    # ["Source", "Ts", "Price", "Ema 20", "Bb Upper", "Bb Middle", "Bb Lower"]
+    # where Source is a dimension, Ts is x, and the final 5 columns are the series.
+    if len(candidate_labels) < n and len(columns) >= n:
+        candidate_labels = columns[-n:]
+
+    if len(candidate_labels) < n:
+        return {raw: str(raw) for raw in series_values}
+
+    return {
+        raw: _format_label(candidate_labels[idx])
+        for idx, raw in enumerate(series_values)
+    }
+
+
+def _series_name(
+    value: Any,
+    label_map: dict[Any, str],
+) -> str:
+    if value in label_map:
+        return label_map[value]
+
+    value_text = str(value)
+
+    if value_text in label_map:
+        return label_map[value_text]
+
+    try:
+        value_int = int(value)
+        if value_int in label_map:
+            return label_map[value_int]
+    except Exception:
+        pass
+
+    return value_text
 
 
 def _axis_titles(
@@ -226,10 +448,14 @@ def _layout(
     y_title: str | None = None,
 ) -> go.Figure:
     fig.update_layout(
-        title=title or "",
+        title={
+            "text": title or "",
+            "x": 0.02,
+            "xanchor": "left",
+        },
         width=1200,
         height=760,
-        margin={"l": 95, "r": 50, "t": 90, "b": 110},
+        margin={"l": 95, "r": 70, "t": 115, "b": 130},
         font={"size": 18},
         paper_bgcolor="white",
         plot_bgcolor="white",
@@ -271,7 +497,7 @@ def _with_metadata_columns(
 ) -> dict[str, Any]:
     """
     format_kv strips internal _columns from Vega payloads and keeps display
-    column names under metadata.columns. Put them back for Telegram table rendering.
+    column names under metadata.columns. Put them back for Telegram rendering.
     """
     metadata = kv_results.get("metadata") or {}
     columns = metadata.get("columns") if isinstance(metadata, dict) else None
@@ -279,6 +505,21 @@ def _with_metadata_columns(
     if columns and "_columns" not in payload:
         payload = dict(payload)
         payload["_columns"] = columns
+
+    if isinstance(metadata, dict):
+        for source_key, target_key in (
+            ("series_labels", "_series_labels"),
+            ("series_label_map", "_series_label_map"),
+            ("y_keys", "_y_keys"),
+            ("x_key", "_x_key"),
+            ("y_key", "_y_key"),
+            ("size_key", "_size_key"),
+            ("label_key", "_label_key"),
+            ("color_key", "_color_key"),
+        ):
+            if source_key in metadata and target_key not in payload:
+                payload = dict(payload)
+                payload[target_key] = metadata[source_key]
 
     return payload
 
@@ -303,7 +544,7 @@ def _with_raw_axis_metadata(
         [VegaConverter._format_column_name(key) for key in keys],
     )
 
-    if result_type != "bar_chart":
+    if result_type not in {"bar_chart", "bubble_chart"}:
         return payload
 
     first_item = raw_data[0]
@@ -322,13 +563,31 @@ def _with_raw_axis_metadata(
         )
 
     if not y_key:
-        for key in keys:
-            if key != x_key and VegaConverter._is_numeric_field(raw_data, key):
-                y_key = key
-                break
+        y_key = next(
+            (
+                key for key in keys
+                if key != x_key and VegaConverter._is_numeric_field(raw_data, key)
+            ),
+            None,
+        )
 
-    if not y_key:
-        y_key = keys[-1] if len(keys) > 1 else keys[0]
+
+    if result_type == "bubble_chart":
+        if not y_key:
+            y_key = keys[-1] if len(keys) > 1 else keys[0]
+
+    if result_type == "bubble_chart":
+        size_key = field_assignments.get("size") or field_assignments.get("z")
+        if not size_key:
+            numeric_candidates = [
+                key for key in keys
+                if key not in {x_key, y_key}
+                and VegaConverter._is_numeric_field(raw_data, key)
+            ]
+            size_key = numeric_candidates[0] if numeric_candidates else None
+
+        if size_key:
+            payload.setdefault("_size_key", size_key)
 
     payload.setdefault("_x_key", x_key)
     payload.setdefault("_y_key", y_key)
@@ -581,6 +840,7 @@ def _short_label(value: Any, max_len: int = 26) -> str:
 
 
 def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None) -> go.Figure:
+    title = _clean_chart_title(title)
     values = vega.get("values") or []
 
     if not values and result_type != "table":
@@ -624,27 +884,143 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
         return fig
 
     if result_type == "bar_chart":
-        fig = go.Figure(data=[go.Bar(x=[v.get("category") for v in values], y=[v.get("amount") for v in values])])
-        x_title, y_title = _axis_titles(result_type, vega, default_x="Category", default_y="Amount")
-        return _layout(fig, title, x_title=x_title, y_title=y_title)
+        raw_categories = [v.get("category") for v in values]
+
+        if any(_is_datetime_like(value) for value in raw_categories):
+            categories = _display_category_labels(raw_categories)
+        else:
+            category_map = _series_label_map(
+                vega=vega,
+                values=values,
+                series_key="category",
+            )
+
+            categories = [
+                _series_name(v.get("category"), category_map)
+                for v in values
+            ]
+
+        fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=categories,
+                    y=[v.get("amount") for v in values],
+                )
+            ]
+        )
+
+        x_title, y_title = _axis_titles(
+            result_type,
+            vega,
+            default_x="Category",
+            default_y="Amount",
+        )
+
+        fig = _layout(fig, title, x_title=x_title, y_title=y_title)
+
+        # Keep bar-chart labels readable when there are many categories.
+        fig.update_xaxes(
+            tickangle=-45,
+            automargin=True,
+        )
+        if len(categories) > 24:
+            fig.update_xaxes(nticks=18)
+
+        return fig
 
     if result_type == "pie_chart":
-        fig = go.Figure(data=[go.Pie(labels=[v.get("category") for v in values], values=[v.get("value") for v in values])])
+        category_map = _series_label_map(
+            vega=vega,
+            values=values,
+            series_key="category",
+        )
+
+        labels = [
+            _series_name(v.get("category"), category_map)
+            for v in values
+        ]
+
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=labels,
+                    values=[v.get("value") for v in values],
+                )
+            ]
+        )
+
         return _layout(fig, title)
 
     if result_type == "line_chart":
         df = pd.DataFrame(values)
         fig = go.Figure()
+
         if "c" in df.columns:
-            for c, group in df.groupby("c"):
-                fig.add_trace(go.Scatter(x=group["x"], y=group["y"], mode="lines+markers", name=str(c)))
+            label_map = _series_label_map(
+                vega=vega,
+                values=values,
+                series_key="c",
+            )
+
+            for c, group in df.groupby("c", sort=False):
+                fig.add_trace(
+                    go.Scatter(
+                        x=group["x"],
+                        y=group["y"],
+                        mode="lines+markers",
+                        name=_series_name(c, label_map),
+                    )
+                )
         else:
-            fig.add_trace(go.Scatter(x=df.get("x"), y=df.get("y"), mode="lines+markers"))
+            trace_name = None
+
+            y_keys = vega.get("_y_keys")
+            if isinstance(y_keys, list) and len(y_keys) == 1:
+                trace_name = _format_label(y_keys[0])
+            elif vega.get("_y_key"):
+                trace_name = _format_label(vega.get("_y_key"))
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df.get("x"),
+                    y=df.get("y"),
+                    mode="lines+markers",
+                    name=trace_name,
+                )
+            )
+
         x_title, y_title = _axis_titles(result_type, vega, default_x="X", default_y="Value")
         return _layout(fig, title, x_title=x_title, y_title=y_title)
 
     if result_type == "scatter_chart":
-        fig = go.Figure(data=[go.Scatter(x=[v.get("x") for v in values], y=[v.get("y") for v in values], mode="markers")])
+        df = pd.DataFrame(values)
+        fig = go.Figure()
+
+        if "c" in df.columns:
+            label_map = _series_label_map(
+                vega=vega,
+                values=values,
+                series_key="c",
+            )
+
+            for c, group in df.groupby("c", sort=False):
+                fig.add_trace(
+                    go.Scatter(
+                        x=group["x"],
+                        y=group["y"],
+                        mode="markers",
+                        name=_series_name(c, label_map),
+                    )
+                )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=df.get("x"),
+                    y=df.get("y"),
+                    mode="markers",
+                )
+            )
+
         x_title, y_title = _axis_titles(result_type, vega, default_x="X", default_y="Y")
         return _layout(fig, title, x_title=x_title, y_title=y_title)
 
@@ -712,6 +1088,34 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
                 for size in numeric_sizes
             ]
 
+        x_title = _semantic_label(vega, "_x_key", x_value_key, "X") or "X"
+        y_title = _semantic_label(vega, "_y_key", y_value_key, "Y") or "Y"
+        size_title = _semantic_label(vega, "_size_key", size_value_key, "Bubble size") or "Bubble size"
+
+        size_values = [
+            _number(row.get(size_value_key), 1.0) if size_value_key else 1.0
+            for row in rows
+        ]
+
+        hover_text = []
+        for row, raw_size in zip(rows, size_values):
+            parts = [
+                f"{x_title}: {_scalar(row.get(x_value_key))}",
+                f"{y_title}: {_scalar(row.get(y_value_key))}",
+                f"{size_title}: {raw_size}",
+            ]
+
+            # Include remaining useful fields without duplicating x/y/size.
+            for col in columns:
+                if col in {x_value_key, y_value_key, size_value_key}:
+                    continue
+
+                value = row.get(col)
+                if value is not None:
+                    parts.append(f"{_axis_title(col) or col}: {_scalar(value)}")
+
+            hover_text.append("<br>".join(parts))
+
         fig = go.Figure(
             data=[
                 go.Scatter(
@@ -723,22 +1127,31 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
                         "sizemode": "diameter",
                         "opacity": 0.75,
                     },
-                    text=[
-                        "<br>".join(
-                            f"{col}: {_scalar(row.get(col))}"
-                            for col in columns
-                            if row.get(col) is not None
-                        )
-                        for row in rows
-                    ],
+                    text=hover_text,
+                    hovertemplate="%{text}<extra></extra>",
                 )
             ]
         )
 
-        x_title = _axis_title(vega.get("_x_key") or x_value_key) or "X"
-        y_title = _axis_title(vega.get("_y_key") or y_value_key) or "Y"
+        fig = _layout(fig, title, x_title=x_title, y_title=y_title)
+        fig.add_annotation(
+            text=f"Bubble size = {size_title}",
+            x=0.99,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            xanchor="right",
+            yanchor="top",
+            align="right",
+            font={"size": 16},
+            bgcolor="rgba(255,255,255,0.75)",
+            bordercolor="rgba(80,80,80,0.25)",
+            borderwidth=1,
+            borderpad=6,
+        )
 
-        return _layout(fig, title, x_title=x_title, y_title=y_title)
+        return fig
 
     if result_type == "heatmap":
         df = pd.DataFrame(values)
@@ -817,3 +1230,114 @@ def _figure_from_vega(result_type: str, vega: dict[str, Any], title: str | None)
         return _layout(fig, title)
 
     raise ValueError(f"Unsupported Telegram render type: {result_type}")
+
+def _parse_datetime_like(value: Any) -> pd.Timestamp | None:
+    raw = _scalar(value)
+
+    if raw is None or raw == "":
+        return None
+
+    text = str(raw).strip()
+
+    # Avoid treating plain numbers like epoch numbers as dates.
+    if text.replace(".", "", 1).isdigit():
+        return None
+
+    try:
+        ts = pd.to_datetime(text, errors="coerce", utc=False)
+    except Exception:
+        return None
+
+    if pd.isna(ts):
+        return None
+
+    return ts
+
+
+def _is_datetime_like(value: Any) -> bool:
+    return _parse_datetime_like(value) is not None
+
+
+def _format_datetime_label(value: Any, *, granularity: str | None = None) -> str:
+    ts = _parse_datetime_like(value)
+
+    if ts is None:
+        return str(_scalar(value) or "")
+
+    # Remove timezone wrapper if pandas returns one.
+    try:
+        ts = ts.tz_localize(None)
+    except Exception:
+        pass
+
+    if granularity == "year":
+        return ts.strftime("%Y")
+
+    if granularity == "month":
+        return ts.strftime("%Y-%m")
+
+    if granularity == "day":
+        return ts.strftime("%Y-%m-%d")
+
+    if granularity == "hour":
+        return ts.strftime("%Y-%m-%d %H:%M")
+
+    # Automatic compact formatting.
+    if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
+        if ts.day == 1:
+            return ts.strftime("%Y-%m")
+        return ts.strftime("%Y-%m-%d")
+
+    return ts.strftime("%Y-%m-%d %H:%M")
+
+
+def _infer_time_granularity(values: list[Any]) -> str | None:
+    timestamps = [_parse_datetime_like(value) for value in values]
+    timestamps = [ts for ts in timestamps if ts is not None]
+
+    if not timestamps:
+        return None
+
+    # Monthly series: most values are first day of month at midnight.
+    month_like = [
+        ts for ts in timestamps
+        if ts.day == 1 and ts.hour == 0 and ts.minute == 0 and ts.second == 0
+    ]
+
+    if len(month_like) >= max(1, int(len(timestamps) * 0.8)):
+        return "month"
+
+    day_like = [
+        ts for ts in timestamps
+        if ts.hour == 0 and ts.minute == 0 and ts.second == 0
+    ]
+
+    if len(day_like) >= max(1, int(len(timestamps) * 0.8)):
+        return "day"
+
+    return "hour"
+
+
+def _display_category_labels(values: list[Any]) -> list[str]:
+    if not values:
+        return []
+
+    if any(_is_datetime_like(value) for value in values):
+        granularity = _infer_time_granularity(values)
+        return [
+            _format_datetime_label(value, granularity=granularity)
+            for value in values
+        ]
+
+    return [str(_scalar(value) or "") for value in values]
+
+def _clean_chart_title(title: str | None, *, max_len: int = 90) -> str | None:
+    if not title:
+        return title
+
+    text = str(title).strip()
+
+    if len(text) <= max_len:
+        return text
+
+    return f"{text[:max_len - 1]}…"
