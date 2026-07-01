@@ -117,7 +117,7 @@ def _get_or_create_telegram_guest_runner_user(
     """
 
     telegram_user_name = TELEGRAM_GUEST_RUNNER_USERNAME + str(telegram_user_id)
-    user = db.query(User).filter(User.username == TELEGRAM_GUEST_RUNNER_USERNAME).first()
+    user = db.query(User).filter(User.username == telegram_user_name).first()
     if user:
         return user
 
