@@ -429,13 +429,26 @@ class LLMClient:
         if (not formatted_results or len(formatted_results) == 0):
             logger.info(f" Federated query returned empty: \n{serialized_query}")
 
-        async for chunk in self.generate_stream(
-            prompt=prompt,
-            model=self.llm_model,
-            system_prompt=system_prompt,
-            temperature=temperature
-        ):
-            yield chunk
+        try:
+            async for chunk in self.generate_stream(
+                prompt=prompt,
+                model=self.llm_model,
+                system_prompt=system_prompt,
+                temperature=temperature
+            ):
+                yield chunk
+
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code if exc.response else None
+
+            if status_code == 429 and kv_results:
+                logger.warning(
+                    "OpenAI rate limit while generating final answer. "
+                    "kv_results were already streamed, so skipping LLM text generation."
+                )
+                return
+
+            raise
 
 
 # Global client instance
