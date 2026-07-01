@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 
 from cap.chains.cardano.canon.query_normalizer import QueryNormalizer
 from cap.federated.federated_result_processor import merge_federated_kv_results
-from cap.federated.models import FederatedQuery, QuerySource
+from cap.federated.models import FederatedQuery, PostProcessingConfig, QuerySource
 from cap.federated.service import execute_federated_query
 from cap.federated.sparql.sparql_result_processor import convert_sparql_to_kv
 from cap.federated.sql.sql_result_processor import normalize_sql_results
@@ -43,6 +43,12 @@ async def get_cached_federated_query(
             sql = parsed.get("sql", "") or ""
             source = parsed.get("source") or _infer_source(sparql, sql).value
             explanation=parsed.get("explanation", "cached federated query") or ""
+            language = parsed.get("language", "en") or "en"
+
+            post_processing_raw = parsed.get("post_processing")
+            post_processing = None
+            if isinstance(post_processing_raw, dict):
+                post_processing = PostProcessingConfig.model_validate(post_processing_raw)
 
             return FederatedQuery(
                 visualization_type=visualization_type,
@@ -50,7 +56,9 @@ async def get_cached_federated_query(
                 sql=sql,
                 source=QuerySource(source),
                 explanation=explanation,
-                nl_query=user_query
+                language=language,
+                post_processing=post_processing,
+                nl_query=user_query,
             )
 
     except json.JSONDecodeError:
@@ -62,6 +70,8 @@ async def get_cached_federated_query(
         sql="",
         source=QuerySource.ONCHAIN,
         explanation="legacy SPARQL cache entry",
+        language="en",
+        post_processing=None,
         nl_query=user_query
     )
 
@@ -76,9 +86,16 @@ async def cache_successful_query(
     payload = json.dumps(
         {
             "source": federated_query.source.value,
+            "visualization_type": federated_query.visualization_type or "",
             "sparql": federated_query.sparql or "",
             "sql": federated_query.sql or "",
             "explanation": federated_query.explanation or "",
+            "language": federated_query.language or "en",
+            "post_processing": (
+                federated_query.post_processing.model_dump()
+                if federated_query.post_processing
+                else None
+            ),
         },
         sort_keys=True,
     )

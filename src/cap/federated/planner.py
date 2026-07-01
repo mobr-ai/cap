@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Any
 
-from cap.federated.models import FederatedQuery, QuerySource
+from cap.federated.models import FederatedQuery, PostProcessingConfig, QuerySource
 from cap.federated.offchain_schema import OFFCHAIN_SCHEMA
 from cap.federated.sparql.sparql_util import ensure_validity
 from cap.federated.sql.sql_util import clean_sql
@@ -56,6 +56,12 @@ User Question:
         sql = clean_sql(parsed.get("sql", "") or "")
         source = parsed.get("source") or self._infer_source(sparql, sql)
         explanation=parsed.get("explanation", "") or ""
+        language = parsed.get("language", "en") or "en"
+
+        post_processing_raw = parsed.get("post_processing")
+        post_processing = None
+        if isinstance(post_processing_raw, dict):
+            post_processing = PostProcessingConfig.model_validate(post_processing_raw)
 
         if sparql:
             sparql = ensure_validity(sparql, natural_query)
@@ -66,7 +72,9 @@ User Question:
             sql=sql,
             source=QuerySource(source),
             explanation=explanation,
-            nl_query=natural_query
+            language=language,
+            post_processing=post_processing,
+            nl_query=natural_query,
         )
 
     @staticmethod

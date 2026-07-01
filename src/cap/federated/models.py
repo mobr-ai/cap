@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,12 +10,27 @@ class QuerySource(StrEnum):
     FEDERATED = "federated"
 
 
+class PostProcessingConfig(BaseModel):
+    type: Literal[
+        "cumulative_sum",
+        "cumulative_count",
+        "ratio",
+        "percentage",
+        "derived_field",
+    ]
+    sort_by: str | None = None
+    source_fields: list[str] = Field(default_factory=list)
+    target_field: str
+
+
 class FederatedQuery(BaseModel):
     visualization_type: str = ""
     sparql: str = ""
     sql: str = ""
     source: QuerySource
     explanation: str = ""
+    language: str = "en"
+    post_processing: PostProcessingConfig | None = None
     nl_query: str = ""
 
 

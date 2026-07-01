@@ -42,6 +42,8 @@ def extract_query_blocks(content: str) -> list[FederatedQuery]:
                     visualization_type=visualization_type,
                     explanation=explanation,
                     source=source,
+                    language="en",
+                    post_processing=None,
                     nl_query=nl_query,
                 )
             )

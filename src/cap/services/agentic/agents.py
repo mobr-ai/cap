@@ -5,6 +5,7 @@ from langgraph.config import get_stream_writer
 
 from cap.federated.planner import FederatedPlanner
 from cap.services.agentic.state import AgenticQueryState
+from cap.services.agentic.post_processing import apply_post_processing
 from cap.services.agentic.tools import (
     cache_successful_query,
     execute_query_tool,
@@ -219,6 +220,32 @@ class ContextAgent(WorkflowAgent):
 
         state["formatted_results"] = formatted
         state["kv_results"] = kv_results
+        return state
+
+
+class PostProcessingAgent(WorkflowAgent):
+    def __init__(self, agent_name: str):
+        super().__init__(agent_name)
+
+    async def _run(self, state: AgenticQueryState) -> AgenticQueryState:
+        query = state.get("federated_query")
+        kv_results = state.get("kv_results")
+
+        if not query or not isinstance(kv_results, dict):
+            state["post_processed"] = False
+            return state
+
+        if not query.post_processing:
+            state["post_processed"] = False
+            return state
+
+        processed = apply_post_processing(
+            kv_results=kv_results,
+            post_processing=query.post_processing,
+        )
+
+        state["kv_results"] = processed
+        state["post_processed"] = True
         return state
 
 

@@ -9,6 +9,7 @@ from cap.services.agentic.agents import (
     ExecutionAgent,
     PersistenceAgent,
     PlanningAgent,
+    PostProcessingAgent,
 )
 from cap.services.agentic.state import AgenticQueryState
 from cap.services.llm_client import LLMClient
@@ -24,6 +25,7 @@ def build_agentic_query_graph(
     execution_agent = ExecutionAgent("execute")
     critic_agent = CriticAgent("critic")
     context_agent = ContextAgent("context")
+    post_processing_agent = PostProcessingAgent("postprocess")
     answer_agent = AnswerAgent(llm_client, "answer")
     persistence_agent = PersistenceAgent(redis_client, "persitance")
 
@@ -47,6 +49,9 @@ def build_agentic_query_graph(
 
     async def context_node(state: AgenticQueryState) -> AgenticQueryState:
         return await context_agent.run(state)
+
+    async def post_processing_node(state: AgenticQueryState) -> AgenticQueryState:
+        return await post_processing_agent.run(state)
 
     async def answer_node(state: AgenticQueryState) -> AgenticQueryState:
         return await answer_agent.run(state)
@@ -83,6 +88,7 @@ def build_agentic_query_graph(
     workflow.add_node(execution_agent.name, execution_node)
     workflow.add_node(critic_agent.name, critic_node)
     workflow.add_node(context_agent.name, context_node)
+    workflow.add_node(post_processing_agent.name, post_processing_node)
     workflow.add_node(answer_agent.name, answer_node)
     workflow.add_node(persistence_agent.name, persistence_node)
 
@@ -92,7 +98,8 @@ def build_agentic_query_graph(
     workflow.add_edge(planning_agent.name, execution_agent.name)
     workflow.add_conditional_edges(execution_agent.name, after_execute)
     workflow.add_conditional_edges(critic_agent.name, after_critic)
-    workflow.add_edge(context_agent.name, answer_agent.name)
+    workflow.add_edge(context_agent.name, post_processing_agent.name)
+    workflow.add_edge(post_processing_agent.name, answer_agent.name)
     workflow.add_conditional_edges(answer_agent.name, after_answer)
     workflow.add_edge(persistence_agent.name, END)
 

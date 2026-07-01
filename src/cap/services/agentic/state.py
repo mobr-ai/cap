@@ -20,3 +20,4 @@ class AgenticQueryState(TypedDict, total=False):
     max_retries: int
     refer_decision: Any
     infrastructure_limit_exceeded: bool
+    post_processed: bool
