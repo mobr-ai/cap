@@ -19,7 +19,7 @@ from cap.services.billing_access import (
     check_nl_query_access,
     consume_nl_query_success,
 )
-from cap.services.nl_service import query_with_stream_response
+from cap.services.nl_service import query_with_stream_response, is_billable_assistant_text
 from cap.services.telegram_auth import (
     verify_internal_bot_request,
     verify_telegram_init_data,
@@ -104,19 +104,25 @@ def _extract_text_and_kv(chunks: list[str]) -> tuple[str, dict[str, Any] | None]
     return answer, kv
 
 
-def _get_or_create_telegram_guest_runner_user(db: Session) -> User:
+def _get_or_create_telegram_guest_runner_user(
+    db: Session,
+    telegram_user_id: int,
+) -> User:
+
     """
     Internal CAP user used only to execute public guest Telegram queries.
 
     Guest limits are NOT calculated on this user.
     Guest limits are calculated by telegram_user_id in telegram_guest_usage_period.
     """
+
+    telegram_user_name = TELEGRAM_GUEST_RUNNER_USERNAME + str(telegram_user_id)
     user = db.query(User).filter(User.username == TELEGRAM_GUEST_RUNNER_USERNAME).first()
     if user:
         return user
 
     user = User(
-        username=TELEGRAM_GUEST_RUNNER_USERNAME,
+        username=telegram_user_name,
         display_name="Telegram Guest",
         is_confirmed=False,
     )
@@ -128,7 +134,7 @@ def _get_or_create_telegram_guest_runner_user(db: Session) -> User:
         return user
     except IntegrityError:
         db.rollback()
-        user = db.query(User).filter(User.username == TELEGRAM_GUEST_RUNNER_USERNAME).first()
+        user = db.query(User).filter(User.username == telegram_user_name).first()
         if not user:
             raise
         return user
@@ -230,7 +236,7 @@ async def _run_telegram_query(
             absolute=True,
         )
 
-    if answer:
+    if answer and is_billable_assistant_text(answer):
         if consume_cap_billing:
             consume_nl_query_success(db, cap_user)
 
@@ -262,7 +268,7 @@ async def _run_telegram_guest_query(
     except TelegramGuestLimitDenied as exc:
         _raise_guest_limit(exc)
 
-    guest_runner = _get_or_create_telegram_guest_runner_user(db)
+    guest_runner = _get_or_create_telegram_guest_runner_user(db, telegram_user_id)
 
     try:
         return await _run_telegram_query(

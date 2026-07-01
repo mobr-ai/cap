@@ -2,6 +2,7 @@
 Natural language query API endpoint using LLM.
 Multi-stage pipeline: NL -> FederatedQuery -> Execute -> Contextualize -> Stream
 """
+import re
 import logging
 import time
 from typing import Any
@@ -14,6 +15,127 @@ from cap.util.json_util import json_safe
 from cap.util.status_message import StatusMessage
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------
+# Streaming helpers (NO mid-word splits, NO whitespace "help")
+# ---------------------------------------------------------------------
+# NOTE:
+# Upstream/proxies sometimes append "data: [DONE]" directly onto the end of a
+# data payload without a newline, e.g. "...smart contracts.data: [DONE]".
+# Do NOT rely on word-boundary before "data:" because chunking/punctuation can
+# make it inconsistent.
+_INLINE_DONE_RE = re.compile(r"(?:data:\s*)?\[DONE\]")
+
+
+def split_inline_done(payload: str) -> tuple[str, bool]:
+    """
+    Upstream streams (or proxies) may accidentally concatenate `data: [DONE]`
+    onto the end of a normal payload without a newline, e.g.:
+      ".... smart contracts.data: [DONE]"
+
+    This function detects an inline DONE marker and splits it off so we can:
+      - emit the preceding text (without leaking `data:` into UI),
+      - then emit a clean DONE event, and stop.
+    """
+    if not payload:
+        return payload, False
+
+    m = _INLINE_DONE_RE.search(payload)
+    if not m:
+        return payload, False
+
+    before = payload[: m.start()]
+    # If the broken concat left a trailing "data:" token at the end of the text,
+    # strip it (preserve everything else).
+    before = re.sub(r"(?:\s*data:\s*)$", "", before)
+    return before, True
+
+def strip_any_done_markers(text: str) -> tuple[str, bool]:
+    before, hit = split_inline_done(text)
+    return before, hit
+
+def sse_line(text: str) -> bytes:
+    # Keep protocol simple and standard
+    return (str(text) + "\n").encode("utf-8")
+
+def sse_data(payload: str) -> bytes:
+    # Standard SSE framing with a single space after colon
+    # (frontend removes only ONE optional space after "data:")
+    return ("data: " + str(payload) + "\n").encode("utf-8")
+
+def iter_word_safe_chunks(text: str, max_len: int = 96):
+    r"""
+    Yield chunks without splitting inside words.
+
+    Consumes tokens as: non-space + trailing whitespace (\\S+\\s*).
+    Preserves spaces exactly; avoids 'thiswould' / 'mint ed' regressions
+    caused by fixed-width slicing or trimming.
+    """
+    if not text:
+        return
+    if max_len <= 0:
+        yield text
+        return
+
+    buf = ""
+    for m in re.finditer(r"\S+\s*", text):
+        tok = m.group(0)
+
+        # hard-split only if a single token is enormous (rare)
+        if len(tok) > max_len:
+            if buf:
+                yield buf
+                buf = ""
+            for i in range(0, len(tok), max_len):
+                yield tok[i : i + max_len]
+            continue
+
+        if buf and (len(buf) + len(tok) > max_len):
+            yield buf
+            buf = tok
+        else:
+            buf += tok
+
+    if buf:
+        yield buf
+
+def is_billable_assistant_text(text: str) -> bool:
+    value = (text or "").strip()
+    if not value:
+        return False
+
+    lowered = value.lower()
+
+    non_billable_markers = (
+        "error:",
+        "error generating answer",
+        "client error",
+        "server error",
+        "http error",
+        "unauthorized",
+        "for more information check:",
+        "failed to generate",
+        "failed to execute",
+    )
+
+    return not any(marker in lowered for marker in non_billable_markers)
+
+
+
+def parse_sse_payload_from_line(line: str) -> str:
+    """
+    Convert an SSE text line to its payload.
+
+    - For "data:" lines, remove the SSE delimiter and ONE optional space.
+    - For other lines (status/kv markers), payload is the raw line.
+    """
+    if line.startswith("data:"):
+        payload = line[5:]
+        if payload.startswith(" "):
+            payload = payload[1:]
+        return payload
+    return line
+
 
 async def query_with_stream_response(
     query,
