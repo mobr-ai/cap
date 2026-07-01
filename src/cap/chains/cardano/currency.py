@@ -9,6 +9,38 @@ ADA_CURRENCY_URI = "https://mobr.ai/ont/cardano#cnt/ada"
 LOVELACE_TO_ADA = Decimal("1000000")
 
 
+def _contains_lovelace_to_ada_division(expr: str) -> bool:
+    return bool(re.search(r"/\s*(?:1000000|1000000\.0|1_000_000)\b", expr))
+
+
+def _iter_projection_expressions(query_text: str):
+    """
+    Yields balanced parenthesized projection expressions, e.g.
+
+      (SUM(xsd:decimal(?lovelaceValue)) AS ?controlledLovelace)
+      (COUNT(DISTINCT ?unspentOutput) AS ?utxoCount)
+
+    This avoids the previous greedy aggregate regex accidentally spanning
+    across multiple SELECT expressions.
+    """
+    depth = 0
+    start = None
+
+    for i, ch in enumerate(query_text):
+        if ch == "(":
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                continue
+
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield query_text[start:i]
+                start = None
+
+
 def _query_text(sparql_query: str | list[Any] | dict[str, Any]) -> str:
     if isinstance(sparql_query, list):
         return " ".join(
@@ -81,20 +113,42 @@ def detect_ada_variables(sparql_query: str | list[Any] | dict[str, Any]) -> set[
             query_text,
             re.IGNORECASE | re.DOTALL,
         ):
+            if _contains_lovelace_to_ada_division(expr):
+                continue
+
             source_vars = re.findall(r"\?(\w+)", expr)
             if any(source_var in ada_vars for source_var in source_vars):
                 ada_vars.add(result_var)
 
-        # Aggregate expressions:
-        # SUM(?value) AS ?total
-        # SUM(COALESCE(?value, 0)) AS ?total
-        # SUM(xsd:decimal(?value)) AS ?total
-        # AVG(COALESCE(xsd:decimal(?fee), 0)) AS ?avgFee
-        for expr, result_var in re.findall(
-            r"(?:SUM|AVG|MIN|MAX)\s*\((.*?)\)\s+AS\s+\?(\w+)",
-            query_text,
-            re.IGNORECASE | re.DOTALL,
-        ):
+        # Aggregate / projection expressions.
+        #
+        # Do NOT use a greedy regex across the whole query here. It can cross
+        # expression boundaries and incorrectly classify COUNT aliases such as
+        # ?utxoCount as ADA when another expression in the same SELECT contains
+        # ?lovelaceValue.
+        for projection_expr in _iter_projection_expressions(query_text):
+            alias_match = re.search(
+                r"\bAS\s+\?(\w+)\s*$",
+                projection_expr,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not alias_match:
+                continue
+
+            result_var = alias_match.group(1)
+            expr = projection_expr[:alias_match.start()]
+
+            # COUNT results are cardinalities, never ADA amounts.
+            if re.search(r"\bCOUNT\s*\(", expr, re.IGNORECASE):
+                continue
+
+            # If the query already divides lovelace by 1,000,000, the projected
+            # value is already ADA. Do not convert it again.
+            if _contains_lovelace_to_ada_division(expr):
+                continue
+
+            # Only propagate ADA-ness through real numeric expressions derived
+            # from already-known lovelace variables.
             source_vars = re.findall(r"\?(\w+)", expr)
             if any(source_var in ada_vars for source_var in source_vars):
                 ada_vars.add(result_var)
