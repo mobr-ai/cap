@@ -366,38 +366,43 @@ async def query_from_telegram_bot(
         .first()
     )
 
+    telegram_linked= ""
+    account_id = None
+    cap_user_id = None
     if account:
+        telegram_linked="telegram_linked"
         cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
         if not cap_user:
             raise HTTPException(404, detail="capUserNotFound")
 
-        _upsert_telegram_chat_binding(
-            db=db,
-            data=data,
-            default_cap_user_id=cap_user.user_id,
-        )
+        cap_user_id = cap_user.user_id
+        account_id = account.id
 
-        return await _run_telegram_query(
-            db=db,
-            cap_user=cap_user,
-            telegram_user_id=data.telegram_user_id,
-            telegram_chat_id=data.telegram_chat_id,
-            telegram_account_id=account.id,
-            request_source="telegram_linked",
-            query=data.query,
-            context=data.context,
-        )
+
+    sync_msg = get_sync_message()
+    if sync_msg:
+        return {
+            "answer": sync_msg,
+            "image": None,
+            "telegram": {
+                "send_as": "message",
+                "parse_mode": "HTML",
+            },
+        }
 
     _upsert_telegram_chat_binding(
         db=db,
         data=data,
-        default_cap_user_id=None,
+        default_cap_user_id=cap_user_id,
     )
 
-    return await _run_telegram_guest_query(
+    return await _run_telegram_query(
         db=db,
+        cap_user=cap_user,
         telegram_user_id=data.telegram_user_id,
         telegram_chat_id=data.telegram_chat_id,
+        telegram_account_id=account_id,
+        request_source=telegram_linked,
         query=data.query,
         context=data.context,
     )
