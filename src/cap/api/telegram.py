@@ -35,7 +35,7 @@ from cap.services.telegram_guest_access import (
 router = APIRouter(prefix="/api/v1/telegram", tags=["telegram"])
 
 
-TELEGRAM_GUEST_RUNNER_USERNAME = "telegram_guest_runner"
+TELEGRAM_GUEST_RUNNER_USERNAME = "telegram_guest_"
 
 
 class TelegramLinkRequest(BaseModel):
