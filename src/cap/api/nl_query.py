@@ -122,7 +122,7 @@ async def natural_language_query(
         if sync_msg:
             yield sse_data(sync_msg)
             yield sse_data("[DONE]")
-            return None
+            return
 
         # 1) Conversation + user message
         persist = current_user is not None
