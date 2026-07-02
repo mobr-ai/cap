@@ -120,9 +120,14 @@ async def natural_language_query(
 
         sync_msg = get_sync_message()
         if sync_msg:
-            yield sse_data(sync_msg)
-            yield sse_data("[DONE]")
-            return
+            async def sync_stream():
+                yield sse_data(sync_msg)
+                yield sse_data("[DONE]")
+
+            return StreamingResponse(
+                sync_stream(),
+                media_type="text/event-stream; charset=utf-8",
+            )
 
         # 1) Conversation + user message
         persist = current_user is not None
