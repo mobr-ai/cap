@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir poetry==1.8.3
 FROM base AS cap_deps
 
 # Copy manifests first for caching
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock status.json ./
 
 # IMPORTANT:
 # - DO NOT use --only if you want rag too.
