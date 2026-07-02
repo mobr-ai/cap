@@ -54,6 +54,7 @@ class PromptBuilder:
             get_chain().default_nl_to_sparql_prompt(),
         )
 
+
     @property
     def default_chart_prompt(self) -> str:
         return self._load_prompt(
@@ -108,6 +109,13 @@ class PromptBuilder:
         return self._load_prompt(
             "CONTEXTUALIZE_PROMPT",
             "Based on the query results, provide a clear and helpful answer.",
+        )
+
+
+    def get_syncing_prompt(self, remaining_time) -> str:
+        return self._load_prompt(
+            "SYNCING_PROMPT",
+            f"The platform periodically reindexes its knowledge graph every four days to ensure optimal query performance and data consistency. Reindexing is currently in progress and is expected to complete in approximately {remaining_time}. Thank you for your patience.",
         )
 
 

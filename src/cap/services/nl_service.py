@@ -8,8 +8,10 @@ import time
 from typing import Any
 
 from cap.services.agentic.graph import build_agentic_query_graph
+from cap.core.base_status import is_syncing, get_sync_time_remaining
 from cap.services.llm_client import get_llm_client
 from cap.services.metrics_service import MetricsService
+from cap.services.prompt_builder import PromptBuilder
 from cap.services.redis_nl_client import get_redis_nl_client
 from cap.util.json_util import json_safe
 from cap.util.status_message import StatusMessage
@@ -121,7 +123,6 @@ def is_billable_assistant_text(text: str) -> bool:
     return not any(marker in lowered for marker in non_billable_markers)
 
 
-
 def parse_sse_payload_from_line(line: str) -> str:
     """
     Convert an SSE text line to its payload.
@@ -135,6 +136,14 @@ def parse_sse_payload_from_line(line: str) -> str:
             payload = payload[1:]
         return payload
     return line
+
+
+def get_sync_message() -> str:
+    if not is_syncing():
+        return ""
+
+    time_remaining = get_sync_time_remaining()
+    return PromptBuilder().get_syncing_prompt(time_remaining)
 
 
 async def query_with_stream_response(

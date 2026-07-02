@@ -28,6 +28,7 @@ from cap.services.conversation_persistence import (
 )
 from cap.services.llm_client import get_llm_client
 from cap.services.nl_service import (
+    get_sync_message,
     query_with_stream_response,
     strip_any_done_markers,
     iter_word_safe_chunks,
@@ -116,6 +117,12 @@ async def natural_language_query(
             span.set_attribute("billing.free_query_remaining", billing_access.get("free_query_remaining", 0))
         except BillingAccessDenied as exc:
             raise HTTPException(status_code=402, detail=exc.payload) from exc
+
+        sync_msg = get_sync_message()
+        if sync_msg:
+            yield sse_data(sync_msg)
+            yield sse_data("[DONE]")
+            return None
 
         # 1) Conversation + user message
         persist = current_user is not None

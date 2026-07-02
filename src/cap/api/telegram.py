@@ -19,7 +19,11 @@ from cap.services.billing_access import (
     check_nl_query_access,
     consume_nl_query_success,
 )
-from cap.services.nl_service import query_with_stream_response, is_billable_assistant_text
+from cap.services.nl_service import (
+    get_sync_message,
+    query_with_stream_response,
+    is_billable_assistant_text,
+)
 from cap.services.telegram_auth import (
     verify_internal_bot_request,
     verify_telegram_init_data,
@@ -418,6 +422,17 @@ async def telegram_webhook(
 
     if not sender.get("id") or not text:
         return {"status": "ignored"}
+
+    sync_msg = get_sync_message()
+    if sync_msg:
+        return {
+            "answer": sync_msg,
+            "image": None,
+            "telegram": {
+                "send_as": "message",
+                "parse_mode": "HTML",
+            },
+        }
 
     account = (
         db.query(TelegramAccount)
