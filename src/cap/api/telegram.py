@@ -369,6 +369,7 @@ async def query_from_telegram_bot(
     telegram_linked= ""
     account_id = None
     cap_user_id = None
+    cap_user = None
     if account:
         telegram_linked="telegram_linked"
         cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
@@ -377,7 +378,6 @@ async def query_from_telegram_bot(
 
         cap_user_id = cap_user.user_id
         account_id = account.id
-
 
     sync_msg = get_sync_message()
     if sync_msg:
