@@ -259,41 +259,6 @@ async def _run_telegram_query(
     }
 
 
-async def _run_telegram_guest_query(
-    *,
-    db: Session,
-    telegram_user_id: int,
-    telegram_chat_id: int | None,
-    query: str,
-    context: str | None,
-) -> dict[str, Any]:
-    try:
-        check_telegram_guest_query_access(db, telegram_user_id=telegram_user_id)
-    except TelegramGuestLimitDenied as exc:
-        _raise_guest_limit(exc)
-
-    guest_runner = _get_or_create_telegram_guest_runner_user(db, telegram_user_id)
-
-    try:
-        return await _run_telegram_query(
-            db=db,
-            cap_user=guest_runner,
-            telegram_user_id=telegram_user_id,
-            telegram_chat_id=telegram_chat_id,
-            telegram_account_id=None,
-            request_source="telegram_guest",
-            query=query,
-            context=context,
-            check_cap_billing=False,
-            consume_cap_billing=False,
-            consume_success=lambda: consume_telegram_guest_query_success(
-                db,
-                telegram_user_id=telegram_user_id,
-            ),
-        )
-    except TelegramGuestLimitDenied as exc:
-        _raise_guest_limit(exc)
-
 
 @router.post("/link")
 def link_telegram_account(
@@ -366,19 +331,6 @@ async def query_from_telegram_bot(
         .first()
     )
 
-    telegram_linked= ""
-    account_id = None
-    cap_user_id = None
-    cap_user = None
-    if account:
-        telegram_linked="telegram_linked"
-        cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
-        if not cap_user:
-            raise HTTPException(404, detail="capUserNotFound")
-
-        cap_user_id = cap_user.user_id
-        account_id = account.id
-
     sync_msg = get_sync_message()
     if sync_msg:
         return {
@@ -390,22 +342,60 @@ async def query_from_telegram_bot(
             },
         }
 
+    telegram_account_id: int | None = None
+    cap_user_id: int | None = None
+    request_source = "telegram_guest"
+    check_cap_billing = False
+    consume_cap_billing = False
+    consume_success: Callable[[], None] | None = lambda: consume_telegram_guest_query_success(
+        db,
+        telegram_user_id=data.telegram_user_id,
+    )
+
+    if account:
+        cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
+        if not cap_user:
+            raise HTTPException(404, detail="capUserNotFound")
+
+        cap_user_id = cap_user.user_id
+        telegram_account_id = account.id
+        request_source = "telegram_linked"
+        check_cap_billing = True
+        consume_cap_billing = True
+        consume_success = None
+    else:
+        try:
+            check_telegram_guest_query_access(db, telegram_user_id=data.telegram_user_id)
+        except TelegramGuestLimitDenied as exc:
+            _raise_guest_limit(exc)
+
+        cap_user = _get_or_create_telegram_guest_runner_user(
+            db,
+            telegram_user_id=data.telegram_user_id,
+        )
+
     _upsert_telegram_chat_binding(
         db=db,
         data=data,
         default_cap_user_id=cap_user_id,
     )
 
-    return await _run_telegram_query(
-        db=db,
-        cap_user=cap_user,
-        telegram_user_id=data.telegram_user_id,
-        telegram_chat_id=data.telegram_chat_id,
-        telegram_account_id=account_id,
-        request_source=telegram_linked,
-        query=data.query,
-        context=data.context,
-    )
+    try:
+        return await _run_telegram_query(
+            db=db,
+            cap_user=cap_user,
+            telegram_user_id=data.telegram_user_id,
+            telegram_chat_id=data.telegram_chat_id,
+            telegram_account_id=telegram_account_id,
+            request_source=request_source,
+            query=data.query,
+            context=data.context,
+            check_cap_billing=check_cap_billing,
+            consume_cap_billing=consume_cap_billing,
+            consume_success=consume_success,
+        )
+    except TelegramGuestLimitDenied as exc:
+        _raise_guest_limit(exc)
 
 
 @router.post("/webhook")
@@ -439,36 +429,71 @@ async def telegram_webhook(
             },
         }
 
+    telegram_user_id = int(sender["id"])
+    telegram_chat_id = int(chat["id"]) if chat.get("id") is not None else None
+
     account = (
         db.query(TelegramAccount)
-        .filter(TelegramAccount.telegram_user_id == int(sender["id"]))
+        .filter(TelegramAccount.telegram_user_id == telegram_user_id)
         .first()
     )
-    if not account:
-        result = await _run_telegram_guest_query(
+
+    telegram_account_id: int | None = None
+    request_source = "telegram_guest"
+    check_cap_billing = False
+    consume_cap_billing = False
+    consume_success: Callable[[], None] | None = lambda: consume_telegram_guest_query_success(
+        db,
+        telegram_user_id=telegram_user_id,
+    )
+    is_guest = True
+
+    if account:
+        cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
+        if not cap_user:
+            return {"status": "error", "answer": "CAP user not found."}
+
+        telegram_account_id = account.id
+        request_source = "telegram_linked"
+        check_cap_billing = True
+        consume_cap_billing = True
+        consume_success = None
+        is_guest = False
+    else:
+        try:
+            check_telegram_guest_query_access(db, telegram_user_id=telegram_user_id)
+        except TelegramGuestLimitDenied as exc:
+            _raise_guest_limit(exc)
+
+        cap_user = _get_or_create_telegram_guest_runner_user(
+            db,
+            telegram_user_id=telegram_user_id,
+        )
+
+    try:
+        result = await _run_telegram_query(
             db=db,
-            telegram_user_id=int(sender["id"]),
-            telegram_chat_id=int(chat["id"]) if chat.get("id") is not None else None,
+            cap_user=cap_user,
+            telegram_user_id=telegram_user_id,
+            telegram_chat_id=telegram_chat_id,
+            telegram_account_id=telegram_account_id,
+            request_source=request_source,
             query=text,
             context=None,
+            check_cap_billing=check_cap_billing,
+            consume_cap_billing=consume_cap_billing,
+            consume_success=consume_success,
         )
+    except TelegramGuestLimitDenied as exc:
+        _raise_guest_limit(exc)
+
+    if is_guest:
         return {
             "status": "guest",
             **result,
         }
 
-    cap_user = db.query(User).filter(User.user_id == account.cap_user_id).first()
-    if not cap_user:
-        return {"status": "error", "answer": "CAP user not found."}
-
-    return await _run_telegram_query(
-        db=db,
-        cap_user=cap_user,
-        telegram_user_id=int(sender["id"]),
-        telegram_chat_id=int(chat["id"]) if chat.get("id") is not None else None,
-        query=text,
-        context=None,
-    )
+    return result
 
 
 @router.get("/image/{image_id}")
