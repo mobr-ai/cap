@@ -693,9 +693,10 @@
   },
   "admin_query_created": {
     "en": {
-      "preheader": "A CAP user submitted a new query.",
       "title": "New CAP query",
       "lead": "A user submitted a new query in CAP.",
+      "footer": "You are receiving this message because query notifications are enabled.",
+      "preheader": "A CAP user submitted a new query.",
       "query_id_label": "Query ID",
       "user_label": "User",
       "language_label": "Language",
@@ -705,13 +706,13 @@
       "latency_label": "Latency",
       "complexity_label": "Complexity",
       "query_label": "Query",
-      "manage_link_label": "Open metrics",
-      "footer": "You are receiving this message because query notifications are enabled."
+      "manage_link_label": "Open metrics"
     },
     "pt": {
-      "preheader": "Um usuário da CAP enviou uma nova consulta.",
       "title": "Nova consulta na CAP",
       "lead": "Um usuário enviou uma nova consulta na CAP.",
+      "footer": "Você está recebendo esta mensagem porque as notificações de consultas estão habilitadas.",
+      "preheader": "Um usuário da CAP enviou uma nova consulta.",
       "query_id_label": "ID da consulta",
       "user_label": "Usuário",
       "language_label": "Idioma",
@@ -721,12 +722,11 @@
       "latency_label": "Latência",
       "complexity_label": "Complexidade",
       "query_label": "Consulta",
-      "manage_link_label": "Abrir métricas",
-      "footer": "Você está recebendo esta mensagem porque as notificações de consultas estão habilitadas."
+      "manage_link_label": "Abrir métricas"
     }
   },
-  "en": {
-    "beta_program_invitation": {
+  "beta_program_invitation": {
+    "en": {
       "preheader": "You have been invited to the CAP closed beta.",
       "title": "CAP closed beta invitation",
       "lead": "Your CAP closed beta request has been selected for early access.",
@@ -734,12 +734,17 @@
       "cta_label": "Open CAP beta",
       "footer": "This invitation was sent by the CAP team."
     },
-    "admin_query_created": {
-      "title": "New CAP query (all users)",
-      "lead": "A CAP user submitted a new query. This alert is not limited to beta users.",
-      "footer": "You are receiving this message because all-user query notifications are enabled."
-    },
-    "admin_beta_query_created": {
+    "pt": {
+      "preheader": "Você recebeu um convite para o beta fechado da CAP.",
+      "title": "Convite para o beta fechado da CAP",
+      "lead": "Sua solicitação para o beta fechado da CAP foi selecionada para acesso antecipado.",
+      "next": "Você já pode abrir a CAP, entrar na plataforma e começar os testes. Estamos especialmente interessados em feedback prático sobre consultas, dashboards e fluxos de analytics.",
+      "cta_label": "Abrir beta da CAP",
+      "footer": "Este convite foi enviado pela equipe da CAP."
+    }
+  },
+  "admin_beta_query_created": {
+    "en": {
       "preheader": "A registered CAP beta user submitted a query.",
       "title": "New beta-user CAP query",
       "lead": "A registered CAP beta-program user submitted a new query.",
@@ -755,23 +760,8 @@
       "query_label": "Query",
       "cta_label": "Open beta program",
       "footer": "You are receiving this message because beta-user query notifications are enabled."
-    }
-  },
-  "pt": {
-    "beta_program_invitation": {
-      "preheader": "Você recebeu um convite para o beta fechado da CAP.",
-      "title": "Convite para o beta fechado da CAP",
-      "lead": "Sua solicitação para o beta fechado da CAP foi selecionada para acesso antecipado.",
-      "next": "Você já pode abrir a CAP, entrar na plataforma e começar os testes. Estamos especialmente interessados em feedback prático sobre consultas, dashboards e fluxos de analytics.",
-      "cta_label": "Abrir beta da CAP",
-      "footer": "Este convite foi enviado pela equipe da CAP."
     },
-    "admin_query_created": {
-      "title": "Nova consulta CAP (todos os usuários)",
-      "lead": "Um usuário da CAP enviou uma nova consulta. Este alerta não é limitado a usuários beta.",
-      "footer": "Você está recebendo esta mensagem porque as notificações de consultas de todos os usuários estão habilitadas."
-    },
-    "admin_beta_query_created": {
+    "pt": {
       "preheader": "Um usuário beta registrado da CAP enviou uma consulta.",
       "title": "Nova consulta CAP de usuário beta",
       "lead": "Um usuário registrado no programa beta da CAP enviou uma nova consulta.",
