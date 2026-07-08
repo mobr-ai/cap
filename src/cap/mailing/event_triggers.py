@@ -814,7 +814,7 @@ def on_beta_program_invitation(
         language=language,
         ctx={
             "full_name": full_name or "",
-            "beta_url": beta_url or f"{_app_url()}/beta",
+            "beta_url": beta_url or f"{_app_url()}/login",
             "app_url": _app_url(),
         },
         template_type="beta",

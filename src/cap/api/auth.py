@@ -14,7 +14,7 @@ from cap.core.security import (
     new_confirmation_token,
     verify_password,
 )
-from cap.database.model import User
+from cap.database.model import User, BetaProgramRegistration
 from cap.database.session import get_db
 from cap.mailing.event_triggers import on_user_access_granted
 from cap.services.admin_alerts_service import maybe_notify_admins_new_user
@@ -103,6 +103,32 @@ class SetPasswordIn(BaseModel):
 
 
 
+
+# ---- Closed beta auth allowlist ----
+BETA_AUTO_APPROVE_STATUSES = {"accepted", "invited"}
+
+
+def _beta_preapproved_registration(db: Session, email: str | None) -> BetaProgramRegistration | None:
+    """
+    Closed-beta allowlist lookup.
+
+    A beta registration with status accepted/invited means the user should not
+    go through the generic waitlist/admin approval gate again. Email/password
+    users still confirm email ownership. Google users are trusted through
+    Google's verified identity flow.
+    """
+    email_norm = (str(email or "").strip().lower())
+    if not email_norm:
+        return None
+
+    return (
+        db.query(BetaProgramRegistration)
+        .filter(BetaProgramRegistration.email == email_norm)
+        .filter(BetaProgramRegistration.status.in_(BETA_AUTO_APPROVE_STATUSES))
+        .first()
+    )
+
+
 def _ensure_waitlist_row(
     db: Session, email: str, ref: str = "", language: str = "en"
 ) -> bool:
@@ -187,20 +213,51 @@ def wallet_claim_email(
 # ---- Auth: Register (unconfirmed) ----
 @router.post("/register")
 def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
-    if not data.email or not data.password:
+    email_norm = (str(data.email or "").strip().lower()) if data.email else ""
+
+    if not email_norm or not data.password:
         raise HTTPException(400, detail="registerError")
 
-    user = db.query(User).filter(User.email == data.email).first()
+    beta_preapproved = _beta_preapproved_registration(db, email_norm)
+
+    user = db.query(User).filter(User.email == email_norm).first()
     if user:
         if user.google_id:
             raise HTTPException(400, detail="oauthExistsError")
+
+        # Smooth beta onboarding for placeholder/waitlist users that were
+        # pre-created without a password. They still confirm email ownership.
+        if beta_preapproved and not user.password_hash:
+            token = new_confirmation_token()
+            email_local = email_norm.split("@")[0]
+
+            user.password_hash = hash_password(data.password)
+            user.confirmation_token = token
+            if not user.username:
+                user.username = generate_unique_username(db, User, preferred=email_local)
+
+            db.commit()
+            db.refresh(user)
+
+            base = str(request.base_url).rstrip("/")
+            activation_link = f"{base}/{route_prefix}/confirm/{token}"
+
+            on_user_registered(
+                to=[email_norm],
+                language=(data.language or "en"),
+                username=user.username or email_local,
+                activation_link=activation_link,
+            )
+
+            return {"redirect": "/login?confirmed=false", "beta_access": True}
+
         raise HTTPException(400, detail="userExistsError")
 
     token = new_confirmation_token()
-    email_local = data.email.split("@")[0]
+    email_local = email_norm.split("@")[0]
 
     new_user = User(
-        email=data.email,
+        email=email_norm,
         username=generate_unique_username(db, User, preferred=email_local),
         password_hash=hash_password(data.password),
         confirmation_token=token,
@@ -211,7 +268,7 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     db.commit()
 
     # Notify admins (if configured)
-    maybe_notify_admins_new_user(db, new_user, source="password")
+    maybe_notify_admins_new_user(db, new_user, source=("password_beta" if beta_preapproved else "password"))
 
     # Build confirmation link
     base = str(request.base_url).rstrip("/")
@@ -219,9 +276,9 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
 
     # Send confirmation email
     on_user_registered(
-        to=[data.email],
+        to=[email_norm],
         language=(data.language or "en"),
-        username=new_user.username or data.email.split("@")[0],
+        username=new_user.username or email_local,
         activation_link=activation_link,
     )
 
@@ -409,6 +466,8 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
         if not email:
             raise HTTPException(400, detail="missingGoogleEmail")
 
+        beta_preapproved = _beta_preapproved_registration(db, email)
+
         # 1) Prefer lookup by google_id
         user = db.query(User).filter(User.google_id == google_id).first()
 
@@ -436,6 +495,11 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
                         db, User, preferred=(email.split("@")[0] or display_name)
                     )
 
+                # Closed beta invited/accepted users bypass the generic waitlist gate.
+                if beta_preapproved and not bool(user.is_confirmed):
+                    user.is_confirmed = True
+                    user.confirmation_token = None
+
                 db.commit()
             else:
                 # 3) No user by google_id or email -> create
@@ -448,12 +512,12 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
                     username=username,
                     display_name=display_name,
                     avatar=avatar,
-                    is_confirmed=False,  # do not auto-confirm
+                    is_confirmed=bool(beta_preapproved),  # beta invited users bypass waitlist; Google verifies email
                     is_admin=False,
                 )
                 db.add(user)
                 db.commit()
-                maybe_notify_admins_new_user(db, user, source="google")
+                maybe_notify_admins_new_user(db, user, source=("google_beta" if beta_preapproved else "google"))
 
         else:
             # Existing google_id user: keep profile fields fresh
@@ -463,6 +527,12 @@ def auth_google(data: GoogleIn, request: Request, db: Session = Depends(get_db))
                 user.display_name = display_name
             if avatar and not user.avatar:
                 user.avatar = avatar
+
+            # Closed beta invited/accepted users bypass the generic waitlist gate.
+            if beta_preapproved and not bool(user.is_confirmed):
+                user.is_confirmed = True
+                user.confirmation_token = None
+
             db.commit()
 
         # If not confirmed, put on waitlist and do not issue token
