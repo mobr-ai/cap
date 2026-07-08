@@ -568,40 +568,6 @@ class SharedImage(Base):
     )
 
 
-class Asset(Base):
-    __tablename__ = "asset"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    asset_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    symbol: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    name: Mapped[str | None] = mapped_column(Text, nullable=True)
-    policy_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
-    asset_name_hex: Mapped[str | None] = mapped_column(Text, nullable=True)
-    decimals: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-
-
-class AssetOHLCV(Base):
-    __tablename__ = "asset_ohlcv"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    asset_id: Mapped[str] = mapped_column(Text, ForeignKey("asset.asset_id", ondelete="CASCADE"), nullable=False)
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    interval: Mapped[str] = mapped_column(Text, nullable=False)
-    open: Mapped[Decimal] = mapped_column(Numeric(38, 18), nullable=False)
-    high: Mapped[Decimal] = mapped_column(Numeric(38, 18), nullable=False)
-    low: Mapped[Decimal] = mapped_column(Numeric(38, 18), nullable=False)
-    close: Mapped[Decimal] = mapped_column(Numeric(38, 18), nullable=False)
-    volume: Mapped[Decimal] = mapped_column(Numeric(38, 18), nullable=False)
-    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'unknown'"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-
-    __table_args__ = (
-        UniqueConstraint("asset_id", "ts", "interval", "source", name="uq_asset_ohlcv_asset_ts_interval_source"),
-        Index("ix_asset_ohlcv_asset_ts", "asset_id", "ts"),
-        Index("ix_asset_ohlcv_ts_interval", "ts", "interval"),
-    )
-
 class TelegramAccount(Base):
     __tablename__ = "telegram_account"
 

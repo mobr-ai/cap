@@ -69,51 +69,38 @@ Table: asset_relationship
 - created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 Unique key: (from_asset_id, to_asset_id, relationship_type)
 
-Table: offchain_governance_source
+Table: offchain_governance_proposal
 - id BIGSERIAL PRIMARY KEY
 - provider TEXT NOT NULL
-- source_type TEXT NOT NULL
-- external_id TEXT NOT NULL
-- url TEXT NOT NULL
-- discovered_from TEXT
-- first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
-- last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
-- enabled BOOLEAN NOT NULL DEFAULT true
-Unique key: (provider, external_id)
-
-Table: offchain_governance_metadata
-- id BIGSERIAL PRIMARY KEY
-- provider TEXT NOT NULL
-- metadata_type TEXT NOT NULL
-- external_id TEXT NOT NULL
-- url TEXT NOT NULL
-- content_type TEXT
-- http_status INTEGER
+- source_system TEXT NOT NULL
+- source_endpoint TEXT NOT NULL
+- source_external_id TEXT NOT NULL
+- source_url TEXT NOT NULL
 - title TEXT
 - abstract TEXT
 - motivation TEXT
 - rationale TEXT
-- given_name TEXT
+- proposer_name TEXT
+- proposer_url TEXT
+- proposer_id TEXT
+- lifecycle_status TEXT
+- governance_action_type TEXT
+- governance_action_tx_id TEXT
+- governance_action_index INTEGER
+- governance_action_id TEXT
+- metadata_url TEXT
+- metadata_hash TEXT
+- requested_lovelace NUMERIC(38,0)
 - raw_content TEXT NOT NULL
+- raw_text TEXT NOT NULL
 - content_sha256 TEXT NOT NULL
-- fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
-Unique key: (provider, external_id, content_sha256)
-
-Table: offchain_governance_metadata_fetch_log
-- id BIGSERIAL PRIMARY KEY
-- provider TEXT NOT NULL
-- url TEXT NOT NULL
 - http_status INTEGER
-- error TEXT
-- attempted_at TIMESTAMPTZ NOT NULL DEFAULT now()
-
-Table: etl_checkpoint
-- source TEXT NOT NULL
-- entity_id TEXT NOT NULL
-- checkpoint_key TEXT NOT NULL
-- checkpoint_value TEXT NOT NULL
-- updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-Primary key: (source, entity_id, checkpoint_key)
+- content_type TEXT
+- first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+- last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+- fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+- enabled BOOLEAN NOT NULL DEFAULT true
+Unique key: (provider, source_system, source_endpoint, source_external_id, content_sha256)
 
 Query guidance:
 - Use asset_ohlcv for price, OHLCV, candles, market volume, open, high, low, close, returns, volatility, and time-series market queries.
@@ -121,6 +108,9 @@ Query guidance:
 - Join asset_market_source when the query depends on exchange/provider, quote asset, source symbol, market validity, or market-specific uniqueness.
 - Use asset_indicator for precomputed indicators such as sma, ema, rsi, bb_middle, bb_upper, bb_lower, macd, macd_signal, and macd_histogram.
 - Use asset_relationship for mapped relationships between assets, such as wrapped, bridged, derivative, or related market assets.
-- Use offchain_governance_* tables only for off-chain governance metadata, pages, proposal discussions, budget discussions, and fetch status.
 - Interval data currently available is 1h.
+- Use offchain_governance_proposal only for off-chain governance metadata, proposal discussion content, proposer names, titles, rationale, abstracts, metadata URLs, and public governance-page status labels.
+- Do not use offchain_governance_proposal as a substitute for onchain facts already present in the Cardano knowledge graph.
+- For federated governance queries, join SQL governance metadata to SPARQL governance actions by governance_action_tx_id and governance_action_index when available; otherwise join by governance_action_tx_id only and report ambiguity when a transaction contains multiple governance actions.
+- Do not use raw_json as the primary query interface unless a field has not yet been normalized.
 """
