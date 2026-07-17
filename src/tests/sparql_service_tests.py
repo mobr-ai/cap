@@ -10,11 +10,11 @@ def extract_query_blocks(content: str) -> list[dict]:
     queries = []
     raw_queries = QueryFileParser.parse(content)
     for nl_query, payload in raw_queries:
-        sql = str(payload.get("sql", "")).strip()
-        if sql:
+        sparql = str(payload.get("sparql", "")).strip()
+        if sparql:
             queries.append({
                 "nl_query": nl_query,
-                "sql": sql,
+                "sparql": sparql,
             })
 
     return queries
