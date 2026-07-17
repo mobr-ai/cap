@@ -999,6 +999,15 @@ def get_my_billing_transactions(
                 "expires_at": _format_utc(linked_session.expires_at),
             })
 
+        # For payment-linked ledger entries, the payment reconciliation time
+        # is authoritative and is already stored as UTC. Non-payment ledger
+        # entries use their explicitly UTC-normalized created_at value.
+        event_at = (
+            linked_session.paid_at
+            if linked_session is not None and linked_session.paid_at is not None
+            else row.created_at
+        )
+
         transactions.append({
             "id": f"ledger:{row.id}",
             "currency": row.currency,
@@ -1008,8 +1017,8 @@ def get_my_billing_transactions(
             "status": linked_session.status if linked_session else "posted",
             "payment_session_id": row.payment_session_id,
             "metadata": metadata,
-            "created_at": _format_utc(row.created_at),
-            "_sort_at": _from_db_naive_utc(row.created_at),
+            "created_at": _format_utc(event_at),
+            "_sort_at": _from_db_naive_utc(event_at),
         })
 
     transactions.extend(

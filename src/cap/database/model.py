@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -239,7 +239,13 @@ class UserCreditLedger(Base):
     payment_session_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("payment_session.id", ondelete="SET NULL"), nullable=True, index=True)
     related_entitlement_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("user_entitlement.id", ondelete="SET NULL"), nullable=True, index=True)
     metadata_json: Mapped[Any | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("NOW()"), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        server_default=text("TIMEZONE('utc', NOW())"),
+        index=True,
+    )
 
     __table_args__ = (
         Index("idx_user_credit_ledger_user_created", "user_id", "created_at"),
