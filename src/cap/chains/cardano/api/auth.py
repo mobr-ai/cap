@@ -255,6 +255,16 @@ def cardano_auth_verify(
 
     user = _create_or_get_cardano_user(db, address)
 
+    # A successfully verified CIP-8 signature proves control of the
+    # Cardano wallet. Public CAP access no longer requires beta approval
+    # or an additional email-admission step.
+    if not bool(user.is_confirmed):
+        user.is_confirmed = True
+        user.confirmation_token = None
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
     return _cardano_auth_response(
         user,
         remember_me=data.remember_me,

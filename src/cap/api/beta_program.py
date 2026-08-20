@@ -268,71 +268,26 @@ def get_beta_program_config(
     )
 
 
+
 @router.post(
     "/beta/register",
     response_model=BetaRegistrationPublicOut,
     status_code=status.HTTP_201_CREATED,
 )
-def register_beta_interest(payload: BetaRegistrationIn, db: Session = Depends(get_db)):
-    if not beta_program_enabled():
-        raise HTTPException(status_code=404, detail="betaProgramDisabled")
+def register_beta_interest(
+    payload: BetaRegistrationIn,
+    db: Session = Depends(get_db),
+):
+    """
+    The CAP closed-beta intake is retired.
 
-    # Honeypot: silently accept bots without storing anything.
-    if (payload.company_url or "").strip():
-        return BetaRegistrationPublicOut(message="ok", status="registered")
-
-    email = payload.email.strip().lower()
-    full_name = _clean(payload.full_name, 120)
-    role = _clean(payload.role, 80)
-    organization = _clean(payload.organization, 160)
-    use_case = _clean_long(payload.use_case, 2000)
-    language = (_clean(payload.language, 12) or "en").lower()
-    source = _clean(payload.source, 80) or "welcome_beta_cta"
-
-    existing = db.scalar(select(BetaProgramRegistration).where(BetaProgramRegistration.email == email))
-
-    try:
-        if existing:
-            # Idempotent registration: update useful details, keep admin status/notes intact.
-            existing.full_name = full_name or existing.full_name
-            existing.role = role or existing.role
-            existing.organization = organization or existing.organization
-            existing.use_case = use_case or existing.use_case
-            existing.language = language or existing.language
-            existing.source = source or existing.source
-            existing.updated_at = datetime.utcnow()
-            db.add(existing)
-            db.commit()
-            return BetaRegistrationPublicOut(message="ok", status="already_registered")
-
-        item = BetaProgramRegistration(
-            email=email,
-            full_name=full_name,
-            role=role,
-            organization=organization,
-            use_case=use_case,
-            language=language,
-            source=source,
-            status="new",
-        )
-        db.add(item)
-        db.commit()
-        db.refresh(item)
-    except IntegrityError:
-        db.rollback()
-        return BetaRegistrationPublicOut(message="ok", status="already_registered")
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="betaRegistrationError") from exc
-
-    _notify_new_registration(item)
-    try:
-        maybe_notify_admins_beta_registration(db=db, registration=item)
-    except Exception:
-        logger.exception("Failed to queue beta registration admin notification")
-
-    return BetaRegistrationPublicOut(message="ok", status="registered")
-
+    Historical beta registrations remain available through the admin APIs,
+    but no new beta applications are accepted.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="betaProgramClosed",
+    )
 
 @router.get("/admin/beta/registrations", response_model=BetaRegistrationListOut)
 def list_beta_registrations(

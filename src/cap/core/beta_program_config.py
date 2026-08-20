@@ -18,8 +18,8 @@ def _flag(name: str, default: bool = True) -> bool:
 
 
 def beta_program_enabled() -> bool:
-    return _flag("CAP_BETA_PROGRAM_ENABLED", True)
+    return _flag("CAP_BETA_PROGRAM_ENABLED", False)
 
 
 def beta_admin_enabled() -> bool:
-    return _flag("CAP_BETA_ADMIN_ENABLED", beta_program_enabled())
+    return _flag("CAP_BETA_ADMIN_ENABLED", True)

@@ -94,94 +94,20 @@ def _get_or_create_user(db: Session, email: str, refer_user_id: int | None) -> U
         raise
 
 
+
 @router.post("/wait_list", status_code=status.HTTP_201_CREATED)
-def wait_list(data: WaitIn, request: Request, db: Session = Depends(get_db)):
-    email = data.email.strip().lower()
-    language = (data.language or "en").strip().lower()
-    ref_raw = (data.ref or "").strip()
+def wait_list(
+    data: WaitIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    CAP public registration is open; the legacy waitlist is retired.
 
-    # Basic sanity checks (redundant to EmailStr, kept intentionally)
-    if any(c in INJECTION_CHARS for c in email):
-        raise HTTPException(status_code=400, detail="Invalid email format")
-    if not EMAIL_REGEX.match(email):
-        raise HTTPException(status_code=400, detail="Invalid email format")
-
-    # Already on the waitlist?
-    existing = db.execute(
-        text("SELECT 1 FROM waiting_list WHERE email = :e"),
-        {"e": email},
-    ).first()
-    if existing:
-        # Frontend treats 418 as "already on list"
-        raise HTTPException(status_code=418, detail="alreadyOnList")
-
-    # Ensure we have a User and attach optional referrer
-    refer_user_id = _parse_ref(ref_raw)
-    try:
-        # If wallet flow provided a uid (or wallet), try to bind email to that user
-        user = None
-
-        if data.uid:
-            user = db.query(User).filter(User.user_id == data.uid).first()
-
-        if not user and data.wallet:
-            user = db.query(User).filter(User.wallet_address == data.wallet).first()
-
-        if user:
-            # Safety: do not overwrite an existing email
-            if user.email is None:
-                user.email = email
-                db.add(user)
-                db.commit()
-            else:
-                # Wallet already has an email; if different, it's a wallet-email conflict (not a generic user-exists)
-                if user.email != email:
-                    raise HTTPException(status_code=409, detail="walletEmailAlreadySet")
-
-        user = _get_or_create_user(db, email=email, refer_user_id=refer_user_id)
-    except SQLAlchemyError as e:
-        # Don't block waitlist on user-create errors
-        print(f"[WAITLIST] user create failed for {email}: {e}")
-        user = None
-
-    # Insert on waitlist
-    try:
-        db.execute(
-            text("INSERT INTO waiting_list (email, ref, language) VALUES (:e, :r, :l)"),
-            {"e": email, "r": ref_raw, "l": language},
-        )
-        db.commit()
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500, detail=str(e)
-        ) from e
-
-    # Build referral link and fire-and-forget user email
-    base_url = _stable_base_url(request)
-    referral_link = _make_referral_link(base_url, getattr(user, "user_id", None))
-
-    try:
-        on_waiting_list_joined(
-            to=[email],
-            language=language,
-            referral_link=referral_link,
-        )
-    except Exception as mail_err:
-        # Do not fail the API if mailing fails; just log
-        print(f"[WAITLIST] user mail trigger failed for {email}: {mail_err}")
-
-    # Fire-and-forget admin notification (if enabled in admin settings)
-    try:
-        maybe_notify_admins_waitlist(
-            db=db,
-            email=email,
-            ref=ref_raw,
-            language=language,
-            source="waitlist",
-        )
-    except Exception as admin_mail_err:
-        # Do not fail the API if admin mailing fails; just log
-        print(f"[WAITLIST] admin alert trigger failed for {email}: {admin_mail_err}")
-
-    return {"message": "ok"}
+    Existing waitlist rows remain available to administrators as historical
+    data, but this endpoint never creates new rows.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="waitlistClosed",
+    )

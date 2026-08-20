@@ -1,16 +1,26 @@
 import hashlib
+import os
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Response, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from cap.core.auth_dependencies import get_current_user
-from cap.core.security import generate_unique_username
+from cap.core.security import (
+    decode_email_attachment_token,
+    generate_unique_username,
+    make_email_attachment_token,
+)
 from cap.database.model import User
 from cap.database.session import get_db
+from cap.mailing.event_triggers import (
+    on_user_confirmed,
+    on_user_registered,
+)
 
 router = APIRouter(prefix="/api/v1/user", tags=["user"])
 
@@ -30,6 +40,11 @@ class UsernameIn(BaseModel):
 
 class DisplayNameIn(BaseModel):
     display_name: str
+
+
+class EmailVerificationIn(BaseModel):
+    email: EmailStr
+    language: str | None = "en"
 
 
 # -----------------------------
@@ -129,6 +144,208 @@ def update_display_name(
     db.commit()
 
     return {"display_name": current_user.display_name}
+
+
+# -----------------------------
+# Optional verified account email
+# -----------------------------
+@router.get("/email/status")
+def email_status(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "email": current_user.email,
+        "has_email": bool(current_user.email),
+    }
+
+
+@router.post("/email/verification")
+def request_email_verification(
+    data: EmailVerificationIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Request verification of an optional account email.
+
+    CAP access has already been established independently. For a wallet
+    account that means successful signed Cardano authentication.
+
+    The current canonical email is not changed until the verification
+    link is opened.
+    """
+    email = str(
+        data.email or ""
+    ).strip().lower()
+
+    if not email:
+        raise HTTPException(
+            status_code=400,
+            detail="invalidEmailFormat",
+        )
+
+    existing = db.scalar(
+        select(User).where(
+            User.email == email
+        )
+    )
+
+    if (
+        existing
+        and existing.user_id
+        != current_user.user_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="emailAlreadyInUse",
+        )
+
+    current_email = (
+        (current_user.email or "")
+        .strip()
+        .lower()
+        or None
+    )
+
+    if current_email == email:
+        return {
+            "status": "already_verified",
+            "email": current_user.email,
+        }
+
+    token = make_email_attachment_token(
+        current_user.user_id,
+        email,
+        previous_email=current_email,
+    )
+
+    public_base_url = (
+        os.getenv("PUBLIC_BASE_URL")
+        or str(request.base_url).rstrip("/")
+    ).rstrip("/")
+
+    verification_link = (
+        f"{public_base_url}"
+        f"/api/v1/user/email/confirm/{token}"
+    )
+
+    username = (
+        current_user.username
+        or current_user.display_name
+        or email.split("@")[0]
+    )
+
+    on_user_registered(
+        to=[email],
+        language=(data.language or "en"),
+        username=username,
+        activation_link=verification_link,
+    )
+
+    return {
+        "status": "verification_sent",
+        "email": email,
+    }
+
+
+@router.get("/email/confirm/{token}")
+def confirm_account_email(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Verify an optional account email without changing CAP access state.
+    """
+    payload = decode_email_attachment_token(
+        token
+    )
+
+    try:
+        user_id = int(payload.get("sub"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="invalidEmailVerificationToken",
+        ) from exc
+
+    email = str(
+        payload.get("email") or ""
+    ).strip().lower()
+
+    previous_email_raw = payload.get(
+        "previous_email"
+    )
+
+    expected_previous_email = (
+        str(previous_email_raw or "")
+        .strip()
+        .lower()
+        or None
+    )
+
+    user = db.scalar(
+        select(User).where(
+            User.user_id == user_id
+        )
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="userNotFound",
+        )
+
+    current_email = (
+        (user.email or "")
+        .strip()
+        .lower()
+        or None
+    )
+
+    # A newer verification/change already modified the account.
+    # Do not allow this older signed link to overwrite it.
+    if current_email != expected_previous_email:
+        raise HTTPException(
+            status_code=409,
+            detail="emailVerificationSuperseded",
+        )
+
+    existing = db.scalar(
+        select(User).where(
+            User.email == email
+        )
+    )
+
+    if (
+        existing
+        and existing.user_id
+        != user.user_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="emailAlreadyInUse",
+        )
+
+    user.email = email
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    try:
+        on_user_confirmed(
+            to=[email],
+            language="en",
+        )
+    except Exception:
+        # Ownership is already verified. Failure of the follow-up
+        # notification must not roll the verified email back.
+        pass
+
+    return RedirectResponse(
+        url="/settings?emailConfirmed=true",
+    )
 
 
 # -----------------------------
